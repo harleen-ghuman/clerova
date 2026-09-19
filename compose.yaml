@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: clerova-postgres
+
+    environment:
+      POSTGRES_DB: clerova
+      POSTGRES_USER: clerova
+      POSTGRES_PASSWORD: clerova_dev_password
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - clerova_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  clerova_postgres_data:

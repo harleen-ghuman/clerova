@@ -67,7 +67,7 @@ class AiProposedActionEvaluationTest {
     }
 
     @Test
-    void informationalBillingQuestionShouldRespondToCustomer() {
+    void billingQuestionWithoutAccountContextShouldRespondWithoutAskingForInternalData() {
 
         WorkItem workItem = createWorkItem(
                 Category.BILLING,
@@ -83,6 +83,81 @@ class AiProposedActionEvaluationTest {
         assertEquals(
                 ActionType.RESPOND_TO_CUSTOMER,
                 result.actionType
+        );
+
+        assertNotNull(result.draftedResponse);
+        assertFalse(result.draftedResponse.isBlank());
+
+        String response =
+                result.draftedResponse.toLowerCase();
+
+        assertFalse(response.contains("confirmation number"));
+        assertFalse(response.contains("payment method"));
+        assertFalse(response.contains("screenshot"));
+        assertFalse(response.contains("receipt"));
+
+        assertTrue(
+                response.contains("review")
+                        || response.contains("verify")
+                        || response.contains("check"),
+                "Response should indicate that internal account records need verification"
+        );
+    }
+
+    @Test
+    void lateFeeDisputeShouldUseInternalRecordsInsteadOfRequestingPaymentData() {
+
+        WorkItem workItem = createWorkItem(
+                Category.BILLING,
+                Priority.MEDIUM,
+                "410 Birch Avenue",
+                "Resident reports being charged a $75 late fee despite paying rent on time.",
+                "I was charged a $75 late fee even though I paid my rent on time. " +
+                        "Can you explain why this fee was added?"
+        );
+
+        ProposedActionResult result =
+                aiService.proposeAction(workItem);
+
+        assertEquals(
+                ActionType.RESPOND_TO_CUSTOMER,
+                result.actionType
+        );
+
+        assertNotNull(result.reasoning);
+        assertFalse(result.reasoning.isBlank());
+
+        assertNotNull(result.draftedResponse);
+        assertFalse(result.draftedResponse.isBlank());
+
+        String response =
+                result.draftedResponse.toLowerCase();
+
+        assertFalse(
+                response.contains("confirmation number"),
+                "Should not ask the resident for a confirmation number"
+        );
+
+        assertFalse(
+                response.contains("payment method"),
+                "Should not ask the resident for a payment method"
+        );
+
+        assertFalse(
+                response.contains("screenshot"),
+                "Should not ask the resident for a payment screenshot"
+        );
+
+        assertFalse(
+                response.contains("receipt"),
+                "Should not ask the resident for a payment receipt"
+        );
+
+        assertTrue(
+                response.contains("review")
+                        || response.contains("verify")
+                        || response.contains("check"),
+                "Should indicate that internal records need verification"
         );
     }
 
@@ -172,5 +247,13 @@ class AiProposedActionEvaluationTest {
         assertFalse(response.contains("plumber has been dispatched"));
         assertFalse(response.contains("maintenance has been scheduled"));
         assertFalse(response.contains("technician has been scheduled"));
+        assertFalse(response.contains("we are creating"));
+        assertFalse(response.contains("we have created"));
+        assertFalse(response.contains("we are scheduling"));
+        assertFalse(response.contains("we have scheduled"));
+        assertFalse(response.contains("we are dispatching"));
+        assertFalse(response.contains("we have dispatched"));
+        assertFalse(response.contains("we contacted"));
+        assertFalse(response.contains("we will send"));
     }
 }
