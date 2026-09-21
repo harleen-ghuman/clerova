@@ -45,12 +45,18 @@ export function MaintenancePage({
 
       const data = await getMaintenanceRequests();
 
-      setMaintenanceRequests(data);
+      const sortedData = [...data].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() -
+          new Date(a.createdAt).getTime()
+      );
+
+      setMaintenanceRequests(sortedData);
 
       setNotes((current) => {
         const next = { ...current };
 
-        data.forEach((request) => {
+        sortedData.forEach((request) => {
           if (next[request.id] === undefined) {
             next[request.id] = request.notes ?? "";
           }

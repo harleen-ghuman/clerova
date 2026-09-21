@@ -85,12 +85,18 @@ function App() {
 
       const data = await getMaintenanceRequests();
 
-      setMaintenanceRequests(data);
+      const sortedData = [...data].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() -
+          new Date(a.createdAt).getTime()
+      );
+
+      setMaintenanceRequests(sortedData);
 
       setMaintenanceNotes((current) => {
         const next = { ...current };
 
-        data.forEach((request) => {
+        sortedData.forEach((request) => {
           if (next[request.id] === undefined) {
             next[request.id] = request.notes ?? "";
           }
@@ -99,8 +105,13 @@ function App() {
         return next;
       });
     } catch (err) {
-      console.error("Failed to load maintenance requests:", err);
-      setMaintenanceError("Unable to load maintenance requests.");
+      console.error(
+        "Failed to load maintenance requests:",
+        err
+      );
+      setMaintenanceError(
+        "Unable to load maintenance requests."
+      );
     } finally {
       setMaintenanceLoading(false);
     }
@@ -247,6 +258,20 @@ async function handleRegenerateRejectedAction(
     }
 
     setPendingDecision(null);
+    const refreshedWorkItems = await getWorkItems();
+
+    setWorkItems(refreshedWorkItems);
+
+    const refreshedSelectedWorkItem = refreshedWorkItems.find(
+      (item) => item.id === workItem.id
+    );
+
+    if (
+      refreshedSelectedWorkItem &&
+      selectedWorkItem?.id === workItem.id
+    ) {
+      setSelectedWorkItem(refreshedSelectedWorkItem);
+    }
   } catch (err) {
     console.error(
       "Failed to regenerate proposed action:",
@@ -350,6 +375,18 @@ async function handleRegenerateRejectedAction(
           (action) => action.id !== updatedAction.id
         )
       );
+
+      const refreshedWorkItems = await getWorkItems();
+
+      setWorkItems(refreshedWorkItems);
+
+      const refreshedSelectedWorkItem = refreshedWorkItems.find(
+        (item) => item.id === updatedAction.workItemId
+      );
+
+      if (refreshedSelectedWorkItem) {
+        setSelectedWorkItem(refreshedSelectedWorkItem);
+      }
 
     } catch (err) {
       console.error("Failed to reject proposed action:", err);
@@ -459,6 +496,23 @@ async function handleRejectPendingAction() {
     });
 
     setSelectedPendingAction(null);
+
+    const refreshedWorkItems = await getWorkItems();
+
+    setWorkItems(refreshedWorkItems);
+
+    const refreshedSelectedWorkItem = refreshedWorkItems.find(
+      (item) => item.id === updatedAction.workItemId
+    );
+
+    if (
+      refreshedSelectedWorkItem &&
+      selectedWorkItem?.id === updatedAction.workItemId
+    ) {
+      setSelectedWorkItem(refreshedSelectedWorkItem);
+    }
+
+    await loadPendingActions(refreshedWorkItems);
   } catch (err) {
     console.error(
       "Failed to reject pending action:",
