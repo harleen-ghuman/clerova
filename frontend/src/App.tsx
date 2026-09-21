@@ -787,23 +787,6 @@ const pendingDecisionWorkItem =
       </nav>
 
       <main className="dashboard">
-      <button
-        type="button"
-        className="mobile-brand"
-        onClick={() => {
-          setSelectedMaintenanceWorkItemId(null);
-          setActiveView("dashboard");
-          setActionError(null);
-        }}
-        aria-label="Go to dashboard"
-      >
-        <span className="brand-mark">C</span>
-
-        <span>
-          <strong>Clerova</strong>
-          <small>Property Operations</small>
-        </span>
-      </button>
         <header className="dashboard-header">
           <div>
             <span className="eyebrow">

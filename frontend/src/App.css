@@ -2287,40 +2287,11 @@ button {
 }
 
 /* Hidden on desktop */
-.mobile-nav,
-.mobile-brand {
+.mobile-nav {
   display: none;
 }
 
 @media (max-width: 768px) {
-  .mobile-brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: fit-content;
-    margin-bottom: 20px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .mobile-brand > span:last-child {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .mobile-brand strong {
-    font-size: 16px;
-  }
-
-  .mobile-brand small {
-    font-size: 11px;
-    opacity: 0.65;
-  }
-
   .mobile-nav {
     display: flex;
     position: fixed;
