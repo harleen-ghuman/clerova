@@ -89,7 +89,7 @@ export async function createWorkItem(
   message: string
 ): Promise<WorkItem> {
   const response = await fetch(
-    '${API_BASE_URL}/api/work-items',
+    `${API_BASE_URL}/api/work-items`,
     {
       method: "POST",
       headers: {
