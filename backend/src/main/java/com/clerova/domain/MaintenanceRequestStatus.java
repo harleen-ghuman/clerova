@@ -2,7 +2,7 @@ package com.clerova.domain;
 
 public enum MaintenanceRequestStatus {
     OPEN,
-    In_PROGRESS,
+    IN_PROGRESS,
     COMPLETED,
     CANCELLED
 }

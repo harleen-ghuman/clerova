@@ -9,11 +9,12 @@ import {
   getWorkItems,
   rejectProposedAction,
 } from "./api/workItems";
-
-import { Sidebar } from "./components/Sidebar";
-import { StatCard } from "./components/StatCard";
-import { WorkItemCard } from "./components/WorkItemCard";
-import { getMaintenanceRequests } from "./api/MaintenanceRequests";
+import { getMaintenanceRequests, } from "./api/MaintenanceRequests";
+import { PendingActionsPage } from "./pages/PendingActionsPage";
+import { Sidebar, type AppView } from "./components/Sidebar";
+import { WorkItemsPage } from "./pages/WorkItemsPage";
+import { DashboardPage } from "./pages/DashboardPage";
+import { MaintenancePage } from "./pages/MaintenancePage";
 import type { MaintenanceRequest } from "./types/MaintenanceRequest";
 import type { ProposedAction } from "./types/ProposedAction";
 import type { WorkItem } from "./types/WorkItem";
@@ -23,29 +24,41 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [activeView, setActiveView] =
+    useState<AppView>("dashboard");
+
   const [selectedWorkItem, setSelectedWorkItem] =
     useState<WorkItem | null>(null);
 
   const [proposedAction, setProposedAction] =
     useState<ProposedAction | null>(null);
 
+  const [pendingActions, setPendingActions] = useState<
+    ProposedAction[]
+  >([]);
+
   const [generatingAction, setGeneratingAction] = useState(false);
   const [updatingAction, setUpdatingAction] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [maintenanceRequests, setMaintenanceRequests] =
-    useState<MaintenanceRequest[]>([]);
 
-  const [maintenanceLoading, setMaintenanceLoading] =
-    useState(true);
+  const [maintenanceRequests, setMaintenanceRequests] = useState<
+    MaintenanceRequest[]
+  >([]);
 
-  const [maintenanceError, setMaintenanceError] =
+  const [, setMaintenanceLoading] = useState(true);
+
+  const [, setMaintenanceError] =
     useState<string | null>(null);
 
-  const [newRequestMessage, setNewRequestMessage] =
-    useState("");
+  const [, setMaintenanceNotes] = useState<
+    Record<string, string>
+  >({});
 
-  const [creatingRequest, setCreatingRequest] =
-    useState(false);
+  const [selectedMaintenanceWorkItemId, setSelectedMaintenanceWorkItemId] =
+    useState<string | null>(null);
+
+  const [newRequestMessage, setNewRequestMessage] = useState("");
+  const [creatingRequest, setCreatingRequest] = useState(false);
 
   const [createRequestError, setCreateRequestError] =
     useState<string | null>(null);
@@ -53,22 +66,41 @@ function App() {
   const [createRequestSuccess, setCreateRequestSuccess] =
     useState<string | null>(null);
 
+  const [latestActions, setLatestActions] = useState<
+    Record<string, ProposedAction>
+  >({});
+
+  const [selectedPendingAction, setSelectedPendingAction] =
+    useState<ProposedAction | null>(null);
+
+  const [pendingDecision, setPendingDecision] = useState<{
+    action: ProposedAction;
+    decision: "APPROVED" | "REJECTED";
+  } | null>(null);
+
   async function loadMaintenanceRequests() {
     try {
       setMaintenanceLoading(true);
       setMaintenanceError(null);
 
       const data = await getMaintenanceRequests();
-      setMaintenanceRequests(data);
-    } catch (err) {
-      console.error(
-        "Failed to load maintenance requests:",
-        err
-      );
 
-      setMaintenanceError(
-        "Unable to load maintenance requests."
-      );
+      setMaintenanceRequests(data);
+
+      setMaintenanceNotes((current) => {
+        const next = { ...current };
+
+        data.forEach((request) => {
+          if (next[request.id] === undefined) {
+            next[request.id] = request.notes ?? "";
+          }
+        });
+
+        return next;
+      });
+    } catch (err) {
+      console.error("Failed to load maintenance requests:", err);
+      setMaintenanceError("Unable to load maintenance requests.");
     } finally {
       setMaintenanceLoading(false);
     }
@@ -82,6 +114,7 @@ function App() {
 
         const data = await getWorkItems();
         setWorkItems(data);
+        await loadPendingActions(data);
       } catch (err) {
         console.error("Failed to load work items:", err);
         setError("Unable to load work items.");
@@ -90,9 +123,16 @@ function App() {
       }
     }
 
-    loadWorkItems();
-    loadMaintenanceRequests();
+    void loadWorkItems();
+    void loadMaintenanceRequests();
   }, []);
+
+useEffect(() => {
+  if (activeView !== "pending-actions") {
+    setPendingDecision(null);
+    setSelectedPendingAction(null);
+  }
+}, [activeView]);
 
   async function handleReviewWorkItem(workItem: WorkItem) {
     setSelectedWorkItem(workItem);
@@ -103,14 +143,19 @@ function App() {
       const actions = await getProposedActions(workItem.id);
 
       if (actions.length > 0) {
-        setProposedAction(actions[0]);
+        const latestAction = [...actions].sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() -
+            new Date(a.createdAt).getTime()
+        )[0];
+
+        setProposedAction(latestAction);
       }
     } catch (err) {
-      console.error(err);
+      console.error("Failed to load proposed action:", err);
       setActionError("Unable to load proposed action.");
     }
   }
-
 
   async function handleGenerateProposedAction() {
     if (!selectedWorkItem) {
@@ -127,6 +172,14 @@ function App() {
       );
 
       setProposedAction(result);
+      setLatestActions((current) => ({
+        ...current,
+        [result.workItemId]: result,
+      }));
+      setPendingActions((current) => [
+        result,
+        ...current.filter((action) => action.id !== result.id),
+      ]);
     } catch (err) {
       console.error("Failed to generate proposed action:", err);
       setActionError("Unable to generate proposed action.");
@@ -134,6 +187,65 @@ function App() {
       setGeneratingAction(false);
     }
   }
+
+async function handleRegenerateRejectedAction(
+  rejectedAction: ProposedAction
+) {
+  const workItem = workItems.find(
+    (item) => item.id === rejectedAction.workItemId
+  );
+
+  if (!workItem) {
+    setActionError(
+      "Unable to find the work item for this action."
+    );
+    return;
+  }
+
+  try {
+    setGeneratingAction(true);
+    setActionError(null);
+
+    const result = await generateProposedAction(
+      workItem.id
+    );
+
+    // Latest action for Work Items
+    setLatestActions((current) => ({
+      ...current,
+      [workItem.id]: result,
+    }));
+
+    // Put the newly generated action into Pending Actions
+    setPendingActions((current) => [
+      result,
+      ...current.filter(
+        (action) => action.id !== result.id
+      ),
+    ]);
+
+    // Make it the current pending review
+    setSelectedPendingAction(result);
+
+    // Keep Work Items synchronized too
+    if (selectedWorkItem?.id === workItem.id) {
+      setProposedAction(result);
+    }
+
+    setPendingDecision(null);
+  } catch (err) {
+    console.error(
+      "Failed to regenerate proposed action:",
+      err
+    );
+
+    setActionError(
+      "Unable to generate a new proposed action."
+    );
+  } finally {
+    setGeneratingAction(false);
+  }
+}
 
   async function handleApprove() {
     if (!proposedAction) {
@@ -150,10 +262,49 @@ function App() {
 
       setProposedAction(updatedAction);
 
+      setSelectedPendingAction(null);
+
+      setLatestActions((current) => ({
+        ...current,
+        [updatedAction.workItemId]: updatedAction,
+      }));
+
+      setPendingActions((current) =>
+        current.filter(
+          (action) => action.id !== updatedAction.id
+        )
+      );
+
+      // IMPORTANT:
+      // Approval changes the WorkItem status in the backend.
+      // Reload work items so the UI gets IN_PROGRESS,
+      // WAITING_FOR_INFORMATION, COMPLETED, etc.
+      const refreshedWorkItems = await getWorkItems();
+
+      setWorkItems(refreshedWorkItems);
+
+      // Also update the selected item so the right panel
+      // doesn't continue showing the old NEW status.
+      const refreshedSelectedWorkItem =
+        refreshedWorkItems.find(
+          (item) =>
+            item.id === updatedAction.workItemId
+        );
+
+      if (refreshedSelectedWorkItem) {
+        setSelectedWorkItem(refreshedSelectedWorkItem);
+      }
+
       await loadMaintenanceRequests();
     } catch (err) {
-      console.error("Failed to approve proposed action:", err);
-      setActionError("Unable to approve proposed action.");
+      console.error(
+        "Failed to approve proposed action:",
+        err
+      );
+
+      setActionError(
+        "Unable to approve proposed action."
+      );
     } finally {
       setUpdatingAction(false);
     }
@@ -166,6 +317,7 @@ function App() {
 
     try {
       setUpdatingAction(true);
+      setSelectedPendingAction(null);
       setActionError(null);
 
       const updatedAction = await rejectProposedAction(
@@ -173,6 +325,18 @@ function App() {
       );
 
       setProposedAction(updatedAction);
+
+      setLatestActions((current) => ({
+        ...current,
+        [updatedAction.workItemId]: updatedAction,
+      }));
+
+      setPendingActions((current) =>
+        current.filter(
+          (action) => action.id !== updatedAction.id
+        )
+      );
+
     } catch (err) {
       console.error("Failed to reject proposed action:", err);
       setActionError("Unable to reject proposed action.");
@@ -180,6 +344,118 @@ function App() {
       setUpdatingAction(false);
     }
   }
+
+async function handleApprovePendingAction() {
+  if (!selectedPendingAction) {
+    return;
+  }
+
+  try {
+    setUpdatingAction(true);
+    setActionError(null);
+
+    const updatedAction = await approveProposedAction(
+      selectedPendingAction.id
+    );
+
+    setPendingActions((current) =>
+      current.filter(
+        (action) => action.id !== updatedAction.id
+      )
+    );
+
+    setLatestActions((current) => ({
+      ...current,
+      [updatedAction.workItemId]: updatedAction,
+    }));
+
+    if (proposedAction?.id === updatedAction.id) {
+      setProposedAction(updatedAction);
+    }
+
+    // Show result instead of immediately blanking panel
+    setPendingDecision({
+      action: updatedAction,
+      decision: "APPROVED",
+    });
+
+    setSelectedPendingAction(null);
+    const refreshedWorkItems = await getWorkItems();
+
+    setWorkItems(refreshedWorkItems);
+
+    const refreshedSelectedWorkItem =
+      refreshedWorkItems.find(
+        (item) =>
+          item.id === updatedAction.workItemId
+      );
+
+    if (
+      refreshedSelectedWorkItem &&
+      selectedWorkItem?.id === updatedAction.workItemId
+    ) {
+      setSelectedWorkItem(refreshedSelectedWorkItem);
+    }
+
+    await loadPendingActions(refreshedWorkItems);
+    await loadMaintenanceRequests();
+  } catch (err) {
+    console.error(
+      "Failed to approve pending action:",
+      err
+    );
+
+    setActionError("Unable to approve proposed action.");
+  } finally {
+    setUpdatingAction(false);
+  }
+}
+
+async function handleRejectPendingAction() {
+  if (!selectedPendingAction) {
+    return;
+  }
+
+  try {
+    setUpdatingAction(true);
+    setActionError(null);
+
+    const updatedAction = await rejectProposedAction(
+      selectedPendingAction.id
+    );
+
+    setPendingActions((current) =>
+      current.filter(
+        (action) => action.id !== updatedAction.id
+      )
+    );
+
+    setLatestActions((current) => ({
+      ...current,
+      [updatedAction.workItemId]: updatedAction,
+    }));
+
+    if (proposedAction?.id === updatedAction.id) {
+      setProposedAction(updatedAction);
+    }
+
+    setPendingDecision({
+      action: updatedAction,
+      decision: "REJECTED",
+    });
+
+    setSelectedPendingAction(null);
+  } catch (err) {
+    console.error(
+      "Failed to reject pending action:",
+      err
+    );
+
+    setActionError("Unable to reject proposed action.");
+  } finally {
+    setUpdatingAction(false);
+  }
+}
 
   async function handleCreateRequest(
     event: React.FormEvent<HTMLFormElement>
@@ -211,24 +487,79 @@ function App() {
       ]);
 
       setNewRequestMessage("");
-
-      setCreateRequestSuccess(
-        "Request processed successfully."
-      );
+      setCreateRequestSuccess("Request processed successfully.");
 
       setSelectedWorkItem(createdWorkItem);
       setProposedAction(null);
       setActionError(null);
     } catch (err) {
       console.error("Failed to create work item:", err);
-
-      setCreateRequestError(
-        "Unable to process the request."
-      );
+      setCreateRequestError("Unable to process the request.");
     } finally {
       setCreatingRequest(false);
     }
   }
+
+async function loadPendingActions(items: WorkItem[]) {
+  try {
+    const results = await Promise.all(
+      items.map(async (item) => {
+        const actions = await getProposedActions(item.id);
+
+        if (actions.length === 0) {
+          return {
+            workItemId: item.id,
+            latestAction: null,
+          };
+        }
+
+        const latestAction = [...actions].sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() -
+            new Date(a.createdAt).getTime()
+        )[0];
+
+        return {
+          workItemId: item.id,
+          latestAction,
+        };
+      })
+    );
+
+    const latestByWorkItem: Record<
+      string,
+      ProposedAction
+    > = {};
+
+    const pending: ProposedAction[] = [];
+
+    results.forEach(({ workItemId, latestAction }) => {
+      if (!latestAction) {
+        return;
+      }
+
+      latestByWorkItem[workItemId] = latestAction;
+
+      if (latestAction.status === "PENDING_APPROVAL") {
+        pending.push(latestAction);
+      }
+    });
+
+    pending.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() -
+        new Date(a.createdAt).getTime()
+    );
+
+    setLatestActions(latestByWorkItem);
+    setPendingActions(pending);
+  } catch (err) {
+    console.error(
+      "Failed to load proposed actions:",
+      err
+    );
+  }
+}
 
   function handleCloseDetails() {
     setSelectedWorkItem(null);
@@ -237,363 +568,212 @@ function App() {
   }
 
   const totalWorkItems = workItems.length;
-
-  const openWorkItems = workItems.filter(
-    (item) => item.status === "NEW"
+  const newWorkItems = workItems.filter(
+    (item) => !latestActions[item.id]
   ).length;
 
-  const highPriorityItems = workItems.filter(
-    (item) => item.priority === "HIGH"
-  ).length;
+  const viewContent = {
+    dashboard: {
+      eyebrow: "Property Operations",
+      title: "Dashboard",
+      description:
+        "Monitor incoming requests and property operations.",
+    },
+
+    "work-items": {
+      eyebrow: "Operations",
+      title: "Work Items",
+      description:
+        "Review incoming requests and AI-recommended actions.",
+    },
+
+    maintenance: {
+      eyebrow: "Property Operations",
+      title: "Maintenance",
+      description:
+        "Track maintenance requests created from approved actions.",
+    },
+
+    "pending-actions": {
+      eyebrow: "Human Review",
+      title: "Pending Actions",
+      description:
+        "Review AI recommendations awaiting approval.",
+    },
+  } satisfies Record<
+    AppView,
+    {
+      eyebrow: string;
+      title: string;
+      description: string;
+    }
+  >;
+
+  const currentView = viewContent[activeView];
+
+
+  function handleSelectPendingAction(action: ProposedAction) {
+    setSelectedPendingAction(action);
+    setPendingDecision(null);
+    setActionError(null);
+  }
+
+  function handleViewMaintenance(workItemId: string) {
+    setSelectedMaintenanceWorkItemId(workItemId);
+    setActiveView("maintenance");
+  }
+
+async function handleMaintenanceWorkItemClosed() {
+  const refreshedWorkItems = await getWorkItems();
+
+  setWorkItems(refreshedWorkItems);
+
+  await loadPendingActions(refreshedWorkItems);
+
+  if (
+    selectedWorkItem &&
+    !refreshedWorkItems.some(
+      (item) => item.id === selectedWorkItem.id
+    )
+  ) {
+    setSelectedWorkItem(null);
+    setProposedAction(null);
+  }
+
+  await loadMaintenanceRequests();
+}
+
+const pendingDecisionWorkItem =
+  pendingDecision
+    ? workItems.find(
+        (item) =>
+          item.id === pendingDecision.action.workItemId
+      )
+    : undefined;
 
   return (
     <div className="app-shell">
-      <Sidebar />
+      <Sidebar
+        activeView={activeView}
+        pendingActionCount={pendingActions.length}
+        onNavigate={(view) => {
+          if (view === "maintenance") {
+            setSelectedMaintenanceWorkItemId(null);
+          }
+
+          setActiveView(view);
+          setActionError(null);
+        }}
+      />
 
       <main className="dashboard">
         <header className="dashboard-header">
           <div>
             <span className="eyebrow">
-              Property Operations
+              {currentView.eyebrow}
             </span>
 
-            <h1>Dashboard</h1>
+            <h1>{currentView.title}</h1>
 
-            <p>
-              Review incoming requests and AI-proposed actions.
-            </p>
+            <p>{currentView.description}</p>
           </div>
         </header>
 
-        <section className="stats-grid">
-          <StatCard
-            label="Total Work Items"
-            value={totalWorkItems}
-            helperText="Incoming requests"
+        {/* =====================================================
+            DASHBOARD
+           ===================================================== */}
+
+        {activeView === "dashboard" && (
+          <DashboardPage
+            totalWorkItems={totalWorkItems}
+            newWorkItems={newWorkItems}
+            pendingActionCount={pendingActions.length}
+            maintenanceRequests={maintenanceRequests}
+            newRequestMessage={newRequestMessage}
+            creatingRequest={creatingRequest}
+            createRequestError={createRequestError}
+            createRequestSuccess={createRequestSuccess}
+            onNewRequestMessageChange={setNewRequestMessage}
+            onCreateRequest={handleCreateRequest}
+            onViewWorkItems={() =>
+              setActiveView("work-items")
+            }
+            onViewMaintenance={() => {
+              setSelectedMaintenanceWorkItemId(null);
+              setActiveView("maintenance");
+            }}
           />
+        )}
 
-          <StatCard
-            label="Open"
-            value={openWorkItems}
-            helperText="Needs attention"
+        {/* =====================================================
+            WORK ITEMS
+           ===================================================== */}
+
+        {/* =====================================================
+            WORK ITEMS
+           ===================================================== */}
+
+        {activeView === "work-items" && (
+          <WorkItemsPage
+            workItems={workItems}
+            loading={loading}
+            error={error}
+            selectedWorkItem={selectedWorkItem}
+            proposedAction={proposedAction}
+            latestActions={latestActions}
+            generatingAction={generatingAction}
+            updatingAction={updatingAction}
+            actionError={actionError}
+            onReviewWorkItem={handleReviewWorkItem}
+            onCloseDetails={handleCloseDetails}
+            onGenerateProposedAction={
+              handleGenerateProposedAction
+            }
+            onApprove={handleApprove}
+            onReject={handleReject}
+            onViewMaintenance={handleViewMaintenance}
           />
+        )}
 
-          <StatCard
-            label="High Priority"
-            value={highPriorityItems}
-            helperText="Review first"
+        {/* =====================================================
+            MAINTENANCE
+           ===================================================== */}
+
+{activeView === "maintenance" && (
+  <MaintenancePage
+    selectedWorkItemId={selectedMaintenanceWorkItemId}
+    onClearSelection={() =>
+      setSelectedMaintenanceWorkItemId(null)
+    }
+    onWorkItemClosed={handleMaintenanceWorkItemClosed}
+  />
+)}
+
+        {/* =====================================================
+            PENDING ACTIONS
+           ===================================================== */}
+
+        {activeView === "pending-actions" && (
+          <PendingActionsPage
+            pendingActions={pendingActions}
+            workItems={workItems}
+            selectedPendingAction={selectedPendingAction}
+            pendingDecision={pendingDecision}
+            pendingDecisionWorkItem={pendingDecisionWorkItem}
+            updatingAction={updatingAction}
+            generatingAction={generatingAction}
+            actionError={actionError}
+            onSelectAction={handleSelectPendingAction}
+            onApprove={handleApprovePendingAction}
+            onReject={handleRejectPendingAction}
+            onRegenerate={handleRegenerateRejectedAction}
+            onClearDecision={() => setPendingDecision(null)}
+            onViewMaintenance={(workItemId) => {
+              setPendingDecision(null);
+              handleViewMaintenance(workItemId);
+            }}
           />
-        </section>
-
-        <section className="dashboard-section new-request-section">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">AI Intake</span>
-              <h2>Process New Request</h2>
-              <p>
-                Enter an incoming tenant or property message.
-                Clerova will classify and prioritize it automatically.
-              </p>
-            </div>
-          </div>
-
-          <form
-            className="new-request-form"
-            onSubmit={handleCreateRequest}
-          >
-            <label htmlFor="new-request-message">
-              Incoming message
-            </label>
-
-            <textarea
-              id="new-request-message"
-              value={newRequestMessage}
-              onChange={(event) =>
-                setNewRequestMessage(event.target.value)
-              }
-              placeholder="Example: Water is leaking through the kitchen ceiling at 850 Maple Avenue and it's getting worse."
-              rows={5}
-              disabled={creatingRequest}
-            />
-
-            <div className="new-request-actions">
-              <span className="request-helper">
-                AI will extract the address, category,
-                priority and summary.
-              </span>
-
-              <button
-                className="primary-button"
-                type="submit"
-                disabled={
-                  creatingRequest ||
-                  newRequestMessage.trim().length === 0
-                }
-              >
-                {creatingRequest
-                  ? "Processing with AI..."
-                  : "Process Request"}
-              </button>
-            </div>
-
-            {createRequestError && (
-              <p className="action-error">
-                {createRequestError}
-              </p>
-            )}
-
-            {createRequestSuccess && (
-              <p className="request-success">
-                {createRequestSuccess}
-              </p>
-            )}
-          </form>
-        </section>
-
-        <section className="dashboard-section">
-          <div className="section-heading">
-            <div>
-              <h2>Recent Work Items</h2>
-              <p>
-                AI-classified incoming property requests.
-              </p>
-            </div>
-          </div>
-
-          {loading && <p>Loading work items...</p>}
-
-          {error && <p className="error-message">{error}</p>}
-
-          {!loading && !error && workItems.length === 0 && (
-            <p>No work items found.</p>
-          )}
-
-          {!loading && !error && workItems.length > 0 && (
-            <div className="work-items-list">
-              {workItems.map((workItem) => (
-                <WorkItemCard
-                  key={workItem.id}
-                  workItem={workItem}
-                  onReview={handleReviewWorkItem}
-                />
-              ))}
-            </div>
-          )}
-
-          {selectedWorkItem && (
-            <section className="work-item-details">
-              <div className="details-header">
-                <div>
-                  <span className="details-label">
-                    Work Item
-                  </span>
-
-                  <h2>
-                    {selectedWorkItem.address ??
-                      "Address not provided"}
-                  </h2>
-                </div>
-
-                <button
-                  className="close-button"
-                  onClick={handleCloseDetails}
-                >
-                  Close
-                </button>
-              </div>
-
-              <div className="details-grid">
-                <div>
-                  <span>Priority</span>
-                  <strong>
-                    {selectedWorkItem.priority}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Category</span>
-                  <strong>
-                    {selectedWorkItem.category}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Status</span>
-                  <strong>
-                    {selectedWorkItem.status}
-                  </strong>
-                </div>
-              </div>
-
-              <div className="details-section">
-                <h3>Original Message</h3>
-                <p>{selectedWorkItem.originalMessage}</p>
-              </div>
-
-              <div className="details-section">
-                <h3>AI Summary</h3>
-                <p>{selectedWorkItem.summary}</p>
-              </div>
-
-              {(!proposedAction ||
-                proposedAction.status === "REJECTED") && (
-                <button
-                  className="primary-button"
-                  onClick={handleGenerateProposedAction}
-                  disabled={generatingAction || updatingAction}
-                >
-                  {generatingAction
-                    ? "Generating..."
-                    : proposedAction?.status === "REJECTED"
-                      ? "Generate New Proposed Action"
-                      : "Generate Proposed Action"}
-                </button>
-              )}
-
-              {actionError && (
-                <p className="action-error">
-                  {actionError}
-                </p>
-              )}
-
-              {proposedAction && (
-                <section className="proposed-action">
-                  <h3>Proposed Action</h3>
-
-                  <div className="action-meta">
-                    <div>
-                      <span>Action</span>
-                      <strong>
-                        {proposedAction.actionType}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <span>Status</span>
-                      <strong>
-                        {proposedAction.status}
-                      </strong>
-                    </div>
-                  </div>
-
-                  <div className="details-section">
-                    <h3>AI Reasoning</h3>
-                    <p>{proposedAction.reasoning}</p>
-                  </div>
-
-                  <div className="details-section">
-                    <h3>Drafted Response</h3>
-                    <p className="drafted-response">
-                      {proposedAction.draftedResponse}
-                    </p>
-                  </div>
-
-                  {proposedAction.status ===
-                  "PENDING_APPROVAL" ? (
-                    <div className="approval-actions">
-                      <button
-                        className="approve-button"
-                        onClick={handleApprove}
-                        disabled={updatingAction}
-                      >
-                        {updatingAction
-                          ? "Updating..."
-                          : "Approve"}
-                      </button>
-
-                      <button
-                        className="reject-button"
-                        onClick={handleReject}
-                        disabled={updatingAction}
-                      >
-                        {updatingAction
-                          ? "Updating..."
-                          : "Reject"}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="decision-result">
-                      Action{" "}
-                      {proposedAction.status.toLowerCase()}.
-                    </div>
-                  )}
-                </section>
-              )}
-            </section>
-          )}
-        </section>
-       <section className="dashboard-section">
-         <div className="section-heading">
-           <div>
-             <h2>Maintenance Requests</h2>
-             <p>
-               Requests created from approved AI actions.
-             </p>
-           </div>
-         </div>
-
-         {maintenanceLoading && (
-           <p>Loading maintenance requests...</p>
-         )}
-
-         {maintenanceError && (
-           <p className="error-message">
-             {maintenanceError}
-           </p>
-         )}
-
-         {!maintenanceLoading &&
-           !maintenanceError &&
-           maintenanceRequests.length === 0 && (
-             <p>No maintenance requests yet.</p>
-           )}
-
-         {!maintenanceLoading &&
-           !maintenanceError &&
-           maintenanceRequests.length > 0 && (
-             <div className="maintenance-list">
-               {maintenanceRequests.map((request) => (
-                 <article
-                   className="maintenance-card"
-                   key={request.id}
-                 >
-                   <div className="maintenance-card-header">
-                     <div>
-                       <span className="details-label">
-                         Maintenance Request
-                       </span>
-
-                       <h3>
-                         {request.address ??
-                           "Address not provided"}
-                       </h3>
-                     </div>
-
-                     <span
-                       className={`priority-badge priority-${request.priority.toLowerCase()}`}
-                     >
-                       {request.priority}
-                     </span>
-                   </div>
-
-                   <p className="maintenance-description">
-                     {request.description}
-                   </p>
-
-                   <div className="maintenance-footer">
-                     <span>
-                       Status: <strong>{request.status}</strong>
-                     </span>
-
-                     <span className="ai-created-label">
-                       Created from AI-approved action
-                     </span>
-                   </div>
-                 </article>
-               ))}
-             </div>
-           )}
-       </section>
+        )}
       </main>
     </div>
   );

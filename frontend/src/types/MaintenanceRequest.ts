@@ -7,6 +7,13 @@ export interface MaintenanceRequest {
   description: string;
   priority: "LOW" | "MEDIUM" | "HIGH";
   status: "OPEN" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+  notes: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+export type MaintenanceRequestStatus =
+  | "OPEN"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "CANCELLED";

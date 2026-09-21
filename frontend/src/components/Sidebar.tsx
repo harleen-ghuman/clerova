@@ -1,4 +1,20 @@
-export function Sidebar() {
+export type AppView =
+  | "dashboard"
+  | "work-items"
+  | "maintenance"
+  | "pending-actions";
+
+interface SidebarProps {
+  activeView: AppView;
+  pendingActionCount: number;
+  onNavigate: (view: AppView) => void;
+}
+
+export function Sidebar({
+  activeView,
+  pendingActionCount,
+  onNavigate,
+}: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -11,16 +27,50 @@ export function Sidebar() {
       </div>
 
       <nav className="sidebar-nav">
-        <button className="nav-item active">
+        <button
+          type="button"
+          className={`nav-item ${
+            activeView === "dashboard" ? "active" : ""
+          }`}
+          onClick={() => onNavigate("dashboard")}
+        >
           Dashboard
         </button>
 
-        <button className="nav-item">
+        <button
+          type="button"
+          className={`nav-item ${
+            activeView === "work-items" ? "active" : ""
+          }`}
+          onClick={() => onNavigate("work-items")}
+        >
           Work Items
         </button>
 
-        <button className="nav-item">
-          Pending Actions
+        <button
+          type="button"
+          className={`nav-item ${
+            activeView === "maintenance" ? "active" : ""
+          }`}
+          onClick={() => onNavigate("maintenance")}
+        >
+          Maintenance
+        </button>
+
+        <button
+          type="button"
+          className={`nav-item ${
+            activeView === "pending-actions" ? "active" : ""
+          }`}
+          onClick={() => onNavigate("pending-actions")}
+        >
+          <span>Pending Actions</span>
+
+          {pendingActionCount > 0 && (
+            <span className="nav-count">
+              {pendingActionCount}
+            </span>
+          )}
         </button>
       </nav>
 

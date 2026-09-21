@@ -50,6 +50,9 @@ public class MaintenanceRequest {
     @Column(nullable = false)
     private Instant updatedAt;
 
+    @Column(columnDefinition = "TEXT")
+    private String notes;
+
     @PrePersist
     public void onCreate() {
         Instant now = Instant.now();
@@ -133,5 +136,25 @@ public class MaintenanceRequest {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public void setId(UUID id) {
+        this.id = id;
+    }
+
+    public void setCreatedAt(Instant createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public void setNotes(String notes) {
+        this.notes = notes;
     }
 }

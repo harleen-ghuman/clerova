@@ -1,7 +1,11 @@
 package com.clerova.controller;
 
+import com.clerova.domain.MaintenanceRequest;
 import com.clerova.dto.MaintenanceRequestResponse;
+import com.clerova.dto.UpdateMaintenanceRequest;
 import com.clerova.repository.MaintenanceRequestRepository;
+import com.clerova.service.ActionExecutionService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -12,12 +16,17 @@ import java.util.UUID;
 public class MaintenanceRequestController {
 
     private final MaintenanceRequestRepository maintenanceRequestRepository;
+    private final ActionExecutionService actionExecutionService;
 
     public MaintenanceRequestController(
-            MaintenanceRequestRepository maintenanceRequestRepository
+            MaintenanceRequestRepository maintenanceRequestRepository,
+            ActionExecutionService actionExecutionService
     ) {
         this.maintenanceRequestRepository =
                 maintenanceRequestRepository;
+
+        this.actionExecutionService =
+                actionExecutionService;
     }
 
     @GetMapping
@@ -37,5 +46,23 @@ public class MaintenanceRequestController {
                 .stream()
                 .map(MaintenanceRequestResponse::from)
                 .toList();
+    }
+
+    @PatchMapping("/{id}")
+    public ResponseEntity<MaintenanceRequestResponse>
+    updateMaintenanceRequest(
+            @PathVariable UUID id,
+            @RequestBody UpdateMaintenanceRequest request
+    ) {
+        MaintenanceRequest updated =
+                actionExecutionService.updateMaintenanceRequest(
+                        id,
+                        request.status(),
+                        request.notes()
+                );
+
+        return ResponseEntity.ok(
+                MaintenanceRequestResponse.from(updated)
+        );
     }
 }

@@ -4,6 +4,7 @@ import com.clerova.ai.AiService;
 import com.clerova.domain.ProposedAction;
 import com.clerova.domain.ProposedActionStatus;
 import com.clerova.domain.WorkItem;
+import com.clerova.domain.WorkItemStatus;
 import com.clerova.dto.ExtractionResult;
 import com.clerova.dto.ProposedActionResult;
 import com.clerova.repository.ProposedActionRepository;
@@ -57,7 +58,13 @@ public class WorkItemService {
     }
 
     public List<WorkItem> getAllWorkItems() {
-        return workItemRepository.findAll();
+        return workItemRepository
+                .findByStatusNotInOrderByCreatedAtDesc(
+                        List.of(
+                                WorkItemStatus.COMPLETED,
+                                WorkItemStatus.CANCELLED
+                        )
+                );
     }
 
     public WorkItem getWorkItem(UUID id) {
@@ -110,7 +117,16 @@ public class WorkItemService {
                 ProposedActionStatus.PENDING_APPROVAL
         );
 
-        return proposedActionRepository.save(proposedAction);
+        ProposedAction savedAction =
+                proposedActionRepository.save(proposedAction);
+
+        workItem.setStatus(
+                WorkItemStatus.WAITING_FOR_APPROVAL
+        );
+
+        workItemRepository.save(workItem);
+
+        return savedAction;
     }
 
     @Transactional
@@ -140,30 +156,72 @@ public class WorkItemService {
         ProposedAction savedAction =
                 proposedActionRepository.save(proposedAction);
 
+        WorkItem workItem = savedAction.getWorkItem();
+
         switch (savedAction.getActionType()) {
-            case CREATE_MAINTENANCE_REQUEST ->
-                    actionExecutionService
-                            .executeMaintenanceRequest(savedAction);
+
+            case CREATE_MAINTENANCE_REQUEST -> {
+                actionExecutionService
+                        .executeMaintenanceRequest(savedAction);
+
+                workItem.setStatus(
+                        WorkItemStatus.IN_PROGRESS
+                );
+
+                workItemRepository.save(workItem);
+            }
+
+            case REQUEST_MORE_INFORMATION -> {
+                workItem.setStatus(
+                        WorkItemStatus.WAITING_FOR_INFORMATION
+                );
+
+                workItemRepository.save(workItem);
+            }
+
+            case RESPOND_TO_CUSTOMER -> {
+                workItem.setStatus(
+                        WorkItemStatus.COMPLETED
+                );
+
+                workItemRepository.save(workItem);
+            }
+
+            case NO_ACTION -> {
+                workItem.setStatus(
+                        WorkItemStatus.COMPLETED
+                );
+
+                workItemRepository.save(workItem);
+            }
 
             default -> {
-                // Other action types will be implemented later.
+                workItem.setStatus(
+                        WorkItemStatus.IN_PROGRESS
+                );
+
+                workItemRepository.save(workItem);
             }
         }
 
         return savedAction;
     }
 
+    @Transactional
     public ProposedAction rejectProposedAction(UUID proposedActionId) {
 
         ProposedAction proposedAction =
                 proposedActionRepository.findById(proposedActionId)
                         .orElseThrow(() ->
                                 new RuntimeException(
-                                        "Proposed action not found: " + proposedActionId
+                                        "Proposed action not found: "
+                                                + proposedActionId
                                 )
                         );
 
-        if (proposedAction.getStatus() != ProposedActionStatus.PENDING_APPROVAL) {
+        if (proposedAction.getStatus()
+                != ProposedActionStatus.PENDING_APPROVAL) {
+
             throw new IllegalStateException(
                     "Only pending proposed actions can be rejected"
             );
@@ -172,6 +230,12 @@ public class WorkItemService {
         proposedAction.setStatus(
                 ProposedActionStatus.REJECTED
         );
+
+        WorkItem workItem = proposedAction.getWorkItem();
+
+        workItem.setStatus(WorkItemStatus.IN_PROGRESS);
+
+        workItemRepository.save(workItem);
 
         return proposedActionRepository.save(proposedAction);
     }

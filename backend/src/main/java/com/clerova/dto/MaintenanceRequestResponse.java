@@ -17,7 +17,8 @@ public record MaintenanceRequestResponse(
         Priority priority,
         MaintenanceRequestStatus status,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        String notes
 ) {
 
     public static MaintenanceRequestResponse from(
@@ -33,7 +34,8 @@ public record MaintenanceRequestResponse(
                 request.getPriority(),
                 request.getStatus(),
                 request.getCreatedAt(),
-                request.getUpdatedAt()
+                request.getUpdatedAt(),
+                request.getNotes()
         );
     }
 }
