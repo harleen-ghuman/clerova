@@ -21,4 +21,4 @@ COPY --from=build /app/target/*.jar app.jar
 
 EXPOSE 8080
 
-ENTRYPOINT ["sh", "-c", "if [ -n \"$OPENAI_API_KEY\" ]; then echo 'OPENAI_API_KEY is available'; else echo 'OPENAI_API_KEY is MISSING'; fi; exec java -jar app.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar"]
