@@ -17,14 +17,19 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <aside className="sidebar">
-      <div className="brand">
+      <button
+        type="button"
+        className="brand brand-button"
+        onClick={() => onNavigate("dashboard")}
+        aria-label="Go to dashboard"
+      >
         <div className="brand-mark">C</div>
 
         <div>
           <strong>Clerova</strong>
           <span>Property Operations</span>
         </div>
-      </div>
+      </button>
 
       <nav className="sidebar-nav">
         <button

@@ -2274,3 +2274,95 @@ button {
   font-size: 14px;
   line-height: 1.45;
 }
+
+/* Clickable desktop brand */
+.brand-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Hidden on desktop */
+.mobile-nav,
+.mobile-brand {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: fit-content;
+    margin-bottom: 20px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .mobile-brand > span:last-child {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .mobile-brand strong {
+    font-size: 16px;
+  }
+
+  .mobile-brand small {
+    font-size: 11px;
+    opacity: 0.65;
+  }
+
+  .mobile-nav {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+
+    background: white;
+    border-top: 1px solid #e5e7eb;
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .mobile-nav button {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    padding: 10px 4px;
+    font-size: 11px;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .mobile-nav button.active {
+    font-weight: 700;
+  }
+
+  .mobile-nav-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 17px;
+    height: 17px;
+    margin-left: 3px;
+    padding: 0 4px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .dashboard {
+    padding-bottom: 90px;
+  }
+}

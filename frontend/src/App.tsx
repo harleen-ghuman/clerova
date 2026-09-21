@@ -734,7 +734,76 @@ const pendingDecisionWorkItem =
         }}
       />
 
+      <nav className="mobile-nav" aria-label="Mobile navigation">
+        <button
+          type="button"
+          className={activeView === "dashboard" ? "active" : ""}
+          onClick={() => {
+            setActiveView("dashboard");
+            setActionError(null);
+          }}
+        >
+          Dashboard
+        </button>
+
+        <button
+          type="button"
+          className={activeView === "work-items" ? "active" : ""}
+          onClick={() => {
+            setActiveView("work-items");
+            setActionError(null);
+          }}
+        >
+          Work Items
+        </button>
+
+        <button
+          type="button"
+          className={activeView === "pending-actions" ? "active" : ""}
+          onClick={() => {
+            setActiveView("pending-actions");
+            setActionError(null);
+          }}
+        >
+          AI Review
+          {pendingActions.length > 0 && (
+            <span className="mobile-nav-count">
+              {pendingActions.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          className={activeView === "maintenance" ? "active" : ""}
+          onClick={() => {
+            setSelectedMaintenanceWorkItemId(null);
+            setActiveView("maintenance");
+            setActionError(null);
+          }}
+        >
+          Maintenance
+        </button>
+      </nav>
+
       <main className="dashboard">
+      <button
+        type="button"
+        className="mobile-brand"
+        onClick={() => {
+          setSelectedMaintenanceWorkItemId(null);
+          setActiveView("dashboard");
+          setActionError(null);
+        }}
+        aria-label="Go to dashboard"
+      >
+        <span className="brand-mark">C</span>
+
+        <span>
+          <strong>Clerova</strong>
+          <small>Property Operations</small>
+        </span>
+      </button>
         <header className="dashboard-header">
           <div>
             <span className="eyebrow">
