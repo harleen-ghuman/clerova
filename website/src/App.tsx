@@ -1,6 +1,5 @@
 import "./App.css";
 
-const LIVE_DEMO_URL = "https://app.clerova-ai.com";
 const REQUEST_DEMO_URL = "https://tally.so/r/jajWzE";
 
 function App() {
@@ -24,7 +23,7 @@ function App() {
           target="_blank"
           rel="noreferrer"
         >
-          Request a Demo
+          Request a Live Demo
         </a>
       </header>
 
@@ -49,21 +48,12 @@ function App() {
             <div className="hero-actions">
               <a
                 className="button button-primary"
-                href={LIVE_DEMO_URL}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Try the Live Demo
-                <span aria-hidden="true">→</span>
-              </a>
-
-              <a
-                className="button button-secondary"
                 href={REQUEST_DEMO_URL}
                 target="_blank"
                 rel="noreferrer"
               >
-                Request a Demo
+                Request a Live Demo
+                <span aria-hidden="true">→</span>
               </a>
             </div>
 
@@ -255,15 +245,6 @@ function App() {
                 </div>
               </div>
             </div>
-
-            <a
-              className="text-link"
-              href={LIVE_DEMO_URL}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Explore the live product <span>→</span>
-            </a>
           </div>
 
           <div className="product-image">
@@ -405,28 +386,14 @@ function App() {
           <div className="cta-actions">
             <a
               className="button button-light"
-              href={LIVE_DEMO_URL}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Try the Live Demo
-              <span>→</span>
-            </a>
-
-            <a
-              className="button button-dark-outline"
               href={REQUEST_DEMO_URL}
               target="_blank"
               rel="noreferrer"
             >
-              Request a Demo
+              Request a Live Demo
+              <span>→</span>
             </a>
           </div>
-
-          <small>
-            The public demo uses sample data. Please don't enter real resident
-            or confidential information.
-          </small>
         </section>
       </main>
 
