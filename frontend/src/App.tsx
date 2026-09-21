@@ -172,14 +172,28 @@ useEffect(() => {
       );
 
       setProposedAction(result);
+
       setLatestActions((current) => ({
         ...current,
         [result.workItemId]: result,
       }));
+
       setPendingActions((current) => [
         result,
         ...current.filter((action) => action.id !== result.id),
       ]);
+
+      const refreshedWorkItems = await getWorkItems();
+
+      setWorkItems(refreshedWorkItems);
+
+      const refreshedSelectedWorkItem = refreshedWorkItems.find(
+        (item) => item.id === selectedWorkItem.id
+      );
+
+      if (refreshedSelectedWorkItem) {
+        setSelectedWorkItem(refreshedSelectedWorkItem);
+      }
     } catch (err) {
       console.error("Failed to generate proposed action:", err);
       setActionError("Unable to generate proposed action.");
