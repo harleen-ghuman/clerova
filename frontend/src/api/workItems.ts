@@ -1,7 +1,7 @@
 import type { WorkItem } from "../types/WorkItem";
 import type { ProposedAction } from "../types/ProposedAction";
+import { API_BASE_URL } from "../config";
 
-const API_BASE_URL = "http://localhost:8080";
 
 export async function getWorkItems(): Promise<WorkItem[]> {
   const response = await fetch(`${API_BASE_URL}/api/work-items`);
@@ -74,7 +74,7 @@ export async function getProposedActions(
   workItemId: string
 ): Promise<ProposedAction[]> {
   const response = await fetch(
-    `http://localhost:8080/api/work-items/${workItemId}/proposed-actions`
+    `${API_BASE_URL}/api/work-items/${workItemId}/proposed-actions`
   );
 
   if (!response.ok) {
@@ -89,7 +89,7 @@ export async function createWorkItem(
   message: string
 ): Promise<WorkItem> {
   const response = await fetch(
-    "http://localhost:8080/api/work-items",
+    '${API_BASE_URL}/api/work-items',
     {
       method: "POST",
       headers: {

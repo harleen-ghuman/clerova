@@ -2,14 +2,14 @@ import type {
   MaintenanceRequest,
   MaintenanceRequestStatus,
 } from "../types/MaintenanceRequest";
+import { API_BASE_URL } from "../config";
 
-const API_BASE_URL = "http://localhost:8080/api";
 
 export async function getMaintenanceRequests(): Promise<
   MaintenanceRequest[]
 > {
   const response = await fetch(
-    `${API_BASE_URL}/maintenance-requests`
+    `${API_BASE_URL}/api/maintenance-requests`
   );
 
   if (!response.ok) {
@@ -29,7 +29,7 @@ export async function updateMaintenanceRequest(
   }
 ): Promise<MaintenanceRequest> {
   const response = await fetch(
-    `${API_BASE_URL}/maintenance-requests/${id}`,
+    `${API_BASE_URL}/api/maintenance-requests/${id}`,
     {
       method: "PATCH",
       headers: {
