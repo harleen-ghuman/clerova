@@ -71,7 +71,7 @@ function App() {
                   <span />
                 </div>
                 <div className="browser-address">
-                  app.clerova-ai.com
+                  Clerova
                 </div>
               </div>
 
