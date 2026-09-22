@@ -6,11 +6,13 @@ import com.clerova.dto.AiChatResponse;
 import com.clerova.dto.ExtractionRequest;
 import com.clerova.dto.ExtractionResult;
 import jakarta.validation.Valid;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Profile("!prod")
 @RestController
 @RequestMapping("/api/ai")
 public class AiController {
