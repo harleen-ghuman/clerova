@@ -299,6 +299,62 @@ class EmailIntakeTest {
     }
 
     @Test
+    void replyToRecentlyClosedRequestReopensIt() throws Exception {
+        proposeAction(ActionType.RESPOND_TO_CUSTOMER);
+        String workItemId = deliverNew("<closed1@x>", "When is rent due?");
+
+        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/approve",
+                        latestAction(workItemId).get("id").asText()).with(user))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
+
+        deliver(payload(forwardingAddress, "<closed2@x>", "<closed1@x>", null,
+                "tina@example.com", "Thanks, and is there a grace period?"))
+                .andExpect(jsonPath("$.status").value("STORED"));
+
+        processor.processDue();
+
+        mockMvc.perform(get("/api/inbox").with(user))
+                .andExpect(jsonPath("$[0].status").value("ATTACHED"))
+                .andExpect(jsonPath("$[0].workItemId").value(workItemId));
+
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.status").value("WAITING_FOR_APPROVAL"));
+
+        JsonNode events = json(mockMvc.perform(get("/api/work-items/{id}/events", workItemId).with(user)));
+        assertThat(events.findValuesAsText("type")).contains("REOPENED", "FOLLOW_UP_RECEIVED");
+    }
+
+    @Test
+    void replyToLongClosedRequestStartsNewRequest() throws Exception {
+        proposeAction(ActionType.RESPOND_TO_CUSTOMER);
+        String workItemId = deliverNew("<old1@x>", "When is rent due?");
+
+        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/approve",
+                        latestAction(workItemId).get("id").asText()).with(user))
+                .andExpect(status().isOk());
+
+        jdbcTemplate.update(
+                "update work_items set updated_at = ? where id = ?",
+                java.sql.Timestamp.from(java.time.Instant.now().minus(java.time.Duration.ofDays(30))),
+                UUID.fromString(workItemId)
+        );
+
+        deliver(payload(forwardingAddress, "<old2@x>", "<old1@x>", null,
+                "tina@example.com", "New issue: the heater is broken."))
+                .andExpect(jsonPath("$.status").value("STORED"));
+
+        processor.processDue();
+
+        JsonNode reply = json(mockMvc.perform(get("/api/inbox").with(user))).get(0);
+
+        assertThat(reply.get("status").asText()).isEqualTo("PROCESSED");
+        assertThat(reply.get("workItemId").asText()).isNotEqualTo(workItemId);
+    }
+
+    @Test
     void replyToClerovaAddressThreadsByMailboxHash() throws Exception {
         String workItemId = deliverNew("<hash1@x>", "Heater is broken.");
 

@@ -278,9 +278,9 @@ public class WorkItemService {
     }
 
     /**
-     * A follow-up email arrived for an open work item. Items waiting on the
-     * sender or on a decision go back to review; a pending proposal is
-     * superseded because it did not see the new message.
+     * A follow-up email arrived for a work item. Items waiting on the sender
+     * or on a decision, and recently closed items, go back to review; a
+     * pending proposal is superseded because it did not see the new message.
      *
      * @return true if the work item needs a new proposal
      */
@@ -321,6 +321,14 @@ public class WorkItemService {
             case NEW, WAITING_FOR_INFORMATION, ESCALATED -> {
                 // Back to review below
             }
+
+            case COMPLETED, CANCELLED -> workItemEventService.record(
+                    organizationId,
+                    workItemId,
+                    WorkItemEventType.REOPENED,
+                    "Reopened by a new email",
+                    null
+            );
 
             default -> {
                 // In progress (e.g. maintenance underway): keep the message

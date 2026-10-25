@@ -43,6 +43,12 @@ public class InboundEmailProcessor {
     private static final int BATCH_SIZE = 10;
     private static final Duration STALE_PROCESSING = Duration.ofMinutes(10);
 
+    /**
+     * A reply to a request closed within this window reopens it; replies to
+     * older closed requests start a new one.
+     */
+    static final Duration REOPEN_WINDOW = Duration.ofDays(14);
+
     private static final List<WorkItemStatus> CLOSED_STATUSES = List.of(
             WorkItemStatus.COMPLETED,
             WorkItemStatus.CANCELLED
@@ -196,8 +202,8 @@ public class InboundEmailProcessor {
     }
 
     /**
-     * The open work item this email replies to, found from the reply-to
-     * address hash or from the threading headers.
+     * The work item this email replies to, found from the reply-to address
+     * hash or from the threading headers, if it can still take replies.
      */
     private Optional<WorkItem> findThreadWorkItem(InboundMessage message) {
         UUID organizationId = message.getOrganizationId();
@@ -206,7 +212,7 @@ public class InboundEmailProcessor {
                 .flatMap(id -> workItemRepository.findByIdAndOrganizationId(id, organizationId));
 
         if (byHash.isPresent()) {
-            return byHash.filter(item -> !CLOSED_STATUSES.contains(item.getStatus()));
+            return byHash.filter(InboundEmailProcessor::acceptsReplies);
         }
 
         List<String> referencedIds = new ArrayList<>();
@@ -235,8 +241,18 @@ public class InboundEmailProcessor {
                 .distinct()
                 .map(id -> workItemRepository.findByIdAndOrganizationId(id, organizationId))
                 .flatMap(Optional::stream)
-                .filter(item -> !CLOSED_STATUSES.contains(item.getStatus()))
+                .filter(InboundEmailProcessor::acceptsReplies)
                 .findFirst();
+    }
+
+    /** Open, or closed recently enough that a reply should reopen it. */
+    static boolean acceptsReplies(WorkItem workItem) {
+        if (!CLOSED_STATUSES.contains(workItem.getStatus())) {
+            return true;
+        }
+
+        return workItem.getUpdatedAt() != null
+                && workItem.getUpdatedAt().isAfter(Instant.now().minus(REOPEN_WINDOW));
     }
 
     static boolean isGmailForwardingConfirmation(InboundMessage message) {

@@ -8,5 +8,6 @@ public enum WorkItemEventType {
     PROPOSAL_REJECTED,
     REPLY_SENT,
     MAINTENANCE_UPDATED,
-    CLOSED
+    CLOSED,
+    REOPENED
 }

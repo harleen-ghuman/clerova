@@ -704,8 +704,10 @@ Postmark inbound webhook  ->  stored (duplicates skipped)
 Background processor
   - automated / bulk email ........ Ignored (can be processed anyway)
   - Gmail forwarding confirmation . Ignored, code shown on Email Setup
-  - reply to an open request ...... Added to that request's conversation;
-                                    waiting/escalated requests return to review
+  - reply to a request ............ Added to that request's conversation;
+                                    waiting/escalated requests, and requests
+                                    closed in the last 14 days, return to review
+                                    (older closed requests: new request)
   - anything else ................. New work item + AI proposal
         |
         v
