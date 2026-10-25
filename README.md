@@ -643,6 +643,12 @@ The schema is managed by Flyway migrations in
 Databases created before Flyway was introduced are baselined at version 1
 automatically on first start.
 
+On PostgreSQL, `db/vendor/postgresql/afterMigrate.sql` runs after every
+migration. It enables row level security on every table and revokes the
+Supabase Data API roles (`anon`, `authenticated`), so the anon key used by
+the frontend for sign-in cannot read or change application data. The
+backend connects as the table owner and is not affected.
+
 Flyway takes a PostgreSQL advisory lock while migrating, so `DATABASE_URL`
 should use a direct or session-mode connection (Supabase port `5432`), not the
 transaction-mode pooler (port `6543`).
