@@ -11,10 +11,17 @@ public class OpenAiConfig {
 
     @Bean
     public OpenAIClient openAIClient(
-            @Value("${openai.api-key}") String apiKey
+            @Value("${openai.api-key}") String apiKey,
+            @Value("${openai.base-url:}") String baseUrl
     ) {
-        return OpenAIOkHttpClient.builder()
-                .apiKey(apiKey)
-                .build();
+        OpenAIOkHttpClient.Builder builder = OpenAIOkHttpClient.builder()
+                .apiKey(apiKey);
+
+        // Optional, e.g. for a proxy; defaults to api.openai.com
+        if (!baseUrl.isBlank()) {
+            builder.baseUrl(baseUrl);
+        }
+
+        return builder.build();
     }
 }

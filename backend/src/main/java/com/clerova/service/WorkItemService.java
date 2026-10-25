@@ -1,45 +1,86 @@
 package com.clerova.service;
 
 import com.clerova.ai.AiService;
+import com.clerova.domain.InboundMessage;
+import com.clerova.domain.MaintenanceRequestStatus;
 import com.clerova.domain.ProposedAction;
 import com.clerova.domain.ProposedActionStatus;
 import com.clerova.domain.WorkItem;
+import com.clerova.domain.WorkItemEventType;
+import com.clerova.domain.WorkItemSource;
 import com.clerova.domain.WorkItemStatus;
 import com.clerova.dto.ExtractionResult;
 import com.clerova.dto.ProposedActionResult;
+import com.clerova.exception.NotFoundException;
+import com.clerova.repository.MaintenanceRequestRepository;
 import com.clerova.repository.ProposedActionRepository;
 import com.clerova.repository.WorkItemRepository;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
 public class WorkItemService {
 
+    private static final List<WorkItemStatus> CLOSED_STATUSES = List.of(
+            WorkItemStatus.COMPLETED,
+            WorkItemStatus.CANCELLED
+    );
+
+    private static final List<MaintenanceRequestStatus> ACTIVE_MAINTENANCE_STATUSES = List.of(
+            MaintenanceRequestStatus.OPEN,
+            MaintenanceRequestStatus.IN_PROGRESS
+    );
+
+    /** Limit on email text sent to the AI for extraction. */
+    private static final int MAX_EXTRACTION_CHARS = 8_000;
+
     private final AiService aiService;
     private final WorkItemRepository workItemRepository;
     private final ProposedActionRepository proposedActionRepository;
+    private final MaintenanceRequestRepository maintenanceRequestRepository;
     private final ActionExecutionService actionExecutionService;
+    private final AiUsageService aiUsageService;
+    private final WorkItemEventService workItemEventService;
+    private final ConversationService conversationService;
+    private final TransactionTemplate transactionTemplate;
 
     public WorkItemService(
             AiService aiService,
             WorkItemRepository workItemRepository,
             ProposedActionRepository proposedActionRepository,
-            ActionExecutionService actionExecutionService
+            MaintenanceRequestRepository maintenanceRequestRepository,
+            ActionExecutionService actionExecutionService,
+            AiUsageService aiUsageService,
+            WorkItemEventService workItemEventService,
+            ConversationService conversationService,
+            TransactionTemplate transactionTemplate
     ) {
         this.aiService = aiService;
         this.workItemRepository = workItemRepository;
         this.proposedActionRepository = proposedActionRepository;
+        this.maintenanceRequestRepository = maintenanceRequestRepository;
         this.actionExecutionService = actionExecutionService;
+        this.aiUsageService = aiUsageService;
+        this.workItemEventService = workItemEventService;
+        this.conversationService = conversationService;
+        this.transactionTemplate = transactionTemplate;
     }
 
     public WorkItem createWorkItem(
-            String organizationId,
-            String message
+            UUID organizationId,
+            String message,
+            UUID actorUserId
     ) {
+
+        aiUsageService.consumeAiRequest(organizationId);
 
         ExtractionResult extraction =
                 aiService.extract(message);
@@ -48,43 +89,172 @@ public class WorkItemService {
 
         workItem.setOrganizationId(organizationId);
         workItem.setOriginalMessage(message);
+        workItem.setSource(WorkItemSource.MANUAL);
 
+        applyExtraction(workItem, extraction);
+
+        return transactionTemplate.execute(status -> {
+            WorkItem saved = workItemRepository.save(workItem);
+
+            workItemEventService.record(
+                    organizationId,
+                    saved.getId(),
+                    WorkItemEventType.CREATED,
+                    "Entered manually",
+                    actorUserId
+            );
+
+            return saved;
+        });
+    }
+
+    /**
+     * Creates a work item from a received email and links the email to it.
+     */
+    public WorkItem createWorkItemFromEmail(InboundMessage email) {
+
+        UUID organizationId = email.getOrganizationId();
+
+        aiUsageService.consumeAiRequest(organizationId);
+
+        String content = email.getContentText() != null ? email.getContentText() : "";
+
+        String extractionInput = """
+                From: %s
+                Subject: %s
+
+                %s
+                """.formatted(
+                email.getFromName() != null
+                        ? email.getFromName() + " <" + email.getFromEmail() + ">"
+                        : email.getFromEmail(),
+                email.getSubject() != null ? email.getSubject() : "(no subject)",
+                content.length() > MAX_EXTRACTION_CHARS
+                        ? content.substring(0, MAX_EXTRACTION_CHARS)
+                        : content
+        );
+
+        ExtractionResult extraction = aiService.extract(extractionInput);
+
+        WorkItem workItem = new WorkItem();
+
+        workItem.setOrganizationId(organizationId);
+        workItem.setOriginalMessage(
+                content.isBlank() && email.getSubject() != null ? email.getSubject() : content
+        );
+        workItem.setSource(WorkItemSource.EMAIL);
+        workItem.setSenderEmail(email.getFromEmail());
+        workItem.setSenderName(email.getFromName());
+        workItem.setSubject(email.getSubject());
+
+        applyExtraction(workItem, extraction);
+
+        return transactionTemplate.execute(status -> {
+            WorkItem saved = workItemRepository.save(workItem);
+
+            workItemEventService.record(
+                    organizationId,
+                    saved.getId(),
+                    WorkItemEventType.CREATED,
+                    "Received by email from " + email.getFromEmail(),
+                    null
+            );
+
+            return saved;
+        });
+    }
+
+    private static void applyExtraction(WorkItem workItem, ExtractionResult extraction) {
         workItem.setCategory(extraction.category);
         workItem.setPriority(extraction.priority);
         workItem.setSummary(extraction.summary);
         workItem.setAddress(extraction.address);
-
-        return workItemRepository.save(workItem);
     }
 
-    public List<WorkItem> getAllWorkItems() {
+    public List<WorkItem> getAllWorkItems(UUID organizationId) {
         return workItemRepository
-                .findByStatusNotInOrderByCreatedAtDesc(
-                        List.of(
-                                WorkItemStatus.COMPLETED,
-                                WorkItemStatus.CANCELLED
-                        )
+                .findByOrganizationIdAndStatusNotInOrderByCreatedAtDesc(
+                        organizationId,
+                        CLOSED_STATUSES
                 );
     }
 
-    public WorkItem getWorkItem(UUID id) {
-        return workItemRepository.findById(id)
+    public WorkItem getWorkItem(UUID organizationId, UUID id) {
+        return workItemRepository.findByIdAndOrganizationId(id, organizationId)
                 .orElseThrow(() ->
-                        new RuntimeException("WorkItem not found: " + id)
+                        new NotFoundException("Work item not found: " + id)
                 );
     }
 
-    public ProposedAction generateProposedAction(UUID workItemId) {
+    /**
+     * The AI call takes several seconds, so it runs outside a transaction.
+     * The work item's optimistic-lock version guards against two concurrent
+     * generations both saving a pending proposal.
+     *
+     * @param actorUserId the requesting user, or null when Clerova generates
+     *                    the proposal automatically for an email
+     */
+    public ProposedAction generateProposedAction(
+            UUID organizationId,
+            UUID workItemId,
+            UUID actorUserId
+    ) {
 
-        WorkItem workItem = workItemRepository.findById(workItemId)
-                .orElseThrow(() ->
-                        new RuntimeException(
-                                "Work item not found: " + workItemId
-                        )
-                );
+        WorkItem workItem = getWorkItem(organizationId, workItemId);
+
+        ensureCanGenerateProposal(workItem);
+
+        aiUsageService.consumeAiRequest(organizationId);
+
+        ProposedActionResult result = aiService.proposeAction(
+                workItem,
+                conversationService.conversationForAi(workItem)
+        );
+
+        return transactionTemplate.execute(status -> {
+
+            ensureCanGenerateProposal(workItem);
+
+            workItem.setStatus(WorkItemStatus.WAITING_FOR_APPROVAL);
+
+            // Merging the detached work item fails if another request
+            // changed it while the AI call was running.
+            WorkItem savedWorkItem = workItemRepository.save(workItem);
+
+            ProposedAction proposedAction = new ProposedAction();
+
+            proposedAction.setWorkItem(savedWorkItem);
+            proposedAction.setActionType(result.actionType);
+            proposedAction.setReasoning(result.reasoning);
+            proposedAction.setDraftedResponse(result.draftedResponse);
+            proposedAction.setStatus(
+                    ProposedActionStatus.PENDING_APPROVAL
+            );
+
+            ProposedAction saved = proposedActionRepository.save(proposedAction);
+
+            workItemEventService.record(
+                    organizationId,
+                    workItemId,
+                    WorkItemEventType.PROPOSAL_GENERATED,
+                    "Recommended " + humanize(result.actionType.name()),
+                    actorUserId
+            );
+
+            return saved;
+        });
+    }
+
+    private void ensureCanGenerateProposal(WorkItem workItem) {
+
+        if (CLOSED_STATUSES.contains(workItem.getStatus())) {
+            throw new IllegalStateException(
+                    "This work item is already closed"
+            );
+        }
 
         proposedActionRepository
-                .findFirstByWorkItemIdOrderByCreatedAtDesc(workItemId)
+                .findFirstByWorkItemIdOrderByCreatedAtDesc(workItem.getId())
                 .ifPresent(latestAction -> {
 
                     if (latestAction.getStatus()
@@ -95,62 +265,104 @@ public class WorkItemService {
                         );
                     }
 
-                    if (latestAction.getStatus()
-                            == ProposedActionStatus.APPROVED) {
+                    // A NEW work item with an approved action was reopened
+                    // by a follow-up email and needs a fresh proposal.
+                    if (latestAction.getStatus() != ProposedActionStatus.REJECTED
+                            && workItem.getStatus() != WorkItemStatus.NEW) {
 
                         throw new IllegalStateException(
                                 "This work item already has an approved proposed action"
                         );
                     }
                 });
+    }
 
-        ProposedActionResult result =
-                aiService.proposeAction(workItem);
+    /**
+     * A follow-up email arrived for a work item. Items waiting on the sender
+     * or on a decision, and recently closed items, go back to review; a
+     * pending proposal is superseded because it did not see the new message.
+     *
+     * @return true if the work item needs a new proposal
+     */
+    @Transactional
+    public boolean reopenForFollowUp(UUID organizationId, UUID workItemId, String fromEmail) {
 
-        ProposedAction proposedAction = new ProposedAction();
+        WorkItem workItem = getWorkItem(organizationId, workItemId);
 
-        proposedAction.setWorkItem(workItem);
-        proposedAction.setActionType(result.actionType);
-        proposedAction.setReasoning(result.reasoning);
-        proposedAction.setDraftedResponse(result.draftedResponse);
-        proposedAction.setStatus(
-                ProposedActionStatus.PENDING_APPROVAL
+        workItemEventService.record(
+                organizationId,
+                workItemId,
+                WorkItemEventType.FOLLOW_UP_RECEIVED,
+                "New email from " + fromEmail,
+                null
         );
 
-        ProposedAction savedAction =
-                proposedActionRepository.save(proposedAction);
+        switch (workItem.getStatus()) {
 
-        workItem.setStatus(
-                WorkItemStatus.WAITING_FOR_APPROVAL
-        );
+            case WAITING_FOR_APPROVAL -> {
+                proposedActionRepository
+                        .findFirstByWorkItemIdOrderByCreatedAtDesc(workItemId)
+                        .filter(action -> action.getStatus() == ProposedActionStatus.PENDING_APPROVAL)
+                        .ifPresent(action -> {
+                            action.setStatus(ProposedActionStatus.REJECTED);
+                            action.recordDecision(null);
+                            proposedActionRepository.save(action);
 
+                            workItemEventService.record(
+                                    organizationId,
+                                    workItemId,
+                                    WorkItemEventType.PROPOSAL_REJECTED,
+                                    "Superseded by a new email",
+                                    null
+                            );
+                        });
+            }
+
+            case NEW, WAITING_FOR_INFORMATION, ESCALATED -> {
+                // Back to review below
+            }
+
+            case COMPLETED, CANCELLED -> workItemEventService.record(
+                    organizationId,
+                    workItemId,
+                    WorkItemEventType.REOPENED,
+                    "Reopened by a new email",
+                    null
+            );
+
+            default -> {
+                // In progress (e.g. maintenance underway): keep the message
+                // on the item without changing its workflow.
+                return false;
+            }
+        }
+
+        workItem.setStatus(WorkItemStatus.NEW);
         workItemRepository.save(workItem);
 
-        return savedAction;
+        return true;
     }
 
     @Transactional
-    public ProposedAction approveProposedAction(UUID proposedActionId) {
+    public ProposedAction approveProposedAction(
+            UUID organizationId,
+            UUID proposedActionId,
+            String finalResponse,
+            UUID actorUserId
+    ) {
 
         ProposedAction proposedAction =
-                proposedActionRepository.findById(proposedActionId)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Proposed action not found: "
-                                                + proposedActionId
-                                )
-                        );
-
-        if (proposedAction.getStatus()
-                != ProposedActionStatus.PENDING_APPROVAL) {
-
-            throw new IllegalStateException(
-                    "Only pending proposed actions can be approved"
-            );
-        }
+                getPendingProposedAction(organizationId, proposedActionId, "approved");
 
         proposedAction.setStatus(
                 ProposedActionStatus.APPROVED
+        );
+        proposedAction.recordDecision(actorUserId);
+
+        proposedAction.setFinalResponse(
+                finalResponse != null && !finalResponse.isBlank()
+                        ? finalResponse.trim()
+                        : proposedAction.getDraftedResponse()
         );
 
         ProposedAction savedAction =
@@ -158,62 +370,82 @@ public class WorkItemService {
 
         WorkItem workItem = savedAction.getWorkItem();
 
-        switch (savedAction.getActionType()) {
+        WorkItemStatus nextStatus = switch (savedAction.getActionType()) {
 
             case CREATE_MAINTENANCE_REQUEST -> {
                 actionExecutionService
                         .executeMaintenanceRequest(savedAction);
 
-                workItem.setStatus(
-                        WorkItemStatus.IN_PROGRESS
-                );
-
-                workItemRepository.save(workItem);
+                yield WorkItemStatus.IN_PROGRESS;
             }
 
-            case REQUEST_MORE_INFORMATION -> {
-                workItem.setStatus(
-                        WorkItemStatus.WAITING_FOR_INFORMATION
-                );
+            case REQUEST_MORE_INFORMATION ->
+                    WorkItemStatus.WAITING_FOR_INFORMATION;
 
-                workItemRepository.save(workItem);
-            }
+            case ESCALATE_TO_HUMAN ->
+                    WorkItemStatus.ESCALATED;
 
-            case RESPOND_TO_CUSTOMER -> {
-                workItem.setStatus(
-                        WorkItemStatus.COMPLETED
-                );
+            case RESPOND_TO_CUSTOMER, NO_ACTION ->
+                    WorkItemStatus.COMPLETED;
+        };
 
-                workItemRepository.save(workItem);
-            }
+        workItem.setStatus(nextStatus);
+        workItemRepository.save(workItem);
 
-            case NO_ACTION -> {
-                workItem.setStatus(
-                        WorkItemStatus.COMPLETED
-                );
-
-                workItemRepository.save(workItem);
-            }
-
-            default -> {
-                workItem.setStatus(
-                        WorkItemStatus.IN_PROGRESS
-                );
-
-                workItemRepository.save(workItem);
-            }
-        }
+        workItemEventService.record(
+                organizationId,
+                workItem.getId(),
+                WorkItemEventType.PROPOSAL_APPROVED,
+                "Approved " + humanize(savedAction.getActionType().name()),
+                actorUserId
+        );
 
         return savedAction;
     }
 
     @Transactional
-    public ProposedAction rejectProposedAction(UUID proposedActionId) {
+    public ProposedAction rejectProposedAction(
+            UUID organizationId,
+            UUID proposedActionId,
+            UUID actorUserId
+    ) {
 
         ProposedAction proposedAction =
-                proposedActionRepository.findById(proposedActionId)
+                getPendingProposedAction(organizationId, proposedActionId, "rejected");
+
+        proposedAction.setStatus(
+                ProposedActionStatus.REJECTED
+        );
+        proposedAction.recordDecision(actorUserId);
+
+        // Back to the review queue so a new proposal can be generated.
+        WorkItem workItem = proposedAction.getWorkItem();
+
+        workItem.setStatus(WorkItemStatus.NEW);
+
+        workItemRepository.save(workItem);
+
+        workItemEventService.record(
+                organizationId,
+                workItem.getId(),
+                WorkItemEventType.PROPOSAL_REJECTED,
+                "Rejected " + humanize(proposedAction.getActionType().name()),
+                actorUserId
+        );
+
+        return proposedActionRepository.save(proposedAction);
+    }
+
+    private ProposedAction getPendingProposedAction(
+            UUID organizationId,
+            UUID proposedActionId,
+            String verb
+    ) {
+        ProposedAction proposedAction =
+                proposedActionRepository
+                        .findByIdAndWorkItemOrganizationId(proposedActionId, organizationId)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new NotFoundException(
                                         "Proposed action not found: "
                                                 + proposedActionId
                                 )
@@ -223,31 +455,95 @@ public class WorkItemService {
                 != ProposedActionStatus.PENDING_APPROVAL) {
 
             throw new IllegalStateException(
-                    "Only pending proposed actions can be rejected"
+                    "Only pending proposed actions can be " + verb
             );
         }
 
-        proposedAction.setStatus(
-                ProposedActionStatus.REJECTED
-        );
-
-        WorkItem workItem = proposedAction.getWorkItem();
-
-        workItem.setStatus(WorkItemStatus.IN_PROGRESS);
-
-        workItemRepository.save(workItem);
-
-        return proposedActionRepository.save(proposedAction);
+        return proposedAction;
     }
 
-    public List<ProposedAction> getProposedActions(UUID workItemId) {
+    /**
+     * Manually closes a work item, e.g. after an escalation was handled or
+     * the requested information arrived and was dealt with outside Clerova.
+     */
+    @Transactional
+    public WorkItem closeWorkItem(
+            UUID organizationId,
+            UUID workItemId,
+            WorkItemStatus status,
+            UUID actorUserId
+    ) {
 
-        if (!workItemRepository.existsById(workItemId)) {
-            throw new RuntimeException(
-                    "Work item not found: " + workItemId
+        if (!CLOSED_STATUSES.contains(status)) {
+            throw new IllegalStateException(
+                    "Work items can only be closed as COMPLETED or CANCELLED"
             );
         }
 
+        WorkItem workItem = getWorkItem(organizationId, workItemId);
+
+        if (CLOSED_STATUSES.contains(workItem.getStatus())) {
+            throw new IllegalStateException(
+                    "This work item is already closed"
+            );
+        }
+
+        if (workItem.getStatus() == WorkItemStatus.WAITING_FOR_APPROVAL) {
+            throw new IllegalStateException(
+                    "Approve or reject the pending proposed action first"
+            );
+        }
+
+        if (maintenanceRequestRepository.existsByWorkItemIdAndStatusIn(
+                workItemId,
+                ACTIVE_MAINTENANCE_STATUSES
+        )) {
+            throw new IllegalStateException(
+                    "Complete or cancel the maintenance request to close this work item"
+            );
+        }
+
+        workItem.setStatus(status);
+
+        workItemEventService.record(
+                organizationId,
+                workItemId,
+                WorkItemEventType.CLOSED,
+                status == WorkItemStatus.COMPLETED ? "Marked resolved" : "Cancelled",
+                actorUserId
+        );
+
+        return workItemRepository.save(workItem);
+    }
+
+    public List<ProposedAction> getProposedActions(
+            UUID organizationId,
+            UUID workItemId
+    ) {
+
+        getWorkItem(organizationId, workItemId);
+
         return proposedActionRepository.findByWorkItemIdOrderByCreatedAtDesc(workItemId);
+    }
+
+    /**
+     * Latest proposed action for every open work item, in one query instead
+     * of one request per work item.
+     */
+    public List<ProposedAction> getLatestProposedActions(UUID organizationId) {
+
+        Map<UUID, ProposedAction> latestByWorkItem = new LinkedHashMap<>();
+
+        for (ProposedAction action : proposedActionRepository
+                .findForOpenWorkItemsOrderByCreatedAtDesc(organizationId, CLOSED_STATUSES)) {
+
+            latestByWorkItem.putIfAbsent(action.getWorkItem().getId(), action);
+        }
+
+        return new ArrayList<>(latestByWorkItem.values());
+    }
+
+    static String humanize(String enumName) {
+        return enumName.toLowerCase().replace('_', ' ');
     }
 }

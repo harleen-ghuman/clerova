@@ -1,112 +1,70 @@
 import type { WorkItem } from "../types/WorkItem";
 import type { ProposedAction } from "../types/ProposedAction";
-import { API_BASE_URL } from "../config";
+import { apiRequest } from "./client";
 
-
-export async function getWorkItems(): Promise<WorkItem[]> {
-  const response = await fetch(`${API_BASE_URL}/api/work-items`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to load work items: ${response.status}`);
-  }
-
-  return response.json();
+export function getWorkItems(): Promise<WorkItem[]> {
+  return apiRequest("/api/work-items");
 }
 
-export async function generateProposedAction(
+export function getWorkItem(id: string): Promise<WorkItem> {
+  return apiRequest(`/api/work-items/${id}`);
+}
+
+export function createWorkItem(message: string): Promise<WorkItem> {
+  return apiRequest("/api/work-items", {
+    method: "POST",
+    body: { message },
+  });
+}
+
+export function closeWorkItem(
+  workItemId: string,
+  status: "COMPLETED" | "CANCELLED"
+): Promise<WorkItem> {
+  return apiRequest(`/api/work-items/${workItemId}/close`, {
+    method: "POST",
+    body: { status },
+  });
+}
+
+export function generateProposedAction(
   workItemId: string
 ): Promise<ProposedAction> {
-  const response = await fetch(
-    `${API_BASE_URL}/api/work-items/${workItemId}/proposed-actions`,
-    {
-      method: "POST",
-    }
+  return apiRequest(
+    `/api/work-items/${workItemId}/proposed-actions`,
+    { method: "POST" }
   );
-
-  if (!response.ok) {
-    throw new Error(
-      `Failed to generate proposed action: ${response.status}`
-    );
-  }
-
-  return response.json();
 }
 
-export async function approveProposedAction(
-  proposedActionId: string
-): Promise<ProposedAction> {
-  const response = await fetch(
-    `${API_BASE_URL}/api/work-items/proposed-actions/${proposedActionId}/approve`,
-    {
-      method: "POST",
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      `Failed to approve proposed action: ${response.status}`
-    );
-  }
-
-  return response.json();
-}
-
-export async function rejectProposedAction(
-  proposedActionId: string
-): Promise<ProposedAction> {
-  const response = await fetch(
-    `${API_BASE_URL}/api/work-items/proposed-actions/${proposedActionId}/reject`,
-    {
-      method: "POST",
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      `Failed to reject proposed action: ${response.status}`
-    );
-  }
-
-  return response.json();
-}
-
-export async function getProposedActions(
+export function getProposedActions(
   workItemId: string
 ): Promise<ProposedAction[]> {
-  const response = await fetch(
-    `${API_BASE_URL}/api/work-items/${workItemId}/proposed-actions`
-  );
-
-  if (!response.ok) {
-    throw new Error("Failed to load proposed actions");
-  }
-
-  return response.json();
+  return apiRequest(`/api/work-items/${workItemId}/proposed-actions`);
 }
 
-export async function createWorkItem(
-  organizationId: string,
-  message: string
-): Promise<WorkItem> {
-  const response = await fetch(
-    `${API_BASE_URL}/api/work-items`,
+/** Latest proposed action for each open work item. */
+export function getLatestProposedActions(): Promise<ProposedAction[]> {
+  return apiRequest("/api/work-items/proposed-actions/latest");
+}
+
+export function approveProposedAction(
+  proposedActionId: string,
+  finalResponse?: string
+): Promise<ProposedAction> {
+  return apiRequest(
+    `/api/work-items/proposed-actions/${proposedActionId}/approve`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        organizationId,
-        message,
-      }),
+      body: finalResponse === undefined ? undefined : { finalResponse },
     }
   );
+}
 
-  if (!response.ok) {
-    throw new Error(
-      `Failed to create work item: ${response.status}`
-    );
-  }
-
-  return response.json();
+export function rejectProposedAction(
+  proposedActionId: string
+): Promise<ProposedAction> {
+  return apiRequest(
+    `/api/work-items/proposed-actions/${proposedActionId}/reject`,
+    { method: "POST" }
+  );
 }

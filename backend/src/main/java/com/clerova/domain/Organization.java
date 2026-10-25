@@ -1,0 +1,156 @@
+package com.clerova.domain;
+
+import jakarta.persistence.*;
+
+import java.time.Instant;
+import java.util.UUID;
+
+@Entity
+@Table(name = "organizations")
+public class Organization {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    @Column(nullable = false)
+    private String name;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    private Industry industry;
+
+    @Column(length = 50)
+    private String companySize;
+
+    private String referralSource;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    private Plan plan;
+
+    private Instant trialEndsAt;
+
+    @Column(nullable = false)
+    private Integer aiMonthlyLimit;
+
+    /** Month the usage count applies to, formatted yyyy-MM. */
+    @Column(length = 7)
+    private String aiUsagePeriod;
+
+    @Column(nullable = false)
+    private Integer aiUsageCount = 0;
+
+    /** Local part of the organization's forwarding address. */
+    @Column(length = 40, unique = true)
+    private String inboundEmailToken;
+
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @Column(nullable = false)
+    private Instant updatedAt;
+
+    @PrePersist
+    public void onCreate() {
+        Instant now = Instant.now();
+
+        createdAt = now;
+        updatedAt = now;
+    }
+
+    @PreUpdate
+    public void onUpdate() {
+        updatedAt = Instant.now();
+    }
+
+    public boolean isTrialExpired(Instant now) {
+        return plan == Plan.TRIAL
+                && trialEndsAt != null
+                && now.isAfter(trialEndsAt);
+    }
+
+    public UUID getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public Industry getIndustry() {
+        return industry;
+    }
+
+    public void setIndustry(Industry industry) {
+        this.industry = industry;
+    }
+
+    public String getCompanySize() {
+        return companySize;
+    }
+
+    public void setCompanySize(String companySize) {
+        this.companySize = companySize;
+    }
+
+    public String getReferralSource() {
+        return referralSource;
+    }
+
+    public void setReferralSource(String referralSource) {
+        this.referralSource = referralSource;
+    }
+
+    public Plan getPlan() {
+        return plan;
+    }
+
+    public void setPlan(Plan plan) {
+        this.plan = plan;
+    }
+
+    public Instant getTrialEndsAt() {
+        return trialEndsAt;
+    }
+
+    public void setTrialEndsAt(Instant trialEndsAt) {
+        this.trialEndsAt = trialEndsAt;
+    }
+
+    public Integer getAiMonthlyLimit() {
+        return aiMonthlyLimit;
+    }
+
+    public void setAiMonthlyLimit(Integer aiMonthlyLimit) {
+        this.aiMonthlyLimit = aiMonthlyLimit;
+    }
+
+    public String getAiUsagePeriod() {
+        return aiUsagePeriod;
+    }
+
+    public Integer getAiUsageCount() {
+        return aiUsageCount;
+    }
+
+    public String getInboundEmailToken() {
+        return inboundEmailToken;
+    }
+
+    public void setInboundEmailToken(String inboundEmailToken) {
+        this.inboundEmailToken = inboundEmailToken;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+}

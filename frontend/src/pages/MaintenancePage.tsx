@@ -1,31 +1,32 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-import {
-  getMaintenanceRequests,
-  updateMaintenanceRequest,
-} from "../api/MaintenanceRequests";
+import { updateMaintenanceRequest } from "../api/MaintenanceRequests";
+import { errorMessage } from "../api/client";
 
 import type { MaintenanceRequest } from "../types/MaintenanceRequest";
 
 interface MaintenancePageProps {
+  maintenanceRequests: MaintenanceRequest[];
+  loading: boolean;
+  error: string | null;
   selectedWorkItemId: string | null;
   onClearSelection: () => void;
+  onRequestUpdated: (request: MaintenanceRequest) => void;
   onWorkItemClosed: () => Promise<void>;
 }
 
 export function MaintenancePage({
+  maintenanceRequests,
+  loading,
+  error: loadError,
   selectedWorkItemId,
   onClearSelection,
+  onRequestUpdated,
   onWorkItemClosed,
 }: MaintenancePageProps) {
-  const [maintenanceRequests, setMaintenanceRequests] = useState<
-    MaintenanceRequest[]
-  >([]);
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
-  const [loading, setLoading] = useState(true);
-
-  const [error, setError] = useState<string | null>(null);
-
+  // Unsaved note edits, keyed by request id. Falls back to the saved notes.
   const [notes, setNotes] = useState<Record<string, string>>({});
 
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -38,47 +39,11 @@ export function MaintenancePage({
     Record<string, string>
   >({});
 
-  async function loadMaintenanceRequests() {
-    try {
-      setLoading(true);
-      setError(null);
+  const error = loadError;
 
-      const data = await getMaintenanceRequests();
-
-      const sortedData = [...data].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() -
-          new Date(a.createdAt).getTime()
-      );
-
-      setMaintenanceRequests(sortedData);
-
-      setNotes((current) => {
-        const next = { ...current };
-
-        sortedData.forEach((request) => {
-          if (next[request.id] === undefined) {
-            next[request.id] = request.notes ?? "";
-          }
-        });
-
-        return next;
-      });
-    } catch (err) {
-      console.error(
-        "Failed to load maintenance requests:",
-        err
-      );
-
-      setError("Unable to load maintenance requests.");
-    } finally {
-      setLoading(false);
-    }
+  function notesFor(request: MaintenanceRequest) {
+    return notes[request.id] ?? request.notes ?? "";
   }
-
-  useEffect(() => {
-    void loadMaintenanceRequests();
-  }, []);
 
   async function handleUpdate(
     request: MaintenanceRequest,
@@ -86,21 +51,17 @@ export function MaintenancePage({
   ) {
     try {
       setUpdatingId(request.id);
-      setError(null);
+      setUpdateError(null);
 
       const updated = await updateMaintenanceRequest(
         request.id,
         {
           status,
-          notes: notes[request.id] ?? "",
+          notes: notesFor(request),
         }
       );
 
-      setMaintenanceRequests((current) =>
-        current.map((item) =>
-          item.id === updated.id ? updated : item
-        )
-      );
+      onRequestUpdated(updated);
 
       setNotes((current) => ({
         ...current,
@@ -140,7 +101,9 @@ export function MaintenancePage({
         err
       );
 
-      setError("Unable to update maintenance request.");
+      setUpdateError(
+        errorMessage(err, "Unable to update maintenance request.")
+      );
     } finally {
       setUpdatingId(null);
     }
@@ -214,6 +177,10 @@ export function MaintenancePage({
 
       {error && (
         <p className="error-message">{error}</p>
+      )}
+
+      {updateError && (
+        <p className="action-error">{updateError}</p>
       )}
 
       {!loading &&
@@ -297,7 +264,7 @@ export function MaintenancePage({
 
                       <textarea
                         id={`notes-${request.id}`}
-                        value={notes[request.id] ?? ""}
+                        value={notesFor(request)}
                         onChange={(event) =>
                           setNotes((current) => ({
                             ...current,

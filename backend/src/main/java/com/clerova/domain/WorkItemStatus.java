@@ -5,6 +5,7 @@ public enum WorkItemStatus {
     IN_PROGRESS,
     WAITING_FOR_APPROVAL,
     WAITING_FOR_INFORMATION,
+    ESCALATED,
     COMPLETED,
     CANCELLED
 }

@@ -29,7 +29,7 @@ public class MaintenanceRequest {
     private WorkItem workItem;
 
     @Column(nullable = false)
-    private String organizationId;
+    private UUID organizationId;
 
     private String address;
 
@@ -90,11 +90,11 @@ public class MaintenanceRequest {
         this.workItem = workItem;
     }
 
-    public String getOrganizationId() {
+    public UUID getOrganizationId() {
         return organizationId;
     }
 
-    public void setOrganizationId(String organizationId) {
+    public void setOrganizationId(UUID organizationId) {
         this.organizationId = organizationId;
     }
 

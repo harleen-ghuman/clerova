@@ -228,6 +228,7 @@ NEW
 IN_PROGRESS
 WAITING_FOR_APPROVAL
 WAITING_FOR_INFORMATION
+ESCALATED
 COMPLETED
 CANCELLED
 ```
@@ -245,6 +246,9 @@ REQUEST_MORE_INFORMATION
 ESCALATE_TO_HUMAN
 NO_ACTION
 ```
+
+Reviewers can edit the drafted response before approving. Approved escalations
+and information requests stay open until a user closes them.
 
 Proposed actions begin in `PENDING_APPROVAL` and can be explicitly approved or rejected.
 
@@ -448,6 +452,14 @@ Core API routes include:
 GET  /
 GET  /api/health
 
+GET  /api/me
+POST /api/onboarding
+
+GET  /api/inbox
+POST /api/inbox/{id}/reprocess
+GET  /api/email-settings
+POST /api/inbound/postmark          (Postmark webhook, basic auth)
+
 GET  /api/work-items
 GET  /api/work-items/{id}
 POST /api/work-items
@@ -455,12 +467,26 @@ POST /api/work-items
 GET  /api/work-items/{id}/proposed-actions
 POST /api/work-items/{id}/proposed-actions
 
+POST /api/work-items/{id}/close
+GET  /api/work-items/{id}/conversation
+GET  /api/work-items/{id}/events
+
+GET  /api/work-items/proposed-actions/latest
 POST /api/work-items/proposed-actions/{id}/approve
 POST /api/work-items/proposed-actions/{id}/reject
+POST /api/work-items/proposed-actions/{id}/send-reply
 
 GET   /api/maintenance-requests
 PATCH /api/maintenance-requests/{id}
 ```
+
+All routes except `/` and `/api/health` require a Supabase access token:
+
+```http
+Authorization: Bearer <supabase-access-token>
+```
+
+Data is scoped to the signed-in user's organization.
 
 ### Example: Create Work Item
 
@@ -469,7 +495,6 @@ POST /api/work-items
 Content-Type: application/json
 
 {
-  "organizationId": "demo-property-management",
   "message": "Water is leaking from the bathroom sink at 225 Market Street."
 }
 ```
@@ -484,7 +509,27 @@ POST /api/work-items/{workItemId}/proposed-actions
 
 ```http
 POST /api/work-items/proposed-actions/{proposedActionId}/approve
+Content-Type: application/json
+
+{
+  "finalResponse": "Optional edited response. Defaults to the AI draft."
+}
 ```
+
+### Example: Close an Escalated or Waiting Work Item
+
+```http
+POST /api/work-items/{workItemId}/close
+Content-Type: application/json
+
+{
+  "status": "COMPLETED"
+}
+```
+
+Requests that trigger AI calls (`POST /api/work-items` and
+`POST /api/work-items/{id}/proposed-actions`) are rate limited per client and
+capped per day. Limited requests return `429`.
 
 ---
 
@@ -570,20 +615,163 @@ DATABASE_USERNAME
 DATABASE_PASSWORD
 CORS_ALLOWED_ORIGIN
 PORT
+SUPABASE_URL          (e.g. https://abcd1234.supabase.co)
 ```
 
-Optional logging configuration:
+Optional configuration:
 
 ```text
 SHOW_SQL
 FORMAT_SQL
+AI_RATE_LIMIT_PER_CLIENT_PER_MINUTE   (default 10)
+AI_RATE_LIMIT_GLOBAL_PER_DAY          (default 500)
+TRIAL_DAYS                            (default 14)
+TRIAL_AI_MONTHLY_LIMIT                (default 100)
+SUPABASE_JWT_SECRET                   (only for projects on the legacy JWT secret)
+OPENAI_BASE_URL                       (optional, defaults to api.openai.com)
+INBOUND_EMAIL_DOMAIN                  (e.g. in.clerova-ai.com; enables email intake)
+INBOUND_WEBHOOK_USERNAME              (default postmark)
+INBOUND_WEBHOOK_PASSWORD              (enables email intake)
+POSTMARK_SERVER_TOKEN                 (enables sending replies)
+EMAIL_PROCESSING_INTERVAL_MS          (default 5000)
 ```
+
+### Database Migrations
+
+The schema is managed by Flyway migrations in
+`backend/src/main/resources/db/migration`, and Hibernate only validates it.
+Databases created before Flyway was introduced are baselined at version 1
+automatically on first start.
+
+On PostgreSQL, `db/vendor/postgresql/afterMigrate.sql` runs after every
+migration. It enables row level security on every table and revokes the
+Supabase Data API roles (`anon`, `authenticated`), so the anon key used by
+the frontend for sign-in cannot read or change application data. The
+backend connects as the table owner and is not affected.
+
+Flyway takes a PostgreSQL advisory lock while migrating, so `DATABASE_URL`
+should use a direct or session-mode connection (Supabase port `5432`), not the
+transaction-mode pooler (port `6543`).
 
 ### Frontend
 
 ```text
 VITE_API_BASE_URL
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
 ```
+
+See `frontend/.env.example`.
+
+---
+
+## Accounts and Sign-Up
+
+Anyone can sign up. Authentication is handled by Supabase Auth (email and
+password); the backend verifies Supabase access tokens.
+
+1. A visitor creates an account and confirms their email.
+2. On first sign-in they set up their workspace: company name, industry
+   (property management or trucking), company size, and how they heard about
+   Clerova.
+3. This creates a trial organization with the user as its owner. All work
+   items, proposed actions and maintenance requests belong to that
+   organization and are invisible to others.
+
+New organizations get a free trial (`TRIAL_DAYS`) with a monthly AI request
+quota (`TRIAL_AI_MONTHLY_LIMIT`). When the trial ends, existing data stays
+readable but new AI processing is blocked until the plan is changed.
+
+Marketing links can carry `?utm_source=instagram` (or `?ref=...`). The source
+is remembered in the browser and saved with the organization at onboarding.
+
+---
+
+## Email Intake
+
+Each organization gets a forwarding address such as
+`oakridge-rentals-k3j9x2@in.clerova-ai.com` (shown on the Email Setup page).
+Users forward their requests inbox to it, or set a filter that forwards only
+some emails.
+
+```text
+Email forwarded to Clerova
+        |
+        v
+Postmark inbound webhook  ->  stored (duplicates skipped)
+        |
+        v
+Background processor
+  - automated / bulk email ........ Ignored (can be processed anyway)
+  - Gmail forwarding confirmation . Ignored, code shown on Email Setup
+  - reply to a request ............ Added to that request's conversation;
+                                    waiting/escalated requests, and requests
+                                    closed in the last 14 days, return to review
+                                    (older closed requests: new request)
+  - anything else ................. New work item + AI proposal
+        |
+        v
+Human review: edit, approve, then "Send" emails the reply
+```
+
+- Replies are sent from the organization's Clerova address. Their reply-to
+  address carries the work item (`token+wi-<id>@...`), so the sender's
+  answer is threaded onto the same request even if their mail client drops
+  the threading headers. In-Reply-To/References are matched as well.
+- Each new email uses two AI requests from the monthly quota (extraction and
+  proposal). AI failures are retried twice; quota or trial errors mark the
+  email as failed so it can be retried from the Inbox.
+- Attachment names, types and sizes are recorded; file contents are not
+  stored yet.
+
+### Postmark Setup
+
+1. **Inbound:** in a Postmark server, add an inbound domain (for example
+   `in.clerova-ai.com`) with an MX record pointing to
+   `inbound.postmarkapp.com`, and set the inbound webhook URL to
+   `https://postmark:<INBOUND_WEBHOOK_PASSWORD>@api.clerova-ai.com/api/inbound/postmark`.
+2. **Outbound:** verify the same domain as a sender signature (DKIM and
+   Return-Path DNS records) and set `POSTMARK_SERVER_TOKEN` to the server's
+   API token.
+3. Set `INBOUND_EMAIL_DOMAIN` and `INBOUND_WEBHOOK_PASSWORD` on the backend.
+
+Without these settings the app works as before: the Inbox explains that
+email intake is not available, and approved responses are copied manually.
+
+### Supabase Setup
+
+In the Supabase dashboard:
+
+- **Authentication → Sign In / Providers → Email:** enable email sign-up and
+  keep "Confirm email" on.
+- **Authentication → URL Configuration:** set the Site URL to the app URL
+  (for example `https://app.clerova-ai.com`) and add it to the redirect URLs,
+  so confirmation and password reset links return to the app.
+- **Optional:** enable CAPTCHA protection (Authentication → Attack Protection)
+  to reduce bot sign-ups.
+
+### Managing Trials
+
+Trials can be extended or converted to a paid plan with SQL, for example:
+
+```sql
+update organizations
+set plan = 'STARTER', ai_monthly_limit = 1000, trial_ends_at = null
+where name = 'Acme Property Group';
+```
+
+### Sign-Up Interest
+
+```sql
+select industry, company_size, referral_source, count(*)
+from organizations
+where plan <> 'INTERNAL'
+group by industry, company_size, referral_source
+order by count(*) desc;
+```
+
+Data created before accounts existed belongs to the `Demo Property
+Management` organization.
 
 Local development defaults are provided where appropriate.
 
@@ -602,7 +790,9 @@ cd backend
 ./mvnw test
 ```
 
-Backend tests use an H2 in-memory database where appropriate.
+Backend tests use an H2 in-memory database (PostgreSQL mode). The Flyway
+migrations run against it, so the tests also check that the migrations match
+the JPA entities.
 
 AI evaluation tests are kept separate from normal application tests so standard builds do not require live model calls.
 
@@ -677,16 +867,20 @@ Clerova is a deployed full-stack MVP demonstrating AI-assisted property operatio
 - Environment-based production configuration
 - Production frontend and backend deployment
 - Custom frontend and API domains
+- Flyway database migrations
+- AI request rate limiting
+- Open sign-up with Supabase Auth
+- Email intake by forwarding address, with threading and replies
+- Work item audit trail
+- Multi-tenant organizations with free trials and AI quotas
 
 ### Planned
 
-- Authentication and authorization
-- Multi-tenant organization support
-- Resident communication integrations
+- Gmail and Microsoft 365 inbox connections (OAuth)
+- Attachment storage and document extraction
 - Vendor assignment and dispatch
 - Audit/event history
 - Additional operational workflows
-- Production database migrations
 - Expanded automated test coverage
 
 ---

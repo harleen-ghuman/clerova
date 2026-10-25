@@ -1,6 +1,19 @@
+import { useState } from "react";
+
+import { ApprovedResponse } from "../components/ApprovedResponse";
+import { ResponseEditor } from "../components/ResponseEditor";
+import { WorkItemActivity } from "../components/WorkItemActivity";
 import { WorkItemCard } from "../components/WorkItemCard";
 import type { ProposedAction } from "../types/ProposedAction";
 import type { WorkItem } from "../types/WorkItem";
+import { decisionCopy, hasResponseToSend } from "../utils/actionCopy";
+
+// Statuses where the work item waits on people outside Clerova and is
+// closed manually once handled.
+const MANUALLY_CLOSABLE_STATUSES = [
+  "ESCALATED",
+  "WAITING_FOR_INFORMATION",
+];
 
 interface WorkItemsPageProps {
   workItems: WorkItem[];
@@ -19,9 +32,12 @@ interface WorkItemsPageProps {
   onReviewWorkItem: (workItem: WorkItem) => void;
   onCloseDetails: () => void;
   onGenerateProposedAction: () => void;
-  onApprove: () => void;
+  onApprove: (finalResponse: string) => void;
   onReject: () => void;
+  onCloseWorkItem: (status: "COMPLETED" | "CANCELLED") => void;
   onViewMaintenance: (workItemId: string) => void;
+  emailSendingEnabled: boolean;
+  onActionUpdated: (action: ProposedAction) => void;
 }
 
 export function WorkItemsPage({
@@ -39,8 +55,17 @@ export function WorkItemsPage({
   onGenerateProposedAction,
   onApprove,
   onReject,
+  onCloseWorkItem,
   onViewMaintenance,
+  emailSendingEnabled,
+  onActionUpdated,
 }: WorkItemsPageProps) {
+  // Approved replies can be emailed only for requests that came by email
+  const replyTo =
+    emailSendingEnabled && selectedWorkItem?.source === "EMAIL"
+      ? selectedWorkItem.senderEmail
+      : null;
+
   return (
     <section className="dashboard-section">
       <div className="section-heading">
@@ -179,6 +204,20 @@ export function WorkItemsPage({
                   </div>
                 </div>
 
+                {selectedWorkItem.source === "EMAIL" && (
+                  <div className="email-origin">
+                    <span className="details-label">Received by email</span>
+                    <strong>
+                      {selectedWorkItem.senderName
+                        ? `${selectedWorkItem.senderName} <${selectedWorkItem.senderEmail}>`
+                        : selectedWorkItem.senderEmail}
+                    </strong>
+                    {selectedWorkItem.subject && (
+                      <span>{selectedWorkItem.subject}</span>
+                    )}
+                  </div>
+                )}
+
                 <div className="details-section">
                   <h3>Original Message</h3>
 
@@ -268,109 +307,106 @@ export function WorkItemsPage({
                       </p>
                     </div>
 
-                    <div className="details-section">
-                      <h3>
-                        Suggested response to resident
-                      </h3>
-
-                      <p className="drafted-response">
-                        {proposedAction.draftedResponse}
-                      </p>
-                    </div>
-
                     {proposedAction.status ===
                     "PENDING_APPROVAL" ? (
-                      <div className="approval-actions">
-                        <button
-                          className="approve-button"
-                          type="button"
-                          onClick={onApprove}
-                          disabled={updatingAction}
-                        >
-                          {updatingAction
-                            ? "Updating..."
-                            : "Approve"}
-                        </button>
-
-                        <button
-                          className="reject-button"
-                          type="button"
-                          onClick={onReject}
-                          disabled={updatingAction}
-                        >
-                          {updatingAction
-                            ? "Updating..."
-                            : "Reject"}
-                        </button>
-                      </div>
+                      <PendingApproval
+                        key={proposedAction.id}
+                        action={proposedAction}
+                        updatingAction={updatingAction}
+                        onApprove={onApprove}
+                        onReject={onReject}
+                      />
                     ) : (
-                      <div
-                        className={`decision-result decision-${proposedAction.status.toLowerCase()}`}
-                      >
-                        <div className="decision-content">
-                          <strong>
-                            {proposedAction.status ===
-                              "APPROVED" &&
-                            proposedAction.actionType ===
-                              "CREATE_MAINTENANCE_REQUEST"
-                              ? "Maintenance request created"
-                              : proposedAction.status ===
-                                  "APPROVED"
-                                ? "Action approved"
-                                : "Action rejected"}
-                          </strong>
+                      <>
+                        {hasResponseToSend(proposedAction) && (
+                          <ApprovedResponse
+                            action={proposedAction}
+                            sendTo={replyTo}
+                            onSent={onActionUpdated}
+                          />
+                        )}
 
-                          <span>
-                            {proposedAction.status ===
-                              "APPROVED" &&
-                            proposedAction.actionType ===
-                              "CREATE_MAINTENANCE_REQUEST"
-                              ? "The maintenance request was created successfully and is now available in Maintenance."
-                              : proposedAction.status ===
-                                  "APPROVED"
-                                ? "The approved action was completed successfully."
-                                : "No action was executed."}
-                          </span>
-                        </div>
+                        <div
+                          className={`decision-result decision-${proposedAction.status.toLowerCase()}`}
+                        >
+                          <div className="decision-content">
+                            <strong>
+                              {decisionCopy(proposedAction, Boolean(replyTo)).title}
+                            </strong>
 
-                        {proposedAction.status ===
-                          "APPROVED" &&
-                          proposedAction.actionType ===
-                            "CREATE_MAINTENANCE_REQUEST" && (
+                            <span>
+                              {decisionCopy(proposedAction, Boolean(replyTo)).description}
+                            </span>
+                          </div>
+
+                          {proposedAction.status ===
+                            "APPROVED" &&
+                            proposedAction.actionType ===
+                              "CREATE_MAINTENANCE_REQUEST" && (
+                              <button
+                                type="button"
+                                className="primary-button decision-action-button"
+                                onClick={() =>
+                                  onViewMaintenance(
+                                    selectedWorkItem.id
+                                  )
+                                }
+                              >
+                                View Maintenance
+                              </button>
+                            )}
+
+                          {proposedAction.status ===
+                            "REJECTED" && (
                             <button
-                              type="button"
                               className="primary-button decision-action-button"
-                              onClick={() =>
-                                onViewMaintenance(
-                                  selectedWorkItem.id
-                                )
+                              type="button"
+                              onClick={
+                                onGenerateProposedAction
+                              }
+                              disabled={
+                                generatingAction ||
+                                updatingAction
                               }
                             >
-                              View Maintenance
+                              {generatingAction
+                                ? "Generating..."
+                                : "Generate New Proposal"}
                             </button>
                           )}
-
-                        {proposedAction.status ===
-                          "REJECTED" && (
-                          <button
-                            className="primary-button decision-action-button"
-                            type="button"
-                            onClick={
-                              onGenerateProposedAction
-                            }
-                            disabled={
-                              generatingAction ||
-                              updatingAction
-                            }
-                          >
-                            {generatingAction
-                              ? "Generating..."
-                              : "Generate New Proposal"}
-                          </button>
-                        )}
-                      </div>
+                        </div>
+                      </>
                     )}
                   </section>
+                )}
+
+                <WorkItemActivity
+                  workItem={selectedWorkItem}
+                  refreshKey={`${selectedWorkItem.status}-${selectedWorkItem.updatedAt}-${proposedAction?.id}-${proposedAction?.status}`}
+                />
+
+                {MANUALLY_CLOSABLE_STATUSES.includes(
+                  selectedWorkItem.status
+                ) && (
+                  <div className="close-work-item-actions">
+                    <button
+                      type="button"
+                      className="approve-button"
+                      onClick={() => onCloseWorkItem("COMPLETED")}
+                      disabled={updatingAction}
+                    >
+                      Mark Resolved
+                    </button>
+
+                    <button
+                      type="button"
+                      className="reject-button"
+                      onClick={() => onCloseWorkItem("CANCELLED")}
+                      disabled={updatingAction}
+                    >
+                      Cancel Request
+                    </button>
+                  </div>
                 )}
               </section>
             )}
@@ -378,5 +414,52 @@ export function WorkItemsPage({
         </div>
       )}
     </section>
+  );
+}
+
+interface PendingApprovalProps {
+  action: ProposedAction;
+  updatingAction: boolean;
+  onApprove: (finalResponse: string) => void;
+  onReject: () => void;
+}
+
+function PendingApproval({
+  action,
+  updatingAction,
+  onApprove,
+  onReject,
+}: PendingApprovalProps) {
+  const [response, setResponse] = useState(action.draftedResponse);
+
+  return (
+    <>
+      <ResponseEditor
+        id={`response-${action.id}`}
+        value={response}
+        disabled={updatingAction}
+        onChange={setResponse}
+      />
+
+      <div className="approval-actions">
+        <button
+          className="approve-button"
+          type="button"
+          onClick={() => onApprove(response)}
+          disabled={updatingAction || response.trim().length === 0}
+        >
+          {updatingAction ? "Updating..." : "Approve"}
+        </button>
+
+        <button
+          className="reject-button"
+          type="button"
+          onClick={onReject}
+          disabled={updatingAction}
+        >
+          {updatingAction ? "Updating..." : "Reject"}
+        </button>
+      </div>
+    </>
   );
 }

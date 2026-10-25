@@ -31,6 +31,17 @@ public class ProposedAction {
     @Column(columnDefinition = "TEXT")
     private String draftedResponse;
 
+    @Column(columnDefinition = "TEXT")
+    private String finalResponse;
+
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
+    private UUID decidedByUserId;
+
+    private Instant decidedAt;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -100,6 +111,27 @@ public class ProposedAction {
 
     public void setDraftedResponse(String draftedResponse) {
         this.draftedResponse = draftedResponse;
+    }
+
+    public String getFinalResponse() {
+        return finalResponse;
+    }
+
+    public void setFinalResponse(String finalResponse) {
+        this.finalResponse = finalResponse;
+    }
+
+    public UUID getDecidedByUserId() {
+        return decidedByUserId;
+    }
+
+    public Instant getDecidedAt() {
+        return decidedAt;
+    }
+
+    public void recordDecision(UUID userId) {
+        this.decidedByUserId = userId;
+        this.decidedAt = Instant.now();
     }
 
     public Instant getCreatedAt() {

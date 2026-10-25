@@ -4,7 +4,9 @@ import com.clerova.domain.MaintenanceRequest;
 import com.clerova.domain.MaintenanceRequestStatus;
 import com.clerova.domain.ProposedAction;
 import com.clerova.domain.WorkItem;
+import com.clerova.domain.WorkItemEventType;
 import com.clerova.domain.WorkItemStatus;
+import com.clerova.exception.NotFoundException;
 import com.clerova.repository.MaintenanceRequestRepository;
 import com.clerova.repository.WorkItemRepository;
 import org.springframework.stereotype.Service;
@@ -17,13 +19,16 @@ public class ActionExecutionService {
 
     private final MaintenanceRequestRepository maintenanceRequestRepository;
     private final WorkItemRepository workItemRepository;
+    private final WorkItemEventService workItemEventService;
 
     public ActionExecutionService(
             MaintenanceRequestRepository maintenanceRequestRepository,
-            WorkItemRepository workItemRepository
+            WorkItemRepository workItemRepository,
+            WorkItemEventService workItemEventService
     ) {
         this.maintenanceRequestRepository = maintenanceRequestRepository;
         this.workItemRepository = workItemRepository;
+        this.workItemEventService = workItemEventService;
     }
 
     public MaintenanceRequest executeMaintenanceRequest(
@@ -65,28 +70,55 @@ public class ActionExecutionService {
 
     @Transactional
     public MaintenanceRequest updateMaintenanceRequest(
+            UUID organizationId,
             UUID id,
             MaintenanceRequestStatus status,
-            String notes
+            String notes,
+            UUID actorUserId
     ) {
         MaintenanceRequest request =
-                maintenanceRequestRepository.findById(id)
+                maintenanceRequestRepository.findByIdAndOrganizationId(id, organizationId)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new NotFoundException(
                                         "Maintenance request not found: " + id
                                 )
                         );
 
-        if (status != null) {
+        MaintenanceRequestStatus currentStatus = request.getStatus();
+
+        if (currentStatus.isTerminal()) {
+            throw new IllegalStateException(
+                    "Completed or cancelled maintenance requests cannot be changed"
+            );
+        }
+
+        boolean statusChanged =
+                status != null && status != currentStatus;
+
+        if (statusChanged && !currentStatus.canTransitionTo(status)) {
+            throw new IllegalStateException(
+                    "Cannot move a maintenance request from "
+                            + currentStatus + " to " + status
+            );
+        }
+
+        if (statusChanged) {
             request.setStatus(status);
+
+            workItemEventService.record(
+                    organizationId,
+                    request.getWorkItem().getId(),
+                    WorkItemEventType.MAINTENANCE_UPDATED,
+                    "Maintenance " + status.name().toLowerCase().replace('_', ' '),
+                    actorUserId
+            );
         }
 
         if (notes != null) {
             request.setNotes(notes.trim());
         }
 
-        if (status == MaintenanceRequestStatus.COMPLETED ||
-                status == MaintenanceRequestStatus.CANCELLED) {
+        if (statusChanged && status.isTerminal()) {
 
             WorkItem workItem = request.getWorkItem();
 

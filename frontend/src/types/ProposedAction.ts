@@ -5,6 +5,7 @@ export interface ProposedAction {
   status: string;
   reasoning: string;
   draftedResponse: string;
+  finalResponse: string | null;
   createdAt: string;
   updatedAt: string;
 }

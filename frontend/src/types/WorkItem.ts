@@ -7,6 +7,10 @@ export interface WorkItem {
   priority: string;
   status: string;
   summary: string;
+  source: "MANUAL" | "EMAIL";
+  senderEmail: string | null;
+  senderName: string | null;
+  subject: string | null;
   createdAt: string;
   updatedAt: string;
 }

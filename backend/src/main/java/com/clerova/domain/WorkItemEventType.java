@@ -1,0 +1,13 @@
+package com.clerova.domain;
+
+public enum WorkItemEventType {
+    CREATED,
+    FOLLOW_UP_RECEIVED,
+    PROPOSAL_GENERATED,
+    PROPOSAL_APPROVED,
+    PROPOSAL_REJECTED,
+    REPLY_SENT,
+    MAINTENANCE_UPDATED,
+    CLOSED,
+    REOPENED
+}

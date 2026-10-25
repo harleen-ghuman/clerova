@@ -1,25 +1,46 @@
 import { useEffect, useState } from "react";
-import "./App.css";
 
 import {
   approveProposedAction,
+  closeWorkItem,
   createWorkItem,
   generateProposedAction,
+  getLatestProposedActions,
   getProposedActions,
+  getWorkItem,
   getWorkItems,
   rejectProposedAction,
 } from "./api/workItems";
-import { getMaintenanceRequests, } from "./api/MaintenanceRequests";
+import { getMaintenanceRequests } from "./api/MaintenanceRequests";
+import { getEmailSettings } from "./api/email";
+import { errorMessage } from "./api/client";
 import { PendingActionsPage } from "./pages/PendingActionsPage";
 import { Sidebar, type AppView } from "./components/Sidebar";
 import { WorkItemsPage } from "./pages/WorkItemsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { MaintenancePage } from "./pages/MaintenancePage";
+import { InboxPage } from "./pages/InboxPage";
+import { EmailSetupPage } from "./pages/EmailSetupPage";
+import type { EmailSettings } from "./types/Email";
+import type { Organization } from "./types/Account";
 import type { MaintenanceRequest } from "./types/MaintenanceRequest";
 import type { ProposedAction } from "./types/ProposedAction";
 import type { WorkItem } from "./types/WorkItem";
 
-function App() {
+function byNewest(a: { createdAt: string }, b: { createdAt: string }) {
+  return (
+    new Date(b.createdAt).getTime() -
+    new Date(a.createdAt).getTime()
+  );
+}
+
+interface AppProps {
+  organization: Organization;
+  userEmail: string;
+  onSignOut: () => void;
+}
+
+function App({ organization, userEmail, onSignOut }: AppProps) {
   const [workItems, setWorkItems] = useState<WorkItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,10 +54,6 @@ function App() {
   const [proposedAction, setProposedAction] =
     useState<ProposedAction | null>(null);
 
-  const [pendingActions, setPendingActions] = useState<
-    ProposedAction[]
-  >([]);
-
   const [generatingAction, setGeneratingAction] = useState(false);
   const [updatingAction, setUpdatingAction] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -45,14 +62,10 @@ function App() {
     MaintenanceRequest[]
   >([]);
 
-  const [, setMaintenanceLoading] = useState(true);
+  const [maintenanceLoading, setMaintenanceLoading] = useState(true);
 
-  const [, setMaintenanceError] =
+  const [maintenanceError, setMaintenanceError] =
     useState<string | null>(null);
-
-  const [, setMaintenanceNotes] = useState<
-    Record<string, string>
-  >({});
 
   const [selectedMaintenanceWorkItemId, setSelectedMaintenanceWorkItemId] =
     useState<string | null>(null);
@@ -76,74 +89,133 @@ function App() {
   const [pendingDecision, setPendingDecision] = useState<{
     action: ProposedAction;
     decision: "APPROVED" | "REJECTED";
+    // Snapshot, since approving can close the item and drop it from the list
+    workItem?: WorkItem;
   } | null>(null);
 
-  async function loadMaintenanceRequests() {
-    try {
-      setMaintenanceLoading(true);
-      setMaintenanceError(null);
+  const [emailSettings, setEmailSettings] =
+    useState<EmailSettings | null>(null);
+  const [emailSettingsError, setEmailSettingsError] =
+    useState<string | null>(null);
 
-      const data = await getMaintenanceRequests();
+  // Bumped by the background refresh so pages reload their data
+  const [refreshTick, setRefreshTick] = useState(0);
 
-      const sortedData = [...data].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() -
-          new Date(a.createdAt).getTime()
-      );
+  const pendingActions = Object.values(latestActions)
+    .filter((action) => action.status === "PENDING_APPROVAL")
+    .sort(byNewest);
 
-      setMaintenanceRequests(sortedData);
+  function loadMaintenanceRequests() {
+    return getMaintenanceRequests()
+      .then((data) => {
+        setMaintenanceRequests(data);
+        setMaintenanceError(null);
+      })
+      .catch((err) => {
+        console.error(
+          "Failed to load maintenance requests:",
+          err
+        );
+        setMaintenanceError(
+          errorMessage(err, "Unable to load maintenance requests.")
+        );
+      })
+      .finally(() => setMaintenanceLoading(false));
+  }
 
-      setMaintenanceNotes((current) => {
-        const next = { ...current };
-
-        sortedData.forEach((request) => {
-          if (next[request.id] === undefined) {
-            next[request.id] = request.notes ?? "";
-          }
-        });
-
-        return next;
+  function loadLatestActions() {
+    return getLatestProposedActions()
+      .then((actions) => {
+        setLatestActions(
+          Object.fromEntries(
+            actions.map((action) => [action.workItemId, action])
+          )
+        );
+      })
+      .catch((err) => {
+        console.error("Failed to load proposed actions:", err);
       });
-    } catch (err) {
-      console.error(
-        "Failed to load maintenance requests:",
-        err
+  }
+
+  /**
+   * Reloads the open work items and keeps the selected item in sync. A
+   * selected item that was just closed stays selected (so its result stays
+   * visible) unless clearClosedSelection is set.
+   */
+  async function refreshWorkItems(clearClosedSelection = false) {
+    const refreshedWorkItems = await getWorkItems();
+
+    setWorkItems(refreshedWorkItems);
+
+    setSelectedWorkItem((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return (
+        refreshedWorkItems.find((item) => item.id === current.id) ??
+        (clearClosedSelection ? null : current)
       );
-      setMaintenanceError(
-        "Unable to load maintenance requests."
-      );
-    } finally {
-      setMaintenanceLoading(false);
-    }
+    });
+
+    return refreshedWorkItems;
   }
 
   useEffect(() => {
-    async function loadWorkItems() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const data = await getWorkItems();
+    // State is only set in promise callbacks, never synchronously here.
+    getWorkItems()
+      .then((data) => {
         setWorkItems(data);
-        await loadPendingActions(data);
-      } catch (err) {
+        setError(null);
+      })
+      .catch((err) => {
         console.error("Failed to load work items:", err);
-        setError("Unable to load work items.");
-      } finally {
-        setLoading(false);
-      }
-    }
+        setError(errorMessage(err, "Unable to load work items."));
+      })
+      .finally(() => setLoading(false));
 
-    void loadWorkItems();
+    void loadLatestActions();
     void loadMaintenanceRequests();
+
+    getEmailSettings()
+      .then(setEmailSettings)
+      .catch((err) =>
+        setEmailSettingsError(
+          errorMessage(err, "Unable to load email settings.")
+        )
+      );
   }, []);
 
-useEffect(() => {
-  if (activeView !== "pending-actions") {
-    setPendingDecision(null);
-    setSelectedPendingAction(null);
+  // New emails are processed in the background, so check for new work
+  // regularly while the tab is visible.
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      getWorkItems()
+        .then((data) => setWorkItems(data))
+        .catch((err) => console.error("Background refresh failed:", err));
+
+      void loadLatestActions();
+      void loadMaintenanceRequests();
+      setRefreshTick((tick) => tick + 1);
+    }, 30_000);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  function rememberAction(action: ProposedAction) {
+    setLatestActions((current) => ({
+      ...current,
+      [action.workItemId]: action,
+    }));
+
+    if (proposedAction?.id === action.id) {
+      setProposedAction(action);
+    }
   }
-}, [activeView]);
 
   async function handleReviewWorkItem(workItem: WorkItem) {
     setSelectedWorkItem(workItem);
@@ -154,18 +226,31 @@ useEffect(() => {
       const actions = await getProposedActions(workItem.id);
 
       if (actions.length > 0) {
-        const latestAction = [...actions].sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() -
-            new Date(a.createdAt).getTime()
-        )[0];
-
-        setProposedAction(latestAction);
+        setProposedAction([...actions].sort(byNewest)[0]);
       }
     } catch (err) {
       console.error("Failed to load proposed action:", err);
-      setActionError("Unable to load proposed action.");
+      setActionError(
+        errorMessage(err, "Unable to load proposed action.")
+      );
     }
+  }
+
+  async function generateFor(workItemId: string) {
+    const result = await generateProposedAction(workItemId);
+
+    setLatestActions((current) => ({
+      ...current,
+      [workItemId]: result,
+    }));
+
+    if (selectedWorkItem?.id === workItemId) {
+      setProposedAction(result);
+    }
+
+    await refreshWorkItems();
+
+    return result;
   }
 
   async function handleGenerateProposedAction() {
@@ -178,352 +263,191 @@ useEffect(() => {
       setActionError(null);
       setProposedAction(null);
 
-      const result = await generateProposedAction(
-        selectedWorkItem.id
-      );
-
-      setProposedAction(result);
-
-      setLatestActions((current) => ({
-        ...current,
-        [result.workItemId]: result,
-      }));
-
-      setPendingActions((current) => [
-        result,
-        ...current.filter((action) => action.id !== result.id),
-      ]);
-
-      const refreshedWorkItems = await getWorkItems();
-
-      setWorkItems(refreshedWorkItems);
-
-      const refreshedSelectedWorkItem = refreshedWorkItems.find(
-        (item) => item.id === selectedWorkItem.id
-      );
-
-      if (refreshedSelectedWorkItem) {
-        setSelectedWorkItem(refreshedSelectedWorkItem);
-      }
+      await generateFor(selectedWorkItem.id);
     } catch (err) {
       console.error("Failed to generate proposed action:", err);
-      setActionError("Unable to generate proposed action.");
+      setActionError(
+        errorMessage(err, "Unable to generate proposed action.")
+      );
     } finally {
       setGeneratingAction(false);
     }
   }
 
-async function handleRegenerateRejectedAction(
-  rejectedAction: ProposedAction
-) {
-  const workItem = workItems.find(
-    (item) => item.id === rejectedAction.workItemId
-  );
+  /** A reviewed action changed, e.g. its reply was sent. */
+  function handleActionUpdated(action: ProposedAction) {
+    rememberAction(action);
 
-  if (!workItem) {
-    setActionError(
-      "Unable to find the work item for this action."
+    setPendingDecision((current) =>
+      current && current.action.id === action.id
+        ? { ...current, action }
+        : current
     );
-    return;
+
+    setRefreshTick((tick) => tick + 1);
   }
 
-  try {
-    setGeneratingAction(true);
-    setActionError(null);
-
-    const result = await generateProposedAction(
-      workItem.id
-    );
-
-    // Latest action for Work Items
-    setLatestActions((current) => ({
-      ...current,
-      [workItem.id]: result,
-    }));
-
-    // Put the newly generated action into Pending Actions
-    setPendingActions((current) => [
-      result,
-      ...current.filter(
-        (action) => action.id !== result.id
-      ),
-    ]);
-
-    // Make it the current pending review
-    setSelectedPendingAction(result);
-
-    // Keep Work Items synchronized too
-    if (selectedWorkItem?.id === workItem.id) {
-      setProposedAction(result);
-    }
-
-    setPendingDecision(null);
-    const refreshedWorkItems = await getWorkItems();
-
-    setWorkItems(refreshedWorkItems);
-
-    const refreshedSelectedWorkItem = refreshedWorkItems.find(
-      (item) => item.id === workItem.id
-    );
-
-    if (
-      refreshedSelectedWorkItem &&
-      selectedWorkItem?.id === workItem.id
-    ) {
-      setSelectedWorkItem(refreshedSelectedWorkItem);
-    }
-  } catch (err) {
-    console.error(
-      "Failed to regenerate proposed action:",
-      err
-    );
-
-    setActionError(
-      "Unable to generate a new proposed action."
-    );
-  } finally {
-    setGeneratingAction(false);
-  }
-}
-
-  async function handleApprove() {
-    if (!proposedAction) {
-      return;
-    }
+  async function handleOpenWorkItem(workItemId: string) {
+    navigate("work-items");
 
     try {
-      setUpdatingAction(true);
+      const workItem =
+        workItems.find((item) => item.id === workItemId) ??
+        (await getWorkItem(workItemId));
+
+      await handleReviewWorkItem(workItem);
+    } catch (err) {
+      setActionError(errorMessage(err, "Unable to open this request."));
+    }
+  }
+
+  async function handleRegenerateRejectedAction(
+    rejectedAction: ProposedAction
+  ) {
+    try {
+      setGeneratingAction(true);
       setActionError(null);
 
-      const updatedAction = await approveProposedAction(
-        proposedAction.id
-      );
+      const result = await generateFor(rejectedAction.workItemId);
 
-      setProposedAction(updatedAction);
-
-      setSelectedPendingAction(null);
-
-      setLatestActions((current) => ({
-        ...current,
-        [updatedAction.workItemId]: updatedAction,
-      }));
-
-      setPendingActions((current) =>
-        current.filter(
-          (action) => action.id !== updatedAction.id
-        )
-      );
-
-      // IMPORTANT:
-      // Approval changes the WorkItem status in the backend.
-      // Reload work items so the UI gets IN_PROGRESS,
-      // WAITING_FOR_INFORMATION, COMPLETED, etc.
-      const refreshedWorkItems = await getWorkItems();
-
-      setWorkItems(refreshedWorkItems);
-
-      // Also update the selected item so the right panel
-      // doesn't continue showing the old NEW status.
-      const refreshedSelectedWorkItem =
-        refreshedWorkItems.find(
-          (item) =>
-            item.id === updatedAction.workItemId
-        );
-
-      if (refreshedSelectedWorkItem) {
-        setSelectedWorkItem(refreshedSelectedWorkItem);
-      }
-
-      await loadMaintenanceRequests();
+      // Make it the current pending review
+      setSelectedPendingAction(result);
+      setPendingDecision(null);
     } catch (err) {
       console.error(
-        "Failed to approve proposed action:",
+        "Failed to regenerate proposed action:",
         err
       );
 
       setActionError(
-        "Unable to approve proposed action."
+        errorMessage(err, "Unable to generate a new proposed action.")
       );
     } finally {
-      setUpdatingAction(false);
+      setGeneratingAction(false);
     }
   }
 
-  async function handleReject() {
+  async function decide(
+    action: ProposedAction,
+    decision: "APPROVED" | "REJECTED",
+    finalResponse?: string
+  ) {
+    const updatedAction =
+      decision === "APPROVED"
+        ? await approveProposedAction(action.id, finalResponse)
+        : await rejectProposedAction(action.id);
+
+    rememberAction(updatedAction);
+
+    // The backend changes the work item status on approval/rejection.
+    await refreshWorkItems();
+
+    if (
+      decision === "APPROVED" &&
+      updatedAction.actionType === "CREATE_MAINTENANCE_REQUEST"
+    ) {
+      await loadMaintenanceRequests();
+    }
+
+    return updatedAction;
+  }
+
+  async function handleDecision(
+    decision: "APPROVED" | "REJECTED",
+    finalResponse?: string
+  ) {
     if (!proposedAction) {
       return;
     }
 
     try {
       setUpdatingAction(true);
-      setSelectedPendingAction(null);
       setActionError(null);
+      setSelectedPendingAction(null);
 
-      const updatedAction = await rejectProposedAction(
-        proposedAction.id
+      const updatedAction = await decide(
+        proposedAction,
+        decision,
+        finalResponse
       );
 
       setProposedAction(updatedAction);
-
-      setLatestActions((current) => ({
-        ...current,
-        [updatedAction.workItemId]: updatedAction,
-      }));
-
-      setPendingActions((current) =>
-        current.filter(
-          (action) => action.id !== updatedAction.id
-        )
-      );
-
-      const refreshedWorkItems = await getWorkItems();
-
-      setWorkItems(refreshedWorkItems);
-
-      const refreshedSelectedWorkItem = refreshedWorkItems.find(
-        (item) => item.id === updatedAction.workItemId
-      );
-
-      if (refreshedSelectedWorkItem) {
-        setSelectedWorkItem(refreshedSelectedWorkItem);
-      }
-
     } catch (err) {
-      console.error("Failed to reject proposed action:", err);
-      setActionError("Unable to reject proposed action.");
+      console.error("Failed to update proposed action:", err);
+      setActionError(
+        errorMessage(err, "Unable to update proposed action.")
+      );
     } finally {
       setUpdatingAction(false);
     }
   }
 
-async function handleApprovePendingAction() {
-  if (!selectedPendingAction) {
-    return;
-  }
-
-  try {
-    setUpdatingAction(true);
-    setActionError(null);
-
-    const updatedAction = await approveProposedAction(
-      selectedPendingAction.id
-    );
-
-    setPendingActions((current) =>
-      current.filter(
-        (action) => action.id !== updatedAction.id
-      )
-    );
-
-    setLatestActions((current) => ({
-      ...current,
-      [updatedAction.workItemId]: updatedAction,
-    }));
-
-    if (proposedAction?.id === updatedAction.id) {
-      setProposedAction(updatedAction);
+  async function handlePendingDecision(
+    decision: "APPROVED" | "REJECTED",
+    finalResponse?: string
+  ) {
+    if (!selectedPendingAction) {
+      return;
     }
 
-    // Show result instead of immediately blanking panel
-    setPendingDecision({
-      action: updatedAction,
-      decision: "APPROVED",
-    });
+    try {
+      setUpdatingAction(true);
+      setActionError(null);
 
-    setSelectedPendingAction(null);
-    const refreshedWorkItems = await getWorkItems();
-
-    setWorkItems(refreshedWorkItems);
-
-    const refreshedSelectedWorkItem =
-      refreshedWorkItems.find(
-        (item) =>
-          item.id === updatedAction.workItemId
+      const decidedWorkItem = workItems.find(
+        (item) => item.id === selectedPendingAction.workItemId
       );
 
-    if (
-      refreshedSelectedWorkItem &&
-      selectedWorkItem?.id === updatedAction.workItemId
-    ) {
-      setSelectedWorkItem(refreshedSelectedWorkItem);
+      const updatedAction = await decide(
+        selectedPendingAction,
+        decision,
+        finalResponse
+      );
+
+      // Show result instead of immediately blanking panel
+      setPendingDecision({
+        action: updatedAction,
+        decision,
+        workItem: decidedWorkItem,
+      });
+      setSelectedPendingAction(null);
+    } catch (err) {
+      console.error("Failed to update pending action:", err);
+      setActionError(
+        errorMessage(err, "Unable to update proposed action.")
+      );
+    } finally {
+      setUpdatingAction(false);
     }
-
-    await loadPendingActions(refreshedWorkItems);
-    await loadMaintenanceRequests();
-  } catch (err) {
-    console.error(
-      "Failed to approve pending action:",
-      err
-    );
-
-    setActionError("Unable to approve proposed action.");
-  } finally {
-    setUpdatingAction(false);
-  }
-}
-
-async function handleRejectPendingAction() {
-  if (!selectedPendingAction) {
-    return;
   }
 
-  try {
-    setUpdatingAction(true);
-    setActionError(null);
-
-    const updatedAction = await rejectProposedAction(
-      selectedPendingAction.id
-    );
-
-    setPendingActions((current) =>
-      current.filter(
-        (action) => action.id !== updatedAction.id
-      )
-    );
-
-    setLatestActions((current) => ({
-      ...current,
-      [updatedAction.workItemId]: updatedAction,
-    }));
-
-    if (proposedAction?.id === updatedAction.id) {
-      setProposedAction(updatedAction);
+  async function handleCloseWorkItem(
+    status: "COMPLETED" | "CANCELLED"
+  ) {
+    if (!selectedWorkItem) {
+      return;
     }
 
-    setPendingDecision({
-      action: updatedAction,
-      decision: "REJECTED",
-    });
+    try {
+      setUpdatingAction(true);
+      setActionError(null);
 
-    setSelectedPendingAction(null);
+      await closeWorkItem(selectedWorkItem.id, status);
 
-    const refreshedWorkItems = await getWorkItems();
+      setSelectedWorkItem(null);
+      setProposedAction(null);
 
-    setWorkItems(refreshedWorkItems);
-
-    const refreshedSelectedWorkItem = refreshedWorkItems.find(
-      (item) => item.id === updatedAction.workItemId
-    );
-
-    if (
-      refreshedSelectedWorkItem &&
-      selectedWorkItem?.id === updatedAction.workItemId
-    ) {
-      setSelectedWorkItem(refreshedSelectedWorkItem);
+      await refreshWorkItems();
+      await loadLatestActions();
+    } catch (err) {
+      console.error("Failed to close work item:", err);
+      setActionError(
+        errorMessage(err, "Unable to close this work item.")
+      );
+    } finally {
+      setUpdatingAction(false);
     }
-
-    await loadPendingActions(refreshedWorkItems);
-  } catch (err) {
-    console.error(
-      "Failed to reject pending action:",
-      err
-    );
-
-    setActionError("Unable to reject proposed action.");
-  } finally {
-    setUpdatingAction(false);
   }
-}
 
   async function handleCreateRequest(
     event: React.FormEvent<HTMLFormElement>
@@ -544,10 +468,7 @@ async function handleRejectPendingAction() {
       setCreateRequestError(null);
       setCreateRequestSuccess(null);
 
-      const createdWorkItem = await createWorkItem(
-        "demo-property-management",
-        message
-      );
+      const createdWorkItem = await createWorkItem(message);
 
       setWorkItems((currentItems) => [
         createdWorkItem,
@@ -562,76 +483,45 @@ async function handleRejectPendingAction() {
       setActionError(null);
     } catch (err) {
       console.error("Failed to create work item:", err);
-      setCreateRequestError("Unable to process the request.");
+      setCreateRequestError(
+        errorMessage(err, "Unable to process the request.")
+      );
     } finally {
       setCreatingRequest(false);
     }
   }
 
-async function loadPendingActions(items: WorkItem[]) {
-  try {
-    const results = await Promise.all(
-      items.map(async (item) => {
-        const actions = await getProposedActions(item.id);
-
-        if (actions.length === 0) {
-          return {
-            workItemId: item.id,
-            latestAction: null,
-          };
-        }
-
-        const latestAction = [...actions].sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() -
-            new Date(a.createdAt).getTime()
-        )[0];
-
-        return {
-          workItemId: item.id,
-          latestAction,
-        };
-      })
-    );
-
-    const latestByWorkItem: Record<
-      string,
-      ProposedAction
-    > = {};
-
-    const pending: ProposedAction[] = [];
-
-    results.forEach(({ workItemId, latestAction }) => {
-      if (!latestAction) {
-        return;
-      }
-
-      latestByWorkItem[workItemId] = latestAction;
-
-      if (latestAction.status === "PENDING_APPROVAL") {
-        pending.push(latestAction);
-      }
-    });
-
-    pending.sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() -
-        new Date(a.createdAt).getTime()
-    );
-
-    setLatestActions(latestByWorkItem);
-    setPendingActions(pending);
-  } catch (err) {
-    console.error(
-      "Failed to load proposed actions:",
-      err
-    );
-  }
-}
-
   function handleCloseDetails() {
     setSelectedWorkItem(null);
     setProposedAction(null);
+    setActionError(null);
+  }
+
+  function navigate(view: AppView) {
+    if (view === "maintenance") {
+      setSelectedMaintenanceWorkItemId(null);
+    }
+
+    if (view === "email-setup") {
+      // A Gmail confirmation email may have arrived since the last load
+      getEmailSettings()
+        .then((settings) => {
+          setEmailSettings(settings);
+          setEmailSettingsError(null);
+        })
+        .catch((err) =>
+          setEmailSettingsError(
+            errorMessage(err, "Unable to load email settings.")
+          )
+        );
+    }
+
+    if (view !== "pending-actions") {
+      setPendingDecision(null);
+      setSelectedPendingAction(null);
+    }
+
+    setActiveView(view);
     setActionError(null);
   }
 
@@ -642,10 +532,24 @@ async function loadPendingActions(items: WorkItem[]) {
 
   const viewContent = {
     dashboard: {
-      eyebrow: "Property Operations",
+      eyebrow: "Operations",
       title: "Dashboard",
       description:
-        "Monitor incoming requests and property operations.",
+        "Monitor incoming requests and operations.",
+    },
+
+    inbox: {
+      eyebrow: "Email Intake",
+      title: "Inbox",
+      description:
+        "Emails received at your Clerova forwarding address.",
+    },
+
+    "email-setup": {
+      eyebrow: "Settings",
+      title: "Email Setup",
+      description:
+        "Connect your inbox by forwarding email to Clerova.",
     },
 
     "work-items": {
@@ -679,7 +583,6 @@ async function loadPendingActions(items: WorkItem[]) {
 
   const currentView = viewContent[activeView];
 
-
   function handleSelectPendingAction(action: ProposedAction) {
     setSelectedPendingAction(action);
     setPendingDecision(null);
@@ -691,68 +594,71 @@ async function loadPendingActions(items: WorkItem[]) {
     setActiveView("maintenance");
   }
 
-async function handleMaintenanceWorkItemClosed() {
-  const refreshedWorkItems = await getWorkItems();
-
-  setWorkItems(refreshedWorkItems);
-
-  await loadPendingActions(refreshedWorkItems);
-
-  if (
-    selectedWorkItem &&
-    !refreshedWorkItems.some(
-      (item) => item.id === selectedWorkItem.id
-    )
+  function handleMaintenanceRequestUpdated(
+    updated: MaintenanceRequest
   ) {
-    setSelectedWorkItem(null);
-    setProposedAction(null);
+    setMaintenanceRequests((current) =>
+      current.map((item) =>
+        item.id === updated.id ? updated : item
+      )
+    );
   }
 
-  await loadMaintenanceRequests();
-}
+  async function handleMaintenanceWorkItemClosed() {
+    const refreshedWorkItems = await refreshWorkItems(true);
 
-const pendingDecisionWorkItem =
-  pendingDecision
-    ? workItems.find(
-        (item) =>
-          item.id === pendingDecision.action.workItemId
+    if (
+      selectedWorkItem &&
+      !refreshedWorkItems.some(
+        (item) => item.id === selectedWorkItem.id
       )
-    : undefined;
+    ) {
+      setProposedAction(null);
+    }
+
+    await loadLatestActions();
+  }
+
+  const pendingDecisionWorkItem =
+    pendingDecision
+      ? workItems.find(
+          (item) =>
+            item.id === pendingDecision.action.workItemId
+        ) ?? pendingDecision.workItem
+      : undefined;
 
   return (
     <div className="app-shell">
       <Sidebar
         activeView={activeView}
         pendingActionCount={pendingActions.length}
-        onNavigate={(view) => {
-          if (view === "maintenance") {
-            setSelectedMaintenanceWorkItemId(null);
-          }
-
-          setActiveView(view);
-          setActionError(null);
-        }}
+        organization={organization}
+        userEmail={userEmail}
+        onNavigate={navigate}
+        onSignOut={onSignOut}
       />
 
       <nav className="mobile-nav" aria-label="Mobile navigation">
         <button
           type="button"
           className={activeView === "dashboard" ? "active" : ""}
-          onClick={() => {
-            setActiveView("dashboard");
-            setActionError(null);
-          }}
+          onClick={() => navigate("dashboard")}
         >
           Dashboard
         </button>
 
         <button
           type="button"
+          className={activeView === "inbox" ? "active" : ""}
+          onClick={() => navigate("inbox")}
+        >
+          Inbox
+        </button>
+
+        <button
+          type="button"
           className={activeView === "work-items" ? "active" : ""}
-          onClick={() => {
-            setActiveView("work-items");
-            setActionError(null);
-          }}
+          onClick={() => navigate("work-items")}
         >
           Work Items
         </button>
@@ -760,10 +666,7 @@ const pendingDecisionWorkItem =
         <button
           type="button"
           className={activeView === "pending-actions" ? "active" : ""}
-          onClick={() => {
-            setActiveView("pending-actions");
-            setActionError(null);
-          }}
+          onClick={() => navigate("pending-actions")}
         >
           AI Review
           {pendingActions.length > 0 && (
@@ -776,11 +679,7 @@ const pendingDecisionWorkItem =
         <button
           type="button"
           className={activeView === "maintenance" ? "active" : ""}
-          onClick={() => {
-            setSelectedMaintenanceWorkItemId(null);
-            setActiveView("maintenance");
-            setActionError(null);
-          }}
+          onClick={() => navigate("maintenance")}
         >
           Maintenance
         </button>
@@ -815,19 +714,10 @@ const pendingDecisionWorkItem =
             createRequestSuccess={createRequestSuccess}
             onNewRequestMessageChange={setNewRequestMessage}
             onCreateRequest={handleCreateRequest}
-            onViewWorkItems={() =>
-              setActiveView("work-items")
-            }
-            onViewMaintenance={() => {
-              setSelectedMaintenanceWorkItemId(null);
-              setActiveView("maintenance");
-            }}
+            onViewWorkItems={() => navigate("work-items")}
+            onViewMaintenance={() => navigate("maintenance")}
           />
         )}
-
-        {/* =====================================================
-            WORK ITEMS
-           ===================================================== */}
 
         {/* =====================================================
             WORK ITEMS
@@ -849,9 +739,33 @@ const pendingDecisionWorkItem =
             onGenerateProposedAction={
               handleGenerateProposedAction
             }
-            onApprove={handleApprove}
-            onReject={handleReject}
+            onApprove={(finalResponse) =>
+              handleDecision("APPROVED", finalResponse)
+            }
+            onReject={() => handleDecision("REJECTED")}
+            onCloseWorkItem={handleCloseWorkItem}
             onViewMaintenance={handleViewMaintenance}
+            emailSendingEnabled={emailSettings?.sendingEnabled ?? false}
+            onActionUpdated={handleActionUpdated}
+          />
+        )}
+
+        {/* =====================================================
+            INBOX AND EMAIL SETUP
+           ===================================================== */}
+
+        {activeView === "inbox" && (
+          <InboxPage
+            refreshKey={refreshTick}
+            onOpenWorkItem={handleOpenWorkItem}
+            onOpenEmailSetup={() => navigate("email-setup")}
+          />
+        )}
+
+        {activeView === "email-setup" && (
+          <EmailSetupPage
+            settings={emailSettings}
+            error={emailSettingsError}
           />
         )}
 
@@ -859,15 +773,19 @@ const pendingDecisionWorkItem =
             MAINTENANCE
            ===================================================== */}
 
-{activeView === "maintenance" && (
-  <MaintenancePage
-    selectedWorkItemId={selectedMaintenanceWorkItemId}
-    onClearSelection={() =>
-      setSelectedMaintenanceWorkItemId(null)
-    }
-    onWorkItemClosed={handleMaintenanceWorkItemClosed}
-  />
-)}
+        {activeView === "maintenance" && (
+          <MaintenancePage
+            maintenanceRequests={maintenanceRequests}
+            loading={maintenanceLoading}
+            error={maintenanceError}
+            selectedWorkItemId={selectedMaintenanceWorkItemId}
+            onClearSelection={() =>
+              setSelectedMaintenanceWorkItemId(null)
+            }
+            onRequestUpdated={handleMaintenanceRequestUpdated}
+            onWorkItemClosed={handleMaintenanceWorkItemClosed}
+          />
+        )}
 
         {/* =====================================================
             PENDING ACTIONS
@@ -884,10 +802,14 @@ const pendingDecisionWorkItem =
             generatingAction={generatingAction}
             actionError={actionError}
             onSelectAction={handleSelectPendingAction}
-            onApprove={handleApprovePendingAction}
-            onReject={handleRejectPendingAction}
+            onApprove={(finalResponse) =>
+              handlePendingDecision("APPROVED", finalResponse)
+            }
+            onReject={() => handlePendingDecision("REJECTED")}
             onRegenerate={handleRegenerateRejectedAction}
             onClearDecision={() => setPendingDecision(null)}
+            emailSendingEnabled={emailSettings?.sendingEnabled ?? false}
+            onActionUpdated={handleActionUpdated}
             onViewMaintenance={(workItemId) => {
               setPendingDecision(null);
               handleViewMaintenance(workItemId);
