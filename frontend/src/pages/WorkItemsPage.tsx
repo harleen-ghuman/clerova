@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { ApprovedResponse } from "../components/ApprovedResponse";
 import { ResponseEditor } from "../components/ResponseEditor";
+import { WorkItemActivity } from "../components/WorkItemActivity";
 import { WorkItemCard } from "../components/WorkItemCard";
 import type { ProposedAction } from "../types/ProposedAction";
 import type { WorkItem } from "../types/WorkItem";
@@ -35,6 +36,8 @@ interface WorkItemsPageProps {
   onReject: () => void;
   onCloseWorkItem: (status: "COMPLETED" | "CANCELLED") => void;
   onViewMaintenance: (workItemId: string) => void;
+  emailSendingEnabled: boolean;
+  onActionUpdated: (action: ProposedAction) => void;
 }
 
 export function WorkItemsPage({
@@ -54,7 +57,15 @@ export function WorkItemsPage({
   onReject,
   onCloseWorkItem,
   onViewMaintenance,
+  emailSendingEnabled,
+  onActionUpdated,
 }: WorkItemsPageProps) {
+  // Approved replies can be emailed only for requests that came by email
+  const replyTo =
+    emailSendingEnabled && selectedWorkItem?.source === "EMAIL"
+      ? selectedWorkItem.senderEmail
+      : null;
+
   return (
     <section className="dashboard-section">
       <div className="section-heading">
@@ -193,6 +204,20 @@ export function WorkItemsPage({
                   </div>
                 </div>
 
+                {selectedWorkItem.source === "EMAIL" && (
+                  <div className="email-origin">
+                    <span className="details-label">Received by email</span>
+                    <strong>
+                      {selectedWorkItem.senderName
+                        ? `${selectedWorkItem.senderName} <${selectedWorkItem.senderEmail}>`
+                        : selectedWorkItem.senderEmail}
+                    </strong>
+                    {selectedWorkItem.subject && (
+                      <span>{selectedWorkItem.subject}</span>
+                    )}
+                  </div>
+                )}
+
                 <div className="details-section">
                   <h3>Original Message</h3>
 
@@ -295,10 +320,9 @@ export function WorkItemsPage({
                       <>
                         {hasResponseToSend(proposedAction) && (
                           <ApprovedResponse
-                            response={
-                              proposedAction.finalResponse ??
-                              proposedAction.draftedResponse
-                            }
+                            action={proposedAction}
+                            sendTo={replyTo}
+                            onSent={onActionUpdated}
                           />
                         )}
 
@@ -307,11 +331,11 @@ export function WorkItemsPage({
                         >
                           <div className="decision-content">
                             <strong>
-                              {decisionCopy(proposedAction).title}
+                              {decisionCopy(proposedAction, Boolean(replyTo)).title}
                             </strong>
 
                             <span>
-                              {decisionCopy(proposedAction).description}
+                              {decisionCopy(proposedAction, Boolean(replyTo)).description}
                             </span>
                           </div>
 
@@ -355,6 +379,11 @@ export function WorkItemsPage({
                     )}
                   </section>
                 )}
+
+                <WorkItemActivity
+                  workItem={selectedWorkItem}
+                  refreshKey={`${selectedWorkItem.status}-${selectedWorkItem.updatedAt}-${proposedAction?.id}-${proposedAction?.status}`}
+                />
 
                 {MANUALLY_CLOSABLE_STATUSES.includes(
                   selectedWorkItem.status

@@ -71,7 +71,8 @@ public class MaintenanceRequestController {
                         currentUserService.requireOrganizationId(),
                         id,
                         request.status(),
-                        request.notes()
+                        request.notes(),
+                        currentUserService.currentUserId()
                 );
 
         return ResponseEntity.ok(

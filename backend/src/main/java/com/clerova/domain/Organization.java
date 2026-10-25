@@ -41,6 +41,10 @@ public class Organization {
     @Column(nullable = false)
     private Integer aiUsageCount = 0;
 
+    /** Local part of the organization's forwarding address. */
+    @Column(length = 40, unique = true)
+    private String inboundEmailToken;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -132,6 +136,14 @@ public class Organization {
 
     public Integer getAiUsageCount() {
         return aiUsageCount;
+    }
+
+    public String getInboundEmailToken() {
+        return inboundEmailToken;
+    }
+
+    public void setInboundEmailToken(String inboundEmailToken) {
+        this.inboundEmailToken = inboundEmailToken;
     }
 
     public Instant getCreatedAt() {

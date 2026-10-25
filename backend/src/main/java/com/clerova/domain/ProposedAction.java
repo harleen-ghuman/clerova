@@ -38,6 +38,10 @@ public class ProposedAction {
     @Column(nullable = false)
     private Long version;
 
+    private UUID decidedByUserId;
+
+    private Instant decidedAt;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -115,6 +119,19 @@ public class ProposedAction {
 
     public void setFinalResponse(String finalResponse) {
         this.finalResponse = finalResponse;
+    }
+
+    public UUID getDecidedByUserId() {
+        return decidedByUserId;
+    }
+
+    public Instant getDecidedAt() {
+        return decidedAt;
+    }
+
+    public void recordDecision(UUID userId) {
+        this.decidedByUserId = userId;
+        this.decidedAt = Instant.now();
     }
 
     public Instant getCreatedAt() {

@@ -33,6 +33,18 @@ public class WorkItem {
     @Enumerated(EnumType.STRING)
     private WorkItemStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private WorkItemSource source = WorkItemSource.MANUAL;
+
+    @Column(length = 320)
+    private String senderEmail;
+
+    private String senderName;
+
+    @Column(length = 1000)
+    private String subject;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -138,6 +150,38 @@ public class WorkItem {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public WorkItemSource getSource() {
+        return source;
+    }
+
+    public void setSource(WorkItemSource source) {
+        this.source = source;
+    }
+
+    public String getSenderEmail() {
+        return senderEmail;
+    }
+
+    public void setSenderEmail(String senderEmail) {
+        this.senderEmail = senderEmail;
+    }
+
+    public String getSenderName() {
+        return senderName;
+    }
+
+    public void setSenderName(String senderName) {
+        this.senderName = senderName;
+    }
+
+    public String getSubject() {
+        return subject;
+    }
+
+    public void setSubject(String subject) {
+        this.subject = subject;
     }
 
     public Long getVersion() {

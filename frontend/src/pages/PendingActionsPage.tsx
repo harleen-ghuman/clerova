@@ -27,6 +27,8 @@ interface PendingActionsPageProps {
   onRegenerate: (action: ProposedAction) => void;
   onClearDecision: () => void;
   onViewMaintenance: (workItemId: string) => void;
+  emailSendingEnabled: boolean;
+  onActionUpdated: (action: ProposedAction) => void;
 }
 
 export function PendingActionsPage({
@@ -44,7 +46,14 @@ export function PendingActionsPage({
   onRegenerate,
   onClearDecision,
   onViewMaintenance,
+  emailSendingEnabled,
+  onActionUpdated,
 }: PendingActionsPageProps) {
+  const decisionReplyTo =
+    emailSendingEnabled && pendingDecisionWorkItem?.source === "EMAIL"
+      ? pendingDecisionWorkItem.senderEmail
+      : null;
+
   return (
     <section className="dashboard-section">
       <div className="section-heading">
@@ -157,7 +166,7 @@ export function PendingActionsPage({
                 </span>
 
                 <h2>
-                  {decisionCopy(pendingDecision.action).title}
+                  {decisionCopy(pendingDecision.action, Boolean(decisionReplyTo)).title}
                 </h2>
 
                 {pendingDecisionWorkItem && (
@@ -178,15 +187,14 @@ export function PendingActionsPage({
                 )}
 
                 <p>
-                  {decisionCopy(pendingDecision.action).description}
+                  {decisionCopy(pendingDecision.action, Boolean(decisionReplyTo)).description}
                 </p>
 
                 {hasResponseToSend(pendingDecision.action) && (
                   <ApprovedResponse
-                    response={
-                      pendingDecision.action.finalResponse ??
-                      pendingDecision.action.draftedResponse
-                    }
+                    action={pendingDecision.action}
+                    sendTo={decisionReplyTo}
+                    onSent={onActionUpdated}
                   />
                 )}
 
@@ -331,6 +339,18 @@ function PendingActionReview({
               </strong>
             </div>
           </div>
+
+          {workItem.source === "EMAIL" && (
+            <div className="email-origin">
+              <span className="details-label">Received by email</span>
+              <strong>
+                {workItem.senderName
+                  ? `${workItem.senderName} <${workItem.senderEmail}>`
+                  : workItem.senderEmail}
+              </strong>
+              {workItem.subject && <span>{workItem.subject}</span>}
+            </div>
+          )}
 
           <div className="details-section">
             <h3>Original Message</h3>

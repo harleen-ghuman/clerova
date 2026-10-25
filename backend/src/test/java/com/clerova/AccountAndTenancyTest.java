@@ -59,7 +59,7 @@ class AccountAndTenancyTest {
         action.actionType = ActionType.CREATE_MAINTENANCE_REQUEST;
         action.reasoning = "Reasoning";
         action.draftedResponse = "Draft";
-        when(aiService.proposeAction(any())).thenReturn(action);
+        when(aiService.proposeAction(any(), any())).thenReturn(action);
     }
 
     private String createWorkItem(RequestPostProcessor user) throws Exception {

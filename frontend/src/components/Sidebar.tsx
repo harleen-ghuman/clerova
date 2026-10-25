@@ -2,9 +2,11 @@ import type { Organization } from "../types/Account";
 
 export type AppView =
   | "dashboard"
+  | "inbox"
   | "work-items"
   | "maintenance"
-  | "pending-actions";
+  | "pending-actions"
+  | "email-setup";
 
 interface SidebarProps {
   activeView: AppView;
@@ -83,6 +85,16 @@ export function Sidebar({
         <button
           type="button"
           className={`nav-item ${
+            activeView === "inbox" ? "active" : ""
+          }`}
+          onClick={() => onNavigate("inbox")}
+        >
+          Inbox
+        </button>
+
+        <button
+          type="button"
+          className={`nav-item ${
             activeView === "work-items" ? "active" : ""
           }`}
           onClick={() => onNavigate("work-items")}
@@ -114,6 +126,16 @@ export function Sidebar({
               {pendingActionCount}
             </span>
           )}
+        </button>
+
+        <button
+          type="button"
+          className={`nav-item ${
+            activeView === "email-setup" ? "active" : ""
+          }`}
+          onClick={() => onNavigate("email-setup")}
+        >
+          Email Setup
         </button>
       </nav>
 

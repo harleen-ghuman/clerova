@@ -1,10 +1,13 @@
 package com.clerova.service;
 
 import com.clerova.ai.AiService;
+import com.clerova.domain.InboundMessage;
 import com.clerova.domain.MaintenanceRequestStatus;
 import com.clerova.domain.ProposedAction;
 import com.clerova.domain.ProposedActionStatus;
 import com.clerova.domain.WorkItem;
+import com.clerova.domain.WorkItemEventType;
+import com.clerova.domain.WorkItemSource;
 import com.clerova.domain.WorkItemStatus;
 import com.clerova.dto.ExtractionResult;
 import com.clerova.dto.ProposedActionResult;
@@ -36,12 +39,17 @@ public class WorkItemService {
             MaintenanceRequestStatus.IN_PROGRESS
     );
 
+    /** Limit on email text sent to the AI for extraction. */
+    private static final int MAX_EXTRACTION_CHARS = 8_000;
+
     private final AiService aiService;
     private final WorkItemRepository workItemRepository;
     private final ProposedActionRepository proposedActionRepository;
     private final MaintenanceRequestRepository maintenanceRequestRepository;
     private final ActionExecutionService actionExecutionService;
     private final AiUsageService aiUsageService;
+    private final WorkItemEventService workItemEventService;
+    private final ConversationService conversationService;
     private final TransactionTemplate transactionTemplate;
 
     public WorkItemService(
@@ -51,6 +59,8 @@ public class WorkItemService {
             MaintenanceRequestRepository maintenanceRequestRepository,
             ActionExecutionService actionExecutionService,
             AiUsageService aiUsageService,
+            WorkItemEventService workItemEventService,
+            ConversationService conversationService,
             TransactionTemplate transactionTemplate
     ) {
         this.aiService = aiService;
@@ -59,12 +69,15 @@ public class WorkItemService {
         this.maintenanceRequestRepository = maintenanceRequestRepository;
         this.actionExecutionService = actionExecutionService;
         this.aiUsageService = aiUsageService;
+        this.workItemEventService = workItemEventService;
+        this.conversationService = conversationService;
         this.transactionTemplate = transactionTemplate;
     }
 
     public WorkItem createWorkItem(
             UUID organizationId,
-            String message
+            String message,
+            UUID actorUserId
     ) {
 
         aiUsageService.consumeAiRequest(organizationId);
@@ -76,13 +89,86 @@ public class WorkItemService {
 
         workItem.setOrganizationId(organizationId);
         workItem.setOriginalMessage(message);
+        workItem.setSource(WorkItemSource.MANUAL);
 
+        applyExtraction(workItem, extraction);
+
+        return transactionTemplate.execute(status -> {
+            WorkItem saved = workItemRepository.save(workItem);
+
+            workItemEventService.record(
+                    organizationId,
+                    saved.getId(),
+                    WorkItemEventType.CREATED,
+                    "Entered manually",
+                    actorUserId
+            );
+
+            return saved;
+        });
+    }
+
+    /**
+     * Creates a work item from a received email and links the email to it.
+     */
+    public WorkItem createWorkItemFromEmail(InboundMessage email) {
+
+        UUID organizationId = email.getOrganizationId();
+
+        aiUsageService.consumeAiRequest(organizationId);
+
+        String content = email.getContentText() != null ? email.getContentText() : "";
+
+        String extractionInput = """
+                From: %s
+                Subject: %s
+
+                %s
+                """.formatted(
+                email.getFromName() != null
+                        ? email.getFromName() + " <" + email.getFromEmail() + ">"
+                        : email.getFromEmail(),
+                email.getSubject() != null ? email.getSubject() : "(no subject)",
+                content.length() > MAX_EXTRACTION_CHARS
+                        ? content.substring(0, MAX_EXTRACTION_CHARS)
+                        : content
+        );
+
+        ExtractionResult extraction = aiService.extract(extractionInput);
+
+        WorkItem workItem = new WorkItem();
+
+        workItem.setOrganizationId(organizationId);
+        workItem.setOriginalMessage(
+                content.isBlank() && email.getSubject() != null ? email.getSubject() : content
+        );
+        workItem.setSource(WorkItemSource.EMAIL);
+        workItem.setSenderEmail(email.getFromEmail());
+        workItem.setSenderName(email.getFromName());
+        workItem.setSubject(email.getSubject());
+
+        applyExtraction(workItem, extraction);
+
+        return transactionTemplate.execute(status -> {
+            WorkItem saved = workItemRepository.save(workItem);
+
+            workItemEventService.record(
+                    organizationId,
+                    saved.getId(),
+                    WorkItemEventType.CREATED,
+                    "Received by email from " + email.getFromEmail(),
+                    null
+            );
+
+            return saved;
+        });
+    }
+
+    private static void applyExtraction(WorkItem workItem, ExtractionResult extraction) {
         workItem.setCategory(extraction.category);
         workItem.setPriority(extraction.priority);
         workItem.setSummary(extraction.summary);
         workItem.setAddress(extraction.address);
-
-        return workItemRepository.save(workItem);
     }
 
     public List<WorkItem> getAllWorkItems(UUID organizationId) {
@@ -104,10 +190,14 @@ public class WorkItemService {
      * The AI call takes several seconds, so it runs outside a transaction.
      * The work item's optimistic-lock version guards against two concurrent
      * generations both saving a pending proposal.
+     *
+     * @param actorUserId the requesting user, or null when Clerova generates
+     *                    the proposal automatically for an email
      */
     public ProposedAction generateProposedAction(
             UUID organizationId,
-            UUID workItemId
+            UUID workItemId,
+            UUID actorUserId
     ) {
 
         WorkItem workItem = getWorkItem(organizationId, workItemId);
@@ -116,8 +206,10 @@ public class WorkItemService {
 
         aiUsageService.consumeAiRequest(organizationId);
 
-        ProposedActionResult result =
-                aiService.proposeAction(workItem);
+        ProposedActionResult result = aiService.proposeAction(
+                workItem,
+                conversationService.conversationForAi(workItem)
+        );
 
         return transactionTemplate.execute(status -> {
 
@@ -139,7 +231,17 @@ public class WorkItemService {
                     ProposedActionStatus.PENDING_APPROVAL
             );
 
-            return proposedActionRepository.save(proposedAction);
+            ProposedAction saved = proposedActionRepository.save(proposedAction);
+
+            workItemEventService.record(
+                    organizationId,
+                    workItemId,
+                    WorkItemEventType.PROPOSAL_GENERATED,
+                    "Recommended " + humanize(result.actionType.name()),
+                    actorUserId
+            );
+
+            return saved;
         });
     }
 
@@ -163,8 +265,10 @@ public class WorkItemService {
                         );
                     }
 
-                    if (latestAction.getStatus()
-                            == ProposedActionStatus.APPROVED) {
+                    // A NEW work item with an approved action was reopened
+                    // by a follow-up email and needs a fresh proposal.
+                    if (latestAction.getStatus() != ProposedActionStatus.REJECTED
+                            && workItem.getStatus() != WorkItemStatus.NEW) {
 
                         throw new IllegalStateException(
                                 "This work item already has an approved proposed action"
@@ -173,11 +277,70 @@ public class WorkItemService {
                 });
     }
 
+    /**
+     * A follow-up email arrived for an open work item. Items waiting on the
+     * sender or on a decision go back to review; a pending proposal is
+     * superseded because it did not see the new message.
+     *
+     * @return true if the work item needs a new proposal
+     */
+    @Transactional
+    public boolean reopenForFollowUp(UUID organizationId, UUID workItemId, String fromEmail) {
+
+        WorkItem workItem = getWorkItem(organizationId, workItemId);
+
+        workItemEventService.record(
+                organizationId,
+                workItemId,
+                WorkItemEventType.FOLLOW_UP_RECEIVED,
+                "New email from " + fromEmail,
+                null
+        );
+
+        switch (workItem.getStatus()) {
+
+            case WAITING_FOR_APPROVAL -> {
+                proposedActionRepository
+                        .findFirstByWorkItemIdOrderByCreatedAtDesc(workItemId)
+                        .filter(action -> action.getStatus() == ProposedActionStatus.PENDING_APPROVAL)
+                        .ifPresent(action -> {
+                            action.setStatus(ProposedActionStatus.REJECTED);
+                            action.recordDecision(null);
+                            proposedActionRepository.save(action);
+
+                            workItemEventService.record(
+                                    organizationId,
+                                    workItemId,
+                                    WorkItemEventType.PROPOSAL_REJECTED,
+                                    "Superseded by a new email",
+                                    null
+                            );
+                        });
+            }
+
+            case NEW, WAITING_FOR_INFORMATION, ESCALATED -> {
+                // Back to review below
+            }
+
+            default -> {
+                // In progress (e.g. maintenance underway): keep the message
+                // on the item without changing its workflow.
+                return false;
+            }
+        }
+
+        workItem.setStatus(WorkItemStatus.NEW);
+        workItemRepository.save(workItem);
+
+        return true;
+    }
+
     @Transactional
     public ProposedAction approveProposedAction(
             UUID organizationId,
             UUID proposedActionId,
-            String finalResponse
+            String finalResponse,
+            UUID actorUserId
     ) {
 
         ProposedAction proposedAction =
@@ -186,6 +349,7 @@ public class WorkItemService {
         proposedAction.setStatus(
                 ProposedActionStatus.APPROVED
         );
+        proposedAction.recordDecision(actorUserId);
 
         proposedAction.setFinalResponse(
                 finalResponse != null && !finalResponse.isBlank()
@@ -220,13 +384,22 @@ public class WorkItemService {
         workItem.setStatus(nextStatus);
         workItemRepository.save(workItem);
 
+        workItemEventService.record(
+                organizationId,
+                workItem.getId(),
+                WorkItemEventType.PROPOSAL_APPROVED,
+                "Approved " + humanize(savedAction.getActionType().name()),
+                actorUserId
+        );
+
         return savedAction;
     }
 
     @Transactional
     public ProposedAction rejectProposedAction(
             UUID organizationId,
-            UUID proposedActionId
+            UUID proposedActionId,
+            UUID actorUserId
     ) {
 
         ProposedAction proposedAction =
@@ -235,6 +408,7 @@ public class WorkItemService {
         proposedAction.setStatus(
                 ProposedActionStatus.REJECTED
         );
+        proposedAction.recordDecision(actorUserId);
 
         // Back to the review queue so a new proposal can be generated.
         WorkItem workItem = proposedAction.getWorkItem();
@@ -242,6 +416,14 @@ public class WorkItemService {
         workItem.setStatus(WorkItemStatus.NEW);
 
         workItemRepository.save(workItem);
+
+        workItemEventService.record(
+                organizationId,
+                workItem.getId(),
+                WorkItemEventType.PROPOSAL_REJECTED,
+                "Rejected " + humanize(proposedAction.getActionType().name()),
+                actorUserId
+        );
 
         return proposedActionRepository.save(proposedAction);
     }
@@ -280,7 +462,8 @@ public class WorkItemService {
     public WorkItem closeWorkItem(
             UUID organizationId,
             UUID workItemId,
-            WorkItemStatus status
+            WorkItemStatus status,
+            UUID actorUserId
     ) {
 
         if (!CLOSED_STATUSES.contains(status)) {
@@ -314,6 +497,14 @@ public class WorkItemService {
 
         workItem.setStatus(status);
 
+        workItemEventService.record(
+                organizationId,
+                workItemId,
+                WorkItemEventType.CLOSED,
+                status == WorkItemStatus.COMPLETED ? "Marked resolved" : "Cancelled",
+                actorUserId
+        );
+
         return workItemRepository.save(workItem);
     }
 
@@ -342,5 +533,9 @@ public class WorkItemService {
         }
 
         return new ArrayList<>(latestByWorkItem.values());
+    }
+
+    static String humanize(String enumName) {
+        return enumName.toLowerCase().replace('_', ' ');
     }
 }

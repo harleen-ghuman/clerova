@@ -4,6 +4,7 @@ import com.clerova.domain.MaintenanceRequest;
 import com.clerova.domain.MaintenanceRequestStatus;
 import com.clerova.domain.ProposedAction;
 import com.clerova.domain.WorkItem;
+import com.clerova.domain.WorkItemEventType;
 import com.clerova.domain.WorkItemStatus;
 import com.clerova.exception.NotFoundException;
 import com.clerova.repository.MaintenanceRequestRepository;
@@ -18,13 +19,16 @@ public class ActionExecutionService {
 
     private final MaintenanceRequestRepository maintenanceRequestRepository;
     private final WorkItemRepository workItemRepository;
+    private final WorkItemEventService workItemEventService;
 
     public ActionExecutionService(
             MaintenanceRequestRepository maintenanceRequestRepository,
-            WorkItemRepository workItemRepository
+            WorkItemRepository workItemRepository,
+            WorkItemEventService workItemEventService
     ) {
         this.maintenanceRequestRepository = maintenanceRequestRepository;
         this.workItemRepository = workItemRepository;
+        this.workItemEventService = workItemEventService;
     }
 
     public MaintenanceRequest executeMaintenanceRequest(
@@ -69,7 +73,8 @@ public class ActionExecutionService {
             UUID organizationId,
             UUID id,
             MaintenanceRequestStatus status,
-            String notes
+            String notes,
+            UUID actorUserId
     ) {
         MaintenanceRequest request =
                 maintenanceRequestRepository.findByIdAndOrganizationId(id, organizationId)
@@ -99,6 +104,14 @@ public class ActionExecutionService {
 
         if (statusChanged) {
             request.setStatus(status);
+
+            workItemEventService.record(
+                    organizationId,
+                    request.getWorkItem().getId(),
+                    WorkItemEventType.MAINTENANCE_UPDATED,
+                    "Maintenance " + status.name().toLowerCase().replace('_', ' '),
+                    actorUserId
+            );
         }
 
         if (notes != null) {

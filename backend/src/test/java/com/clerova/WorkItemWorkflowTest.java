@@ -87,7 +87,7 @@ class WorkItemWorkflowTest {
         result.reasoning = "Reasoning";
         result.draftedResponse = "AI draft";
 
-        when(aiService.proposeAction(any())).thenReturn(result);
+        when(aiService.proposeAction(any(), any())).thenReturn(result);
     }
 
     private JsonNode json(ResultActions actions) throws Exception {
@@ -159,6 +159,18 @@ class WorkItemWorkflowTest {
                 .andExpect(jsonPath("$.finalResponse").value("Edited reply"));
 
         assertThat(workItemStatus(workItemId)).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    void sendingReplyForManualRequestIsRejectedWhenEmailIsNotSetUp() throws Exception {
+        proposeAction(ActionType.RESPOND_TO_CUSTOMER);
+        String actionId = generateAction(createWorkItem());
+
+        approve(actionId, null).andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/send-reply", actionId).with(user))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("EMAIL_SENDING_DISABLED"));
     }
 
     @Test

@@ -113,6 +113,14 @@ public class AiService {
     }
 
     public ProposedActionResult proposeAction(WorkItem workItem) {
+        return proposeAction(workItem, null);
+    }
+
+    /**
+     * @param conversation the email conversation so far (oldest first), or
+     *                     null when there is only the original message
+     */
+    public ProposedActionResult proposeAction(WorkItem workItem, String conversation) {
 
         String workItemContext = """
             Category: %s
@@ -127,6 +135,14 @@ public class AiService {
                 workItem.getSummary(),
                 workItem.getOriginalMessage()
         );
+
+        if (conversation != null && !conversation.isBlank()) {
+            workItemContext += """
+
+            Conversation so far (oldest first):
+            %s
+            """.formatted(conversation);
+        }
 
         try {
 
@@ -162,6 +178,11 @@ public class AiService {
 
                                 NO_ACTION:
                                 Use only when no meaningful business action is required.
+
+                                When a conversation is provided, recommend the next action
+                                based on the latest customer message, taking earlier messages
+                                and replies already sent into account. Do not repeat
+                                information that was already sent.
 
                                 Provide a short factual business justification in the
                                 reasoning field.

@@ -455,6 +455,11 @@ GET  /api/health
 GET  /api/me
 POST /api/onboarding
 
+GET  /api/inbox
+POST /api/inbox/{id}/reprocess
+GET  /api/email-settings
+POST /api/inbound/postmark          (Postmark webhook, basic auth)
+
 GET  /api/work-items
 GET  /api/work-items/{id}
 POST /api/work-items
@@ -463,10 +468,13 @@ GET  /api/work-items/{id}/proposed-actions
 POST /api/work-items/{id}/proposed-actions
 
 POST /api/work-items/{id}/close
+GET  /api/work-items/{id}/conversation
+GET  /api/work-items/{id}/events
 
 GET  /api/work-items/proposed-actions/latest
 POST /api/work-items/proposed-actions/{id}/approve
 POST /api/work-items/proposed-actions/{id}/reject
+POST /api/work-items/proposed-actions/{id}/send-reply
 
 GET   /api/maintenance-requests
 PATCH /api/maintenance-requests/{id}
@@ -620,6 +628,12 @@ AI_RATE_LIMIT_GLOBAL_PER_DAY          (default 500)
 TRIAL_DAYS                            (default 14)
 TRIAL_AI_MONTHLY_LIMIT                (default 100)
 SUPABASE_JWT_SECRET                   (only for projects on the legacy JWT secret)
+OPENAI_BASE_URL                       (optional, defaults to api.openai.com)
+INBOUND_EMAIL_DOMAIN                  (e.g. in.clerova-ai.com; enables email intake)
+INBOUND_WEBHOOK_USERNAME              (default postmark)
+INBOUND_WEBHOOK_PASSWORD              (enables email intake)
+POSTMARK_SERVER_TOKEN                 (enables sending replies)
+EMAIL_PROCESSING_INTERVAL_MS          (default 5000)
 ```
 
 ### Database Migrations
@@ -664,6 +678,57 @@ readable but new AI processing is blocked until the plan is changed.
 
 Marketing links can carry `?utm_source=instagram` (or `?ref=...`). The source
 is remembered in the browser and saved with the organization at onboarding.
+
+---
+
+## Email Intake
+
+Each organization gets a forwarding address such as
+`oakridge-rentals-k3j9x2@in.clerova-ai.com` (shown on the Email Setup page).
+Users forward their requests inbox to it, or set a filter that forwards only
+some emails.
+
+```text
+Email forwarded to Clerova
+        |
+        v
+Postmark inbound webhook  ->  stored (duplicates skipped)
+        |
+        v
+Background processor
+  - automated / bulk email ........ Ignored (can be processed anyway)
+  - Gmail forwarding confirmation . Ignored, code shown on Email Setup
+  - reply to an open request ...... Added to that request's conversation;
+                                    waiting/escalated requests return to review
+  - anything else ................. New work item + AI proposal
+        |
+        v
+Human review: edit, approve, then "Send" emails the reply
+```
+
+- Replies are sent from the organization's Clerova address. Their reply-to
+  address carries the work item (`token+wi-<id>@...`), so the sender's
+  answer is threaded onto the same request even if their mail client drops
+  the threading headers. In-Reply-To/References are matched as well.
+- Each new email uses two AI requests from the monthly quota (extraction and
+  proposal). AI failures are retried twice; quota or trial errors mark the
+  email as failed so it can be retried from the Inbox.
+- Attachment names, types and sizes are recorded; file contents are not
+  stored yet.
+
+### Postmark Setup
+
+1. **Inbound:** in a Postmark server, add an inbound domain (for example
+   `in.clerova-ai.com`) with an MX record pointing to
+   `inbound.postmarkapp.com`, and set the inbound webhook URL to
+   `https://postmark:<INBOUND_WEBHOOK_PASSWORD>@api.clerova-ai.com/api/inbound/postmark`.
+2. **Outbound:** verify the same domain as a sender signature (DKIM and
+   Return-Path DNS records) and set `POSTMARK_SERVER_TOKEN` to the server's
+   API token.
+3. Set `INBOUND_EMAIL_DOMAIN` and `INBOUND_WEBHOOK_PASSWORD` on the backend.
+
+Without these settings the app works as before: the Inbox explains that
+email intake is not available, and approved responses are copied manually.
 
 ### Supabase Setup
 
@@ -797,11 +862,14 @@ Clerova is a deployed full-stack MVP demonstrating AI-assisted property operatio
 - Flyway database migrations
 - AI request rate limiting
 - Open sign-up with Supabase Auth
+- Email intake by forwarding address, with threading and replies
+- Work item audit trail
 - Multi-tenant organizations with free trials and AI quotas
 
 ### Planned
 
-- Resident communication integrations
+- Gmail and Microsoft 365 inbox connections (OAuth)
+- Attachment storage and document extraction
 - Vendor assignment and dispatch
 - Audit/event history
 - Additional operational workflows

@@ -6,16 +6,32 @@ export interface DecisionCopy {
 }
 
 /**
- * User-facing description of a reviewed proposed action. Clerova does not
- * send messages yet, so approved responses must be sent by the reviewer.
+ * User-facing description of a reviewed proposed action.
+ *
+ * @param canEmailReply whether the response can be emailed from Clerova;
+ *                      otherwise the reviewer copies and sends it
  */
-export function decisionCopy(action: ProposedAction): DecisionCopy {
+export function decisionCopy(
+  action: ProposedAction,
+  canEmailReply = false
+): DecisionCopy {
   if (action.status === "REJECTED") {
     return {
       title: "Action rejected",
       description: "The recommendation was rejected and no action was executed.",
     };
   }
+
+  if (action.status === "EXECUTED") {
+    return {
+      title: "Reply sent",
+      description: "The approved response was emailed to the sender.",
+    };
+  }
+
+  const sendInstruction = canEmailReply
+    ? "Send the approved response below to the sender."
+    : "Copy the approved response and send it to the resident.";
 
   switch (action.actionType) {
     case "CREATE_MAINTENANCE_REQUEST":
@@ -27,14 +43,14 @@ export function decisionCopy(action: ProposedAction): DecisionCopy {
     case "RESPOND_TO_CUSTOMER":
       return {
         title: "Response approved",
-        description:
-          "Copy the approved response and send it to the resident. The request has been closed.",
+        description: `${sendInstruction} The request has been closed.`,
       };
     case "REQUEST_MORE_INFORMATION":
       return {
         title: "Information request approved",
-        description:
-          "Copy the approved message and send it. The request stays open until you resolve it.",
+        description: canEmailReply
+          ? "Send the approved message below. When the sender replies, the request comes back for review automatically."
+          : "Copy the approved message and send it. The request stays open until you resolve it.",
       };
     case "ESCALATE_TO_HUMAN":
       return {
@@ -55,10 +71,10 @@ export function decisionCopy(action: ProposedAction): DecisionCopy {
   }
 }
 
-/** Whether the approved action has a resident message someone needs to send. */
+/** Whether the reviewed action has a message for the sender. */
 export function hasResponseToSend(action: ProposedAction): boolean {
   return (
-    action.status === "APPROVED" &&
+    (action.status === "APPROVED" || action.status === "EXECUTED") &&
     action.actionType !== "NO_ACTION"
   );
 }

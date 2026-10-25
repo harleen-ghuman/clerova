@@ -7,16 +7,21 @@ import {
   generateProposedAction,
   getLatestProposedActions,
   getProposedActions,
+  getWorkItem,
   getWorkItems,
   rejectProposedAction,
 } from "./api/workItems";
 import { getMaintenanceRequests } from "./api/MaintenanceRequests";
+import { getEmailSettings } from "./api/email";
 import { errorMessage } from "./api/client";
 import { PendingActionsPage } from "./pages/PendingActionsPage";
 import { Sidebar, type AppView } from "./components/Sidebar";
 import { WorkItemsPage } from "./pages/WorkItemsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { MaintenancePage } from "./pages/MaintenancePage";
+import { InboxPage } from "./pages/InboxPage";
+import { EmailSetupPage } from "./pages/EmailSetupPage";
+import type { EmailSettings } from "./types/Email";
 import type { Organization } from "./types/Account";
 import type { MaintenanceRequest } from "./types/MaintenanceRequest";
 import type { ProposedAction } from "./types/ProposedAction";
@@ -84,7 +89,17 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
   const [pendingDecision, setPendingDecision] = useState<{
     action: ProposedAction;
     decision: "APPROVED" | "REJECTED";
+    // Snapshot, since approving can close the item and drop it from the list
+    workItem?: WorkItem;
   } | null>(null);
+
+  const [emailSettings, setEmailSettings] =
+    useState<EmailSettings | null>(null);
+  const [emailSettingsError, setEmailSettingsError] =
+    useState<string | null>(null);
+
+  // Bumped by the background refresh so pages reload their data
+  const [refreshTick, setRefreshTick] = useState(0);
 
   const pendingActions = Object.values(latestActions)
     .filter((action) => action.status === "PENDING_APPROVAL")
@@ -161,6 +176,34 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
 
     void loadLatestActions();
     void loadMaintenanceRequests();
+
+    getEmailSettings()
+      .then(setEmailSettings)
+      .catch((err) =>
+        setEmailSettingsError(
+          errorMessage(err, "Unable to load email settings.")
+        )
+      );
+  }, []);
+
+  // New emails are processed in the background, so check for new work
+  // regularly while the tab is visible.
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      getWorkItems()
+        .then((data) => setWorkItems(data))
+        .catch((err) => console.error("Background refresh failed:", err));
+
+      void loadLatestActions();
+      void loadMaintenanceRequests();
+      setRefreshTick((tick) => tick + 1);
+    }, 30_000);
+
+    return () => window.clearInterval(interval);
   }, []);
 
   function rememberAction(action: ProposedAction) {
@@ -228,6 +271,33 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
       );
     } finally {
       setGeneratingAction(false);
+    }
+  }
+
+  /** A reviewed action changed, e.g. its reply was sent. */
+  function handleActionUpdated(action: ProposedAction) {
+    rememberAction(action);
+
+    setPendingDecision((current) =>
+      current && current.action.id === action.id
+        ? { ...current, action }
+        : current
+    );
+
+    setRefreshTick((tick) => tick + 1);
+  }
+
+  async function handleOpenWorkItem(workItemId: string) {
+    navigate("work-items");
+
+    try {
+      const workItem =
+        workItems.find((item) => item.id === workItemId) ??
+        (await getWorkItem(workItemId));
+
+      await handleReviewWorkItem(workItem);
+    } catch (err) {
+      setActionError(errorMessage(err, "Unable to open this request."));
     }
   }
 
@@ -324,6 +394,10 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
       setUpdatingAction(true);
       setActionError(null);
 
+      const decidedWorkItem = workItems.find(
+        (item) => item.id === selectedPendingAction.workItemId
+      );
+
       const updatedAction = await decide(
         selectedPendingAction,
         decision,
@@ -331,7 +405,11 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
       );
 
       // Show result instead of immediately blanking panel
-      setPendingDecision({ action: updatedAction, decision });
+      setPendingDecision({
+        action: updatedAction,
+        decision,
+        workItem: decidedWorkItem,
+      });
       setSelectedPendingAction(null);
     } catch (err) {
       console.error("Failed to update pending action:", err);
@@ -424,6 +502,20 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
       setSelectedMaintenanceWorkItemId(null);
     }
 
+    if (view === "email-setup") {
+      // A Gmail confirmation email may have arrived since the last load
+      getEmailSettings()
+        .then((settings) => {
+          setEmailSettings(settings);
+          setEmailSettingsError(null);
+        })
+        .catch((err) =>
+          setEmailSettingsError(
+            errorMessage(err, "Unable to load email settings.")
+          )
+        );
+    }
+
     if (view !== "pending-actions") {
       setPendingDecision(null);
       setSelectedPendingAction(null);
@@ -440,10 +532,24 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
 
   const viewContent = {
     dashboard: {
-      eyebrow: "Property Operations",
+      eyebrow: "Operations",
       title: "Dashboard",
       description:
-        "Monitor incoming requests and property operations.",
+        "Monitor incoming requests and operations.",
+    },
+
+    inbox: {
+      eyebrow: "Email Intake",
+      title: "Inbox",
+      description:
+        "Emails received at your Clerova forwarding address.",
+    },
+
+    "email-setup": {
+      eyebrow: "Settings",
+      title: "Email Setup",
+      description:
+        "Connect your inbox by forwarding email to Clerova.",
     },
 
     "work-items": {
@@ -518,7 +624,7 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
       ? workItems.find(
           (item) =>
             item.id === pendingDecision.action.workItemId
-        )
+        ) ?? pendingDecision.workItem
       : undefined;
 
   return (
@@ -539,6 +645,14 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
           onClick={() => navigate("dashboard")}
         >
           Dashboard
+        </button>
+
+        <button
+          type="button"
+          className={activeView === "inbox" ? "active" : ""}
+          onClick={() => navigate("inbox")}
+        >
+          Inbox
         </button>
 
         <button
@@ -631,6 +745,27 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
             onReject={() => handleDecision("REJECTED")}
             onCloseWorkItem={handleCloseWorkItem}
             onViewMaintenance={handleViewMaintenance}
+            emailSendingEnabled={emailSettings?.sendingEnabled ?? false}
+            onActionUpdated={handleActionUpdated}
+          />
+        )}
+
+        {/* =====================================================
+            INBOX AND EMAIL SETUP
+           ===================================================== */}
+
+        {activeView === "inbox" && (
+          <InboxPage
+            refreshKey={refreshTick}
+            onOpenWorkItem={handleOpenWorkItem}
+            onOpenEmailSetup={() => navigate("email-setup")}
+          />
+        )}
+
+        {activeView === "email-setup" && (
+          <EmailSetupPage
+            settings={emailSettings}
+            error={emailSettingsError}
           />
         )}
 
@@ -673,6 +808,8 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
             onReject={() => handlePendingDecision("REJECTED")}
             onRegenerate={handleRegenerateRejectedAction}
             onClearDecision={() => setPendingDecision(null)}
+            emailSendingEnabled={emailSettings?.sendingEnabled ?? false}
+            onActionUpdated={handleActionUpdated}
             onViewMaintenance={(workItemId) => {
               setPendingDecision(null);
               handleViewMaintenance(workItemId);
