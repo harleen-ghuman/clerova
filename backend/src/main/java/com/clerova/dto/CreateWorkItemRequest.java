@@ -5,10 +5,7 @@ import jakarta.validation.constraints.Size;
 
 public record CreateWorkItemRequest(
 
-        @NotBlank
-        String organizationId,
-
-        @NotBlank
+        @NotBlank(message = "Message is required")
         @Size(
                 max = 10000,
                 message = "Message must not exceed 10000 characters"

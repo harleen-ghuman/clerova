@@ -6,6 +6,8 @@ import com.clerova.domain.Category;
 import com.clerova.domain.Priority;
 import com.clerova.domain.WorkItem;
 import com.clerova.dto.ProposedActionResult;
+
+import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,7 +58,7 @@ class AiProposedActionEvaluationTest {
 
         WorkItem workItem = new WorkItem();
 
-        workItem.setOrganizationId("evaluation-org");
+        workItem.setOrganizationId(UUID.randomUUID());
         workItem.setCategory(category);
         workItem.setPriority(priority);
         workItem.setAddress(address);

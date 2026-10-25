@@ -41,6 +41,7 @@ public class WorkItemService {
     private final ProposedActionRepository proposedActionRepository;
     private final MaintenanceRequestRepository maintenanceRequestRepository;
     private final ActionExecutionService actionExecutionService;
+    private final AiUsageService aiUsageService;
     private final TransactionTemplate transactionTemplate;
 
     public WorkItemService(
@@ -49,6 +50,7 @@ public class WorkItemService {
             ProposedActionRepository proposedActionRepository,
             MaintenanceRequestRepository maintenanceRequestRepository,
             ActionExecutionService actionExecutionService,
+            AiUsageService aiUsageService,
             TransactionTemplate transactionTemplate
     ) {
         this.aiService = aiService;
@@ -56,13 +58,16 @@ public class WorkItemService {
         this.proposedActionRepository = proposedActionRepository;
         this.maintenanceRequestRepository = maintenanceRequestRepository;
         this.actionExecutionService = actionExecutionService;
+        this.aiUsageService = aiUsageService;
         this.transactionTemplate = transactionTemplate;
     }
 
     public WorkItem createWorkItem(
-            String organizationId,
+            UUID organizationId,
             String message
     ) {
+
+        aiUsageService.consumeAiRequest(organizationId);
 
         ExtractionResult extraction =
                 aiService.extract(message);
@@ -80,13 +85,16 @@ public class WorkItemService {
         return workItemRepository.save(workItem);
     }
 
-    public List<WorkItem> getAllWorkItems() {
+    public List<WorkItem> getAllWorkItems(UUID organizationId) {
         return workItemRepository
-                .findByStatusNotInOrderByCreatedAtDesc(CLOSED_STATUSES);
+                .findByOrganizationIdAndStatusNotInOrderByCreatedAtDesc(
+                        organizationId,
+                        CLOSED_STATUSES
+                );
     }
 
-    public WorkItem getWorkItem(UUID id) {
-        return workItemRepository.findById(id)
+    public WorkItem getWorkItem(UUID organizationId, UUID id) {
+        return workItemRepository.findByIdAndOrganizationId(id, organizationId)
                 .orElseThrow(() ->
                         new NotFoundException("Work item not found: " + id)
                 );
@@ -97,11 +105,16 @@ public class WorkItemService {
      * The work item's optimistic-lock version guards against two concurrent
      * generations both saving a pending proposal.
      */
-    public ProposedAction generateProposedAction(UUID workItemId) {
+    public ProposedAction generateProposedAction(
+            UUID organizationId,
+            UUID workItemId
+    ) {
 
-        WorkItem workItem = getWorkItem(workItemId);
+        WorkItem workItem = getWorkItem(organizationId, workItemId);
 
         ensureCanGenerateProposal(workItem);
+
+        aiUsageService.consumeAiRequest(organizationId);
 
         ProposedActionResult result =
                 aiService.proposeAction(workItem);
@@ -162,12 +175,13 @@ public class WorkItemService {
 
     @Transactional
     public ProposedAction approveProposedAction(
+            UUID organizationId,
             UUID proposedActionId,
             String finalResponse
     ) {
 
         ProposedAction proposedAction =
-                getPendingProposedAction(proposedActionId, "approved");
+                getPendingProposedAction(organizationId, proposedActionId, "approved");
 
         proposedAction.setStatus(
                 ProposedActionStatus.APPROVED
@@ -210,10 +224,13 @@ public class WorkItemService {
     }
 
     @Transactional
-    public ProposedAction rejectProposedAction(UUID proposedActionId) {
+    public ProposedAction rejectProposedAction(
+            UUID organizationId,
+            UUID proposedActionId
+    ) {
 
         ProposedAction proposedAction =
-                getPendingProposedAction(proposedActionId, "rejected");
+                getPendingProposedAction(organizationId, proposedActionId, "rejected");
 
         proposedAction.setStatus(
                 ProposedActionStatus.REJECTED
@@ -230,11 +247,13 @@ public class WorkItemService {
     }
 
     private ProposedAction getPendingProposedAction(
+            UUID organizationId,
             UUID proposedActionId,
             String verb
     ) {
         ProposedAction proposedAction =
-                proposedActionRepository.findById(proposedActionId)
+                proposedActionRepository
+                        .findByIdAndWorkItemOrganizationId(proposedActionId, organizationId)
                         .orElseThrow(() ->
                                 new NotFoundException(
                                         "Proposed action not found: "
@@ -258,7 +277,11 @@ public class WorkItemService {
      * the requested information arrived and was dealt with outside Clerova.
      */
     @Transactional
-    public WorkItem closeWorkItem(UUID workItemId, WorkItemStatus status) {
+    public WorkItem closeWorkItem(
+            UUID organizationId,
+            UUID workItemId,
+            WorkItemStatus status
+    ) {
 
         if (!CLOSED_STATUSES.contains(status)) {
             throw new IllegalStateException(
@@ -266,7 +289,7 @@ public class WorkItemService {
             );
         }
 
-        WorkItem workItem = getWorkItem(workItemId);
+        WorkItem workItem = getWorkItem(organizationId, workItemId);
 
         if (CLOSED_STATUSES.contains(workItem.getStatus())) {
             throw new IllegalStateException(
@@ -294,13 +317,12 @@ public class WorkItemService {
         return workItemRepository.save(workItem);
     }
 
-    public List<ProposedAction> getProposedActions(UUID workItemId) {
+    public List<ProposedAction> getProposedActions(
+            UUID organizationId,
+            UUID workItemId
+    ) {
 
-        if (!workItemRepository.existsById(workItemId)) {
-            throw new NotFoundException(
-                    "Work item not found: " + workItemId
-            );
-        }
+        getWorkItem(organizationId, workItemId);
 
         return proposedActionRepository.findByWorkItemIdOrderByCreatedAtDesc(workItemId);
     }
@@ -309,12 +331,12 @@ public class WorkItemService {
      * Latest proposed action for every open work item, in one query instead
      * of one request per work item.
      */
-    public List<ProposedAction> getLatestProposedActions() {
+    public List<ProposedAction> getLatestProposedActions(UUID organizationId) {
 
         Map<UUID, ProposedAction> latestByWorkItem = new LinkedHashMap<>();
 
         for (ProposedAction action : proposedActionRepository
-                .findForWorkItemsNotInStatusesOrderByCreatedAtDesc(CLOSED_STATUSES)) {
+                .findForOpenWorkItemsOrderByCreatedAtDesc(organizationId, CLOSED_STATUSES)) {
 
             latestByWorkItem.putIfAbsent(action.getWorkItem().getId(), action);
         }

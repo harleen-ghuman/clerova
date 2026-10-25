@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import "./App.css";
 
 import {
   approveProposedAction,
@@ -18,6 +17,7 @@ import { Sidebar, type AppView } from "./components/Sidebar";
 import { WorkItemsPage } from "./pages/WorkItemsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { MaintenancePage } from "./pages/MaintenancePage";
+import type { Organization } from "./types/Account";
 import type { MaintenanceRequest } from "./types/MaintenanceRequest";
 import type { ProposedAction } from "./types/ProposedAction";
 import type { WorkItem } from "./types/WorkItem";
@@ -29,7 +29,13 @@ function byNewest(a: { createdAt: string }, b: { createdAt: string }) {
   );
 }
 
-function App() {
+interface AppProps {
+  organization: Organization;
+  userEmail: string;
+  onSignOut: () => void;
+}
+
+function App({ organization, userEmail, onSignOut }: AppProps) {
   const [workItems, setWorkItems] = useState<WorkItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -384,10 +390,7 @@ function App() {
       setCreateRequestError(null);
       setCreateRequestSuccess(null);
 
-      const createdWorkItem = await createWorkItem(
-        "demo-property-management",
-        message
-      );
+      const createdWorkItem = await createWorkItem(message);
 
       setWorkItems((currentItems) => [
         createdWorkItem,
@@ -523,7 +526,10 @@ function App() {
       <Sidebar
         activeView={activeView}
         pendingActionCount={pendingActions.length}
+        organization={organization}
+        userEmail={userEmail}
         onNavigate={navigate}
+        onSignOut={onSignOut}
       />
 
       <nav className="mobile-nav" aria-label="Mobile navigation">

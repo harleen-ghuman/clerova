@@ -1,3 +1,5 @@
+import type { Organization } from "../types/Account";
+
 export type AppView =
   | "dashboard"
   | "work-items"
@@ -7,14 +9,38 @@ export type AppView =
 interface SidebarProps {
   activeView: AppView;
   pendingActionCount: number;
+  organization: Organization;
+  userEmail: string;
   onNavigate: (view: AppView) => void;
+  onSignOut: () => void;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function trialDaysLeft(trialEndsAt: string | null): number | null {
+  if (!trialEndsAt) {
+    return null;
+  }
+
+  return Math.max(
+    0,
+    Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / DAY_MS)
+  );
 }
 
 export function Sidebar({
   activeView,
   pendingActionCount,
+  organization,
+  userEmail,
   onNavigate,
+  onSignOut,
 }: SidebarProps) {
+  const daysLeft =
+    organization.plan === "TRIAL"
+      ? trialDaysLeft(organization.trialEndsAt)
+      : null;
+
   return (
     <aside className="sidebar">
       <button
@@ -27,8 +53,20 @@ export function Sidebar({
 
         <div>
           <strong>Clerova</strong>
-          <span>Property Operations</span>
+          <span>
+            {organization.industry === "TRUCKING"
+              ? "Trucking Operations"
+              : "Property Operations"}
+          </span>
         </div>
+      </button>
+
+      <button
+        type="button"
+        className="sidebar-mobile-signout"
+        onClick={onSignOut}
+      >
+        Sign out
       </button>
 
       <nav className="sidebar-nav">
@@ -81,7 +119,25 @@ export function Sidebar({
 
       <div className="sidebar-footer">
         <span>Organization</span>
-        <strong>Demo Property Management</strong>
+        <strong>{organization.name}</strong>
+
+        {daysLeft !== null && (
+          <p className="sidebar-trial">
+            {daysLeft === 0
+              ? "Free trial ended"
+              : `Free trial · ${daysLeft} ${daysLeft === 1 ? "day" : "days"} left`}
+            <br />
+            {organization.aiRequestsUsedThisMonth} /{" "}
+            {organization.aiMonthlyLimit} AI requests this month
+          </p>
+        )}
+
+        <div className="sidebar-account">
+          <small title={userEmail}>{userEmail}</small>
+          <button type="button" onClick={onSignOut}>
+            Sign out
+          </button>
+        </div>
       </div>
     </aside>
   );

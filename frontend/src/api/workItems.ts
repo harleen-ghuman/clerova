@@ -6,13 +6,10 @@ export function getWorkItems(): Promise<WorkItem[]> {
   return apiRequest("/api/work-items");
 }
 
-export function createWorkItem(
-  organizationId: string,
-  message: string
-): Promise<WorkItem> {
+export function createWorkItem(message: string): Promise<WorkItem> {
   return apiRequest("/api/work-items", {
     method: "POST",
-    body: { organizationId, message },
+    body: { message },
   });
 }
 

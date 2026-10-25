@@ -4,6 +4,7 @@ import com.clerova.domain.MaintenanceRequest;
 import com.clerova.dto.MaintenanceRequestResponse;
 import com.clerova.dto.UpdateMaintenanceRequest;
 import com.clerova.repository.MaintenanceRequestRepository;
+import com.clerova.security.CurrentUserService;
 import com.clerova.service.ActionExecutionService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -18,11 +19,15 @@ public class MaintenanceRequestController {
 
     private final MaintenanceRequestRepository maintenanceRequestRepository;
     private final ActionExecutionService actionExecutionService;
+    private final CurrentUserService currentUserService;
 
     public MaintenanceRequestController(
             MaintenanceRequestRepository maintenanceRequestRepository,
-            ActionExecutionService actionExecutionService
+            ActionExecutionService actionExecutionService,
+            CurrentUserService currentUserService
     ) {
+        this.currentUserService = currentUserService;
+
         this.maintenanceRequestRepository =
                 maintenanceRequestRepository;
 
@@ -32,7 +37,10 @@ public class MaintenanceRequestController {
 
     @GetMapping
     public List<MaintenanceRequestResponse> getAllMaintenanceRequests() {
-        return maintenanceRequestRepository.findAllByOrderByCreatedAtDesc()
+        return maintenanceRequestRepository
+                .findByOrganizationIdOrderByCreatedAtDesc(
+                        currentUserService.requireOrganizationId()
+                )
                 .stream()
                 .map(MaintenanceRequestResponse::from)
                 .toList();
@@ -43,7 +51,10 @@ public class MaintenanceRequestController {
             @PathVariable UUID workItemId
     ) {
         return maintenanceRequestRepository
-                .findByWorkItemIdOrderByCreatedAtDesc(workItemId)
+                .findByWorkItemIdAndOrganizationIdOrderByCreatedAtDesc(
+                        workItemId,
+                        currentUserService.requireOrganizationId()
+                )
                 .stream()
                 .map(MaintenanceRequestResponse::from)
                 .toList();
@@ -57,6 +68,7 @@ public class MaintenanceRequestController {
     ) {
         MaintenanceRequest updated =
                 actionExecutionService.updateMaintenanceRequest(
+                        currentUserService.requireOrganizationId(),
                         id,
                         request.status(),
                         request.notes()

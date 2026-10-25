@@ -452,6 +452,9 @@ Core API routes include:
 GET  /
 GET  /api/health
 
+GET  /api/me
+POST /api/onboarding
+
 GET  /api/work-items
 GET  /api/work-items/{id}
 POST /api/work-items
@@ -469,6 +472,14 @@ GET   /api/maintenance-requests
 PATCH /api/maintenance-requests/{id}
 ```
 
+All routes except `/` and `/api/health` require a Supabase access token:
+
+```http
+Authorization: Bearer <supabase-access-token>
+```
+
+Data is scoped to the signed-in user's organization.
+
 ### Example: Create Work Item
 
 ```http
@@ -476,7 +487,6 @@ POST /api/work-items
 Content-Type: application/json
 
 {
-  "organizationId": "demo-property-management",
   "message": "Water is leaking from the bathroom sink at 225 Market Street."
 }
 ```
@@ -597,6 +607,7 @@ DATABASE_USERNAME
 DATABASE_PASSWORD
 CORS_ALLOWED_ORIGIN
 PORT
+SUPABASE_URL          (e.g. https://abcd1234.supabase.co)
 ```
 
 Optional configuration:
@@ -606,6 +617,9 @@ SHOW_SQL
 FORMAT_SQL
 AI_RATE_LIMIT_PER_CLIENT_PER_MINUTE   (default 10)
 AI_RATE_LIMIT_GLOBAL_PER_DAY          (default 500)
+TRIAL_DAYS                            (default 14)
+TRIAL_AI_MONTHLY_LIMIT                (default 100)
+SUPABASE_JWT_SECRET                   (only for projects on the legacy JWT secret)
 ```
 
 ### Database Migrations
@@ -623,7 +637,68 @@ transaction-mode pooler (port `6543`).
 
 ```text
 VITE_API_BASE_URL
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
 ```
+
+See `frontend/.env.example`.
+
+---
+
+## Accounts and Sign-Up
+
+Anyone can sign up. Authentication is handled by Supabase Auth (email and
+password); the backend verifies Supabase access tokens.
+
+1. A visitor creates an account and confirms their email.
+2. On first sign-in they set up their workspace: company name, industry
+   (property management or trucking), company size, and how they heard about
+   Clerova.
+3. This creates a trial organization with the user as its owner. All work
+   items, proposed actions and maintenance requests belong to that
+   organization and are invisible to others.
+
+New organizations get a free trial (`TRIAL_DAYS`) with a monthly AI request
+quota (`TRIAL_AI_MONTHLY_LIMIT`). When the trial ends, existing data stays
+readable but new AI processing is blocked until the plan is changed.
+
+Marketing links can carry `?utm_source=instagram` (or `?ref=...`). The source
+is remembered in the browser and saved with the organization at onboarding.
+
+### Supabase Setup
+
+In the Supabase dashboard:
+
+- **Authentication → Sign In / Providers → Email:** enable email sign-up and
+  keep "Confirm email" on.
+- **Authentication → URL Configuration:** set the Site URL to the app URL
+  (for example `https://app.clerova-ai.com`) and add it to the redirect URLs,
+  so confirmation and password reset links return to the app.
+- **Optional:** enable CAPTCHA protection (Authentication → Attack Protection)
+  to reduce bot sign-ups.
+
+### Managing Trials
+
+Trials can be extended or converted to a paid plan with SQL, for example:
+
+```sql
+update organizations
+set plan = 'STARTER', ai_monthly_limit = 1000, trial_ends_at = null
+where name = 'Acme Property Group';
+```
+
+### Sign-Up Interest
+
+```sql
+select industry, company_size, referral_source, count(*)
+from organizations
+where plan <> 'INTERNAL'
+group by industry, company_size, referral_source
+order by count(*) desc;
+```
+
+Data created before accounts existed belongs to the `Demo Property
+Management` organization.
 
 Local development defaults are provided where appropriate.
 
@@ -721,11 +796,11 @@ Clerova is a deployed full-stack MVP demonstrating AI-assisted property operatio
 - Custom frontend and API domains
 - Flyway database migrations
 - AI request rate limiting
+- Open sign-up with Supabase Auth
+- Multi-tenant organizations with free trials and AI quotas
 
 ### Planned
 
-- Authentication and authorization
-- Multi-tenant organization support
 - Resident communication integrations
 - Vendor assignment and dispatch
 - Audit/event history

@@ -22,12 +22,19 @@ public interface ProposedActionRepository
             UUID workItemId
     );
 
+    Optional<ProposedAction> findByIdAndWorkItemOrganizationId(
+            UUID id,
+            UUID organizationId
+    );
+
     @Query("""
             select pa from ProposedAction pa
-            where pa.workItem.status not in :statuses
+            where pa.workItem.organizationId = :organizationId
+              and pa.workItem.status not in :statuses
             order by pa.createdAt desc
             """)
-    List<ProposedAction> findForWorkItemsNotInStatusesOrderByCreatedAtDesc(
+    List<ProposedAction> findForOpenWorkItemsOrderByCreatedAtDesc(
+            @Param("organizationId") UUID organizationId,
             @Param("statuses") Collection<WorkItemStatus> statuses
     );
 }

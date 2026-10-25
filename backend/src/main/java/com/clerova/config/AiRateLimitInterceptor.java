@@ -18,8 +18,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Limits requests that trigger OpenAI calls: a per-client limit per minute
- * and a global daily cap that bounds total spend. Counters live in memory,
+ * Limits requests that trigger OpenAI calls: a per-user limit per minute
+ * and a global daily cap that bounds total spend. Per-organization monthly
+ * quotas are enforced separately by AiUsageService. Counters live in memory,
  * so they are per instance and reset on restart.
  *
  * Registered as an MVC interceptor (see WebConfig) rather than a servlet
@@ -66,7 +67,12 @@ public class AiRateLimitInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        if (!tryAcquireClient(request.getRemoteAddr())) {
+        // Signed-in users are limited per user; anything else per IP.
+        String clientKey = request.getUserPrincipal() != null
+                ? "user:" + request.getUserPrincipal().getName()
+                : "ip:" + request.getRemoteAddr();
+
+        if (!tryAcquireClient(clientKey)) {
             reject(response, "Too many AI requests. Please wait a minute and try again.");
             return false;
         }

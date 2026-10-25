@@ -11,7 +11,7 @@ public record MaintenanceRequestResponse(
         UUID id,
         UUID workItemId,
         UUID proposedActionId,
-        String organizationId,
+        UUID organizationId,
         String address,
         String description,
         Priority priority,

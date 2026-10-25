@@ -17,6 +17,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.util.UUID;
 
@@ -24,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -42,8 +44,33 @@ class WorkItemWorkflowTest {
     @MockitoBean
     private AiService aiService;
 
+    /** A freshly onboarded user, so each test has its own organization. */
+    private RequestPostProcessor user;
+
+    static RequestPostProcessor userToken(UUID userId) {
+        return jwt().jwt(token -> token
+                .subject(userId.toString())
+                .claim("email", userId + "@example.com"));
+    }
+
+    static RequestPostProcessor onboardNewUser(MockMvc mockMvc) throws Exception {
+        RequestPostProcessor user = userToken(UUID.randomUUID());
+
+        mockMvc.perform(post("/api/onboarding")
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"organizationName":"Acme","industry":"PROPERTY_MANAGEMENT"}
+                                """))
+                .andExpect(status().isCreated());
+
+        return user;
+    }
+
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
+        user = onboardNewUser(mockMvc);
+
         ExtractionResult extraction = new ExtractionResult();
         extraction.category = Category.MAINTENANCE;
         extraction.priority = Priority.HIGH;
@@ -71,22 +98,23 @@ class WorkItemWorkflowTest {
 
     private String createWorkItem() throws Exception {
         return json(mockMvc.perform(post("/api/work-items")
+                        .with(user)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"organizationId":"org","message":"Sink is leaking"}
+                                {"message":"Sink is leaking"}
                                 """))
                 .andExpect(status().isCreated()))
                 .get("id").asText();
     }
 
     private String generateAction(String workItemId) throws Exception {
-        return json(mockMvc.perform(post("/api/work-items/{id}/proposed-actions", workItemId))
+        return json(mockMvc.perform(post("/api/work-items/{id}/proposed-actions", workItemId).with(user))
                 .andExpect(status().isCreated()))
                 .get("id").asText();
     }
 
     private ResultActions approve(String actionId, String body) throws Exception {
-        var request = post("/api/work-items/proposed-actions/{id}/approve", actionId);
+        var request = post("/api/work-items/proposed-actions/{id}/approve", actionId).with(user);
 
         if (body != null) {
             request.contentType(MediaType.APPLICATION_JSON).content(body);
@@ -96,13 +124,13 @@ class WorkItemWorkflowTest {
     }
 
     private String workItemStatus(String workItemId) throws Exception {
-        return json(mockMvc.perform(get("/api/work-items/{id}", workItemId)))
+        return json(mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user)))
                 .get("status").asText();
     }
 
     @Test
     void unknownWorkItemReturns404() throws Exception {
-        mockMvc.perform(get("/api/work-items/{id}", UUID.randomUUID()))
+        mockMvc.perform(get("/api/work-items/{id}", UUID.randomUUID()).with(user))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("NOT_FOUND"));
     }
@@ -112,7 +140,7 @@ class WorkItemWorkflowTest {
         String workItemId = createWorkItem();
         generateAction(workItemId);
 
-        mockMvc.perform(post("/api/work-items/{id}/proposed-actions", workItemId))
+        mockMvc.perform(post("/api/work-items/{id}/proposed-actions", workItemId).with(user))
                 .andExpect(status().isConflict());
     }
 
@@ -152,6 +180,7 @@ class WorkItemWorkflowTest {
         assertThat(workItemStatus(workItemId)).isEqualTo("ESCALATED");
 
         mockMvc.perform(post("/api/work-items/{id}/close", workItemId)
+                        .with(user)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status":"COMPLETED"}
@@ -165,7 +194,7 @@ class WorkItemWorkflowTest {
         String workItemId = createWorkItem();
         String actionId = generateAction(workItemId);
 
-        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/reject", actionId))
+        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/reject", actionId).with(user))
                 .andExpect(status().isOk());
 
         assertThat(workItemStatus(workItemId)).isEqualTo("NEW");
@@ -179,11 +208,12 @@ class WorkItemWorkflowTest {
         approve(generateAction(workItemId), null).andExpect(status().isOk());
 
         String maintenanceId = json(mockMvc.perform(
-                get("/api/maintenance-requests/work-item/{id}", workItemId)))
+                get("/api/maintenance-requests/work-item/{id}", workItemId).with(user)))
                 .get(0).get("id").asText();
 
         // Cannot close the work item while maintenance is still open
         mockMvc.perform(post("/api/work-items/{id}/close", workItemId)
+                        .with(user)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status":"CANCELLED"}
@@ -207,12 +237,12 @@ class WorkItemWorkflowTest {
         String workItemId = createWorkItem();
         String firstActionId = generateAction(workItemId);
 
-        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/reject", firstActionId))
+        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/reject", firstActionId).with(user))
                 .andExpect(status().isOk());
 
         String secondActionId = generateAction(workItemId);
 
-        JsonNode latest = json(mockMvc.perform(get("/api/work-items/proposed-actions/latest"))
+        JsonNode latest = json(mockMvc.perform(get("/api/work-items/proposed-actions/latest").with(user))
                 .andExpect(status().isOk()));
 
         long forWorkItem = 0;
@@ -232,14 +262,16 @@ class WorkItemWorkflowTest {
         String message = "x".repeat(10_001);
 
         mockMvc.perform(post("/api/work-items")
+                        .with(user)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"organizationId\":\"org\",\"message\":\"" + message + "\"}"))
+                        .content("{\"message\":\"" + message + "\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"));
     }
 
     private ResultActions patchMaintenance(String id, String status) throws Exception {
         return mockMvc.perform(patch("/api/maintenance-requests/{id}", id)
+                .with(user)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\":\"" + status + "\"}"));
     }

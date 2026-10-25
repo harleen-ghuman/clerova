@@ -14,7 +14,7 @@ public class WorkItem {
     private UUID id;
 
     @Column(nullable = false)
-    private String organizationId;
+    private UUID organizationId;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String originalMessage;
@@ -68,11 +68,11 @@ public class WorkItem {
         this.id = id;
     }
 
-    public String getOrganizationId() {
+    public UUID getOrganizationId() {
         return organizationId;
     }
 
-    public void setOrganizationId(String organizationId) {
+    public void setOrganizationId(UUID organizationId) {
         this.organizationId = organizationId;
     }
 

@@ -16,6 +16,21 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(ApiException.class)
+    public ResponseEntity<ApiError> handleApiException(
+            ApiException e
+    ) {
+
+        ApiError error = new ApiError(
+                e.getCode(),
+                e.getMessage()
+        );
+
+        return ResponseEntity
+                .status(e.getStatus())
+                .body(error);
+    }
+
     @ExceptionHandler(AiServiceException.class)
     public ResponseEntity<ApiError> handleAiServiceException(
             AiServiceException exception

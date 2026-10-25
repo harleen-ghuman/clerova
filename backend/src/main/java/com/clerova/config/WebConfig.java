@@ -1,22 +1,19 @@
 package com.clerova.config;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+/**
+ * MVC configuration. CORS is configured in SecurityConfig so it also applies
+ * to responses rejected by Spring Security.
+ */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
-    private final String allowedOrigin;
     private final AiRateLimitInterceptor aiRateLimitInterceptor;
 
-    public WebConfig(
-            @Value("${app.cors.allowed-origin}") String allowedOrigin,
-            AiRateLimitInterceptor aiRateLimitInterceptor
-    ) {
-        this.allowedOrigin = allowedOrigin;
+    public WebConfig(AiRateLimitInterceptor aiRateLimitInterceptor) {
         this.aiRateLimitInterceptor = aiRateLimitInterceptor;
     }
 
@@ -28,20 +25,5 @@ public class WebConfig implements WebMvcConfigurer {
                         "/api/work-items",
                         "/api/work-items/*/proposed-actions"
                 );
-    }
-
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/api/**")
-                .allowedOrigins(allowedOrigin)
-                .allowedMethods(
-                        "GET",
-                        "POST",
-                        "PUT",
-                        "PATCH",
-                        "DELETE",
-                        "OPTIONS"
-                )
-                .allowedHeaders("*");
     }
 }

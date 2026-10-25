@@ -66,12 +66,13 @@ public class ActionExecutionService {
 
     @Transactional
     public MaintenanceRequest updateMaintenanceRequest(
+            UUID organizationId,
             UUID id,
             MaintenanceRequestStatus status,
             String notes
     ) {
         MaintenanceRequest request =
-                maintenanceRequestRepository.findById(id)
+                maintenanceRequestRepository.findByIdAndOrganizationId(id, organizationId)
                         .orElseThrow(() ->
                                 new NotFoundException(
                                         "Maintenance request not found: " + id

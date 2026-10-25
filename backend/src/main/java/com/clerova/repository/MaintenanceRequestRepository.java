@@ -12,14 +12,22 @@ import java.util.UUID;
 public interface MaintenanceRequestRepository
         extends JpaRepository<MaintenanceRequest, UUID> {
 
-    List<MaintenanceRequest> findAllByOrderByCreatedAtDesc();
+    List<MaintenanceRequest> findByOrganizationIdOrderByCreatedAtDesc(
+            UUID organizationId
+    );
+
+    Optional<MaintenanceRequest> findByIdAndOrganizationId(
+            UUID id,
+            UUID organizationId
+    );
 
     Optional<MaintenanceRequest> findByProposedActionId(
             UUID proposedActionId
     );
 
-    List<MaintenanceRequest> findByWorkItemIdOrderByCreatedAtDesc(
-            UUID workItemId
+    List<MaintenanceRequest> findByWorkItemIdAndOrganizationIdOrderByCreatedAtDesc(
+            UUID workItemId,
+            UUID organizationId
     );
 
     boolean existsByWorkItemIdAndStatusIn(

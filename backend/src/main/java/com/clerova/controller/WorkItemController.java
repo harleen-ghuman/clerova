@@ -6,6 +6,7 @@ import com.clerova.dto.ApproveProposedActionRequest;
 import com.clerova.dto.CloseWorkItemRequest;
 import com.clerova.dto.CreateWorkItemRequest;
 import com.clerova.dto.ProposedActionResponse;
+import com.clerova.security.CurrentUserService;
 import com.clerova.service.WorkItemService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -20,9 +21,18 @@ import java.util.UUID;
 public class WorkItemController {
 
     private final WorkItemService workItemService;
+    private final CurrentUserService currentUserService;
 
-    public WorkItemController(WorkItemService workItemService) {
+    public WorkItemController(
+            WorkItemService workItemService,
+            CurrentUserService currentUserService
+    ) {
         this.workItemService = workItemService;
+        this.currentUserService = currentUserService;
+    }
+
+    private UUID organizationId() {
+        return currentUserService.requireOrganizationId();
     }
 
     @PostMapping
@@ -32,19 +42,19 @@ public class WorkItemController {
     ) {
 
         return workItemService.createWorkItem(
-                request.organizationId(),
+                organizationId(),
                 request.message()
         );
     }
 
     @GetMapping
     public List<WorkItem> getAllWorkItems() {
-        return workItemService.getAllWorkItems();
+        return workItemService.getAllWorkItems(organizationId());
     }
 
     @GetMapping("/{id}")
     public WorkItem getWorkItem(@PathVariable UUID id) {
-        return workItemService.getWorkItem(id);
+        return workItemService.getWorkItem(organizationId(), id);
     }
 
     @PostMapping("/{id}/close")
@@ -52,7 +62,7 @@ public class WorkItemController {
             @PathVariable UUID id,
             @Valid @RequestBody CloseWorkItemRequest request
     ) {
-        return workItemService.closeWorkItem(id, request.status());
+        return workItemService.closeWorkItem(organizationId(), id, request.status());
     }
 
     @PostMapping("/{workItemId}/proposed-actions")
@@ -61,7 +71,7 @@ public class WorkItemController {
     ) {
 
         ProposedAction proposedAction =
-                workItemService.generateProposedAction(workItemId);
+                workItemService.generateProposedAction(organizationId(), workItemId);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -70,7 +80,7 @@ public class WorkItemController {
 
     @GetMapping("/proposed-actions/latest")
     public List<ProposedActionResponse> getLatestProposedActions() {
-        return workItemService.getLatestProposedActions()
+        return workItemService.getLatestProposedActions(organizationId())
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -84,6 +94,7 @@ public class WorkItemController {
 
         ProposedAction proposedAction =
                 workItemService.approveProposedAction(
+                        organizationId(),
                         proposedActionId,
                         request != null ? request.finalResponse() : null
                 );
@@ -99,7 +110,7 @@ public class WorkItemController {
     ) {
 
         ProposedAction proposedAction =
-                workItemService.rejectProposedAction(proposedActionId);
+                workItemService.rejectProposedAction(organizationId(), proposedActionId);
 
         return ResponseEntity.ok(
                 toResponse(proposedAction)
@@ -126,7 +137,7 @@ public class WorkItemController {
     ) {
 
         List<ProposedActionResponse> responses =
-                workItemService.getProposedActions(workItemId)
+                workItemService.getProposedActions(organizationId(), workItemId)
                         .stream()
                         .map(this::toResponse)
                         .toList();
