@@ -253,6 +253,10 @@ public class AiService {
                                   specific charge when account records have not been supplied.
                                 - Do not ask the customer for payment details that should
                                   exist in the organization's payment or ledger system.
+                                - Do not ask the customer to send screenshots, receipts,
+                                  statements, confirmation numbers, or any other proof or
+                                  documentation of a charge or payment. Staff will look
+                                  up the charge in the account records.
                                 - If required account data is not present in the supplied
                                   context, acknowledge the issue and indicate that the
                                   relevant account records need to be verified.
