@@ -5,6 +5,7 @@ import com.clerova.domain.MaintenanceRequestStatus;
 import com.clerova.domain.ProposedAction;
 import com.clerova.domain.WorkItem;
 import com.clerova.domain.WorkItemStatus;
+import com.clerova.exception.NotFoundException;
 import com.clerova.repository.MaintenanceRequestRepository;
 import com.clerova.repository.WorkItemRepository;
 import org.springframework.stereotype.Service;
@@ -72,12 +73,30 @@ public class ActionExecutionService {
         MaintenanceRequest request =
                 maintenanceRequestRepository.findById(id)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new NotFoundException(
                                         "Maintenance request not found: " + id
                                 )
                         );
 
-        if (status != null) {
+        MaintenanceRequestStatus currentStatus = request.getStatus();
+
+        if (currentStatus.isTerminal()) {
+            throw new IllegalStateException(
+                    "Completed or cancelled maintenance requests cannot be changed"
+            );
+        }
+
+        boolean statusChanged =
+                status != null && status != currentStatus;
+
+        if (statusChanged && !currentStatus.canTransitionTo(status)) {
+            throw new IllegalStateException(
+                    "Cannot move a maintenance request from "
+                            + currentStatus + " to " + status
+            );
+        }
+
+        if (statusChanged) {
             request.setStatus(status);
         }
 
@@ -85,8 +104,7 @@ public class ActionExecutionService {
             request.setNotes(notes.trim());
         }
 
-        if (status == MaintenanceRequestStatus.COMPLETED ||
-                status == MaintenanceRequestStatus.CANCELLED) {
+        if (statusChanged && status.isTerminal()) {
 
             WorkItem workItem = request.getWorkItem();
 

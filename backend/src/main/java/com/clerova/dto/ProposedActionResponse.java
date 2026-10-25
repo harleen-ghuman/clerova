@@ -13,6 +13,7 @@ public record ProposedActionResponse(
         ProposedActionStatus status,
         String reasoning,
         String draftedResponse,
+        String finalResponse,
         Instant createdAt,
         Instant updatedAt
 ) {

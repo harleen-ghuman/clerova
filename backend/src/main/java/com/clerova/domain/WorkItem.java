@@ -39,6 +39,10 @@ public class WorkItem {
     @Column(nullable = false)
     private Instant updatedAt;
 
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     @PrePersist
     public void onCreate() {
         Instant now = Instant.now();
@@ -134,5 +138,9 @@ public class WorkItem {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Long getVersion() {
+        return version;
     }
 }

@@ -2,6 +2,8 @@ package com.clerova.controller;
 
 import com.clerova.domain.ProposedAction;
 import com.clerova.domain.WorkItem;
+import com.clerova.dto.ApproveProposedActionRequest;
+import com.clerova.dto.CloseWorkItemRequest;
 import com.clerova.dto.CreateWorkItemRequest;
 import com.clerova.dto.ProposedActionResponse;
 import com.clerova.service.WorkItemService;
@@ -45,6 +47,14 @@ public class WorkItemController {
         return workItemService.getWorkItem(id);
     }
 
+    @PostMapping("/{id}/close")
+    public WorkItem closeWorkItem(
+            @PathVariable UUID id,
+            @Valid @RequestBody CloseWorkItemRequest request
+    ) {
+        return workItemService.closeWorkItem(id, request.status());
+    }
+
     @PostMapping("/{workItemId}/proposed-actions")
     public ResponseEntity<ProposedActionResponse> generateProposedAction(
             @PathVariable UUID workItemId
@@ -58,13 +68,25 @@ public class WorkItemController {
                 .body(toResponse(proposedAction));
     }
 
+    @GetMapping("/proposed-actions/latest")
+    public List<ProposedActionResponse> getLatestProposedActions() {
+        return workItemService.getLatestProposedActions()
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     @PostMapping("/proposed-actions/{proposedActionId}/approve")
     public ResponseEntity<ProposedActionResponse> approveProposedAction(
-            @PathVariable UUID proposedActionId
+            @PathVariable UUID proposedActionId,
+            @Valid @RequestBody(required = false) ApproveProposedActionRequest request
     ) {
 
         ProposedAction proposedAction =
-                workItemService.approveProposedAction(proposedActionId);
+                workItemService.approveProposedAction(
+                        proposedActionId,
+                        request != null ? request.finalResponse() : null
+                );
 
         return ResponseEntity.ok(
                 toResponse(proposedAction)
@@ -92,6 +114,7 @@ public class WorkItemController {
                 proposedAction.getStatus(),
                 proposedAction.getReasoning(),
                 proposedAction.getDraftedResponse(),
+                proposedAction.getFinalResponse(),
                 proposedAction.getCreatedAt(),
                 proposedAction.getUpdatedAt()
         );

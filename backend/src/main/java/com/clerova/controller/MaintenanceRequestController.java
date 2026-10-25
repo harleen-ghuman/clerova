@@ -5,6 +5,7 @@ import com.clerova.dto.MaintenanceRequestResponse;
 import com.clerova.dto.UpdateMaintenanceRequest;
 import com.clerova.repository.MaintenanceRequestRepository;
 import com.clerova.service.ActionExecutionService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,7 +32,7 @@ public class MaintenanceRequestController {
 
     @GetMapping
     public List<MaintenanceRequestResponse> getAllMaintenanceRequests() {
-        return maintenanceRequestRepository.findAll()
+        return maintenanceRequestRepository.findAllByOrderByCreatedAtDesc()
                 .stream()
                 .map(MaintenanceRequestResponse::from)
                 .toList();
@@ -52,7 +53,7 @@ public class MaintenanceRequestController {
     public ResponseEntity<MaintenanceRequestResponse>
     updateMaintenanceRequest(
             @PathVariable UUID id,
-            @RequestBody UpdateMaintenanceRequest request
+            @Valid @RequestBody UpdateMaintenanceRequest request
     ) {
         MaintenanceRequest updated =
                 actionExecutionService.updateMaintenanceRequest(

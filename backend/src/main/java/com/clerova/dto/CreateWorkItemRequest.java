@@ -10,8 +10,8 @@ public record CreateWorkItemRequest(
 
         @NotBlank
         @Size(
-                max = 2000,
-                message = "Message must not exceed 2000 characters"
+                max = 10000,
+                message = "Message must not exceed 10000 characters"
         )
         String message
 

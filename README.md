@@ -228,6 +228,7 @@ NEW
 IN_PROGRESS
 WAITING_FOR_APPROVAL
 WAITING_FOR_INFORMATION
+ESCALATED
 COMPLETED
 CANCELLED
 ```
@@ -245,6 +246,9 @@ REQUEST_MORE_INFORMATION
 ESCALATE_TO_HUMAN
 NO_ACTION
 ```
+
+Reviewers can edit the drafted response before approving. Approved escalations
+and information requests stay open until a user closes them.
 
 Proposed actions begin in `PENDING_APPROVAL` and can be explicitly approved or rejected.
 
@@ -455,6 +459,9 @@ POST /api/work-items
 GET  /api/work-items/{id}/proposed-actions
 POST /api/work-items/{id}/proposed-actions
 
+POST /api/work-items/{id}/close
+
+GET  /api/work-items/proposed-actions/latest
 POST /api/work-items/proposed-actions/{id}/approve
 POST /api/work-items/proposed-actions/{id}/reject
 
@@ -484,7 +491,27 @@ POST /api/work-items/{workItemId}/proposed-actions
 
 ```http
 POST /api/work-items/proposed-actions/{proposedActionId}/approve
+Content-Type: application/json
+
+{
+  "finalResponse": "Optional edited response. Defaults to the AI draft."
+}
 ```
+
+### Example: Close an Escalated or Waiting Work Item
+
+```http
+POST /api/work-items/{workItemId}/close
+Content-Type: application/json
+
+{
+  "status": "COMPLETED"
+}
+```
+
+Requests that trigger AI calls (`POST /api/work-items` and
+`POST /api/work-items/{id}/proposed-actions`) are rate limited per client and
+capped per day. Limited requests return `429`.
 
 ---
 
@@ -572,12 +599,25 @@ CORS_ALLOWED_ORIGIN
 PORT
 ```
 
-Optional logging configuration:
+Optional configuration:
 
 ```text
 SHOW_SQL
 FORMAT_SQL
+AI_RATE_LIMIT_PER_CLIENT_PER_MINUTE   (default 10)
+AI_RATE_LIMIT_GLOBAL_PER_DAY          (default 500)
 ```
+
+### Database Migrations
+
+The schema is managed by Flyway migrations in
+`backend/src/main/resources/db/migration`, and Hibernate only validates it.
+Databases created before Flyway was introduced are baselined at version 1
+automatically on first start.
+
+Flyway takes a PostgreSQL advisory lock while migrating, so `DATABASE_URL`
+should use a direct or session-mode connection (Supabase port `5432`), not the
+transaction-mode pooler (port `6543`).
 
 ### Frontend
 
@@ -602,7 +642,9 @@ cd backend
 ./mvnw test
 ```
 
-Backend tests use an H2 in-memory database where appropriate.
+Backend tests use an H2 in-memory database (PostgreSQL mode). The Flyway
+migrations run against it, so the tests also check that the migrations match
+the JPA entities.
 
 AI evaluation tests are kept separate from normal application tests so standard builds do not require live model calls.
 
@@ -677,6 +719,8 @@ Clerova is a deployed full-stack MVP demonstrating AI-assisted property operatio
 - Environment-based production configuration
 - Production frontend and backend deployment
 - Custom frontend and API domains
+- Flyway database migrations
+- AI request rate limiting
 
 ### Planned
 
@@ -686,7 +730,6 @@ Clerova is a deployed full-stack MVP demonstrating AI-assisted property operatio
 - Vendor assignment and dispatch
 - Audit/event history
 - Additional operational workflows
-- Production database migrations
 - Expanded automated test coverage
 
 ---

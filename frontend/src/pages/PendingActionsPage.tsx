@@ -1,5 +1,10 @@
+import { useState } from "react";
+
+import { ApprovedResponse } from "../components/ApprovedResponse";
+import { ResponseEditor } from "../components/ResponseEditor";
 import type { ProposedAction } from "../types/ProposedAction";
 import type { WorkItem } from "../types/WorkItem";
+import { decisionCopy, hasResponseToSend } from "../utils/actionCopy";
 
 interface PendingDecision {
   action: ProposedAction;
@@ -17,7 +22,7 @@ interface PendingActionsPageProps {
   actionError: string | null;
 
   onSelectAction: (action: ProposedAction) => void;
-  onApprove: () => void;
+  onApprove: (finalResponse: string) => void;
   onReject: () => void;
   onRegenerate: (action: ProposedAction) => void;
   onClearDecision: () => void;
@@ -152,13 +157,7 @@ export function PendingActionsPage({
                 </span>
 
                 <h2>
-                  {pendingDecision.decision === "APPROVED" &&
-                  pendingDecision.action.actionType ===
-                    "CREATE_MAINTENANCE_REQUEST"
-                    ? "Maintenance request created"
-                    : pendingDecision.decision === "APPROVED"
-                      ? "Action approved"
-                      : "Action rejected"}
+                  {decisionCopy(pendingDecision.action).title}
                 </h2>
 
                 {pendingDecisionWorkItem && (
@@ -179,14 +178,17 @@ export function PendingActionsPage({
                 )}
 
                 <p>
-                  {pendingDecision.decision === "APPROVED" &&
-                  pendingDecision.action.actionType ===
-                    "CREATE_MAINTENANCE_REQUEST"
-                    ? "The maintenance request was created successfully and is now available in Maintenance."
-                    : pendingDecision.decision === "APPROVED"
-                      ? "The approved action was completed successfully."
-                      : "The recommendation was rejected and no action was executed."}
+                  {decisionCopy(pendingDecision.action).description}
                 </p>
+
+                {hasResponseToSend(pendingDecision.action) && (
+                  <ApprovedResponse
+                    response={
+                      pendingDecision.action.finalResponse ??
+                      pendingDecision.action.draftedResponse
+                    }
+                  />
+                )}
 
                 {pendingDecision.decision === "APPROVED" &&
                   pendingDecision.action.actionType ===
@@ -241,6 +243,7 @@ export function PendingActionsPage({
               </div>
             ) : (
               <PendingActionReview
+                key={selectedPendingAction.id}
                 action={selectedPendingAction}
                 workItem={workItems.find(
                   (item) =>
@@ -264,7 +267,7 @@ interface PendingActionReviewProps {
   workItem?: WorkItem;
   updatingAction: boolean;
   actionError: string | null;
-  onApprove: () => void;
+  onApprove: (finalResponse: string) => void;
   onReject: () => void;
 }
 
@@ -276,6 +279,8 @@ function PendingActionReview({
   onApprove,
   onReject,
 }: PendingActionReviewProps) {
+  const [response, setResponse] = useState(action.draftedResponse);
+
   return (
     <div className="pending-review-content">
       <div className="details-header">
@@ -339,13 +344,12 @@ function PendingActionReview({
         <p>{action.reasoning}</p>
       </div>
 
-      <div className="details-section">
-        <h3>Suggested response to resident</h3>
-
-        <p className="drafted-response">
-          {action.draftedResponse}
-        </p>
-      </div>
+      <ResponseEditor
+        id={`pending-response-${action.id}`}
+        value={response}
+        disabled={updatingAction}
+        onChange={setResponse}
+      />
 
       {actionError && (
         <p className="action-error">
@@ -366,8 +370,8 @@ function PendingActionReview({
         <button
           type="button"
           className="approve-button"
-          onClick={onApprove}
-          disabled={updatingAction}
+          onClick={() => onApprove(response)}
+          disabled={updatingAction || response.trim().length === 0}
         >
           {updatingAction
             ? "Updating..."
