@@ -373,6 +373,7 @@ deploy.
 VITE_API_BASE_URL
 VITE_SUPABASE_URL
 VITE_SUPABASE_ANON_KEY
+VITE_GOOGLE_CLIENT_ID   # optional: Google's own button, so the sign-in window names this site
 ```
 
 ### Database
@@ -396,6 +397,10 @@ connects as the table owner and is unaffected.
 - **Authentication, Google provider:** turn it on with the client ID and
   secret of a Google Cloud OAuth client (Web application) whose authorized
   redirect URI is `https://<project-ref>.supabase.co/auth/v1/callback`.
+  Set the same client ID as `VITE_GOOGLE_CLIENT_ID` on the frontend, and add
+  the app's address under the client's authorized JavaScript origins. The
+  app then uses Google's own button, and Google's sign-in window shows the
+  app's address instead of the Supabase one.
 - **URL Configuration:** set the Site URL to `https://app.clerova-ai.com`
   and add it to the redirect URLs.
 - **SMTP:** send auth emails through Postmark so they come from the Clerova
