@@ -87,7 +87,7 @@ export function HeroDemo() {
           </div>
         </div>
 
-        <div className="preview-detail">
+        <div className={`preview-detail ${drafted ? "drafted" : ""}`}>
           <div className="preview-title">
             <strong>Kitchen sink leaking</strong>
             <span className={`preview-meta ${sorted ? "shown" : ""}`}>
