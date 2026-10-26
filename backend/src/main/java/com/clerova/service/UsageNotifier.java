@@ -101,7 +101,7 @@ public class UsageNotifier {
                         .formatted(organization.getName(), event.used(), event.limit(), event.limit(), resetDate);
 
         String next = organization.getPlan() == Plan.STARTER
-                ? "To keep going, upgrade to Growth (%d requests a month) from Manage billing in Clerova: %s"
+                ? "To keep going, open Clerova and click Upgrade to Growth (%d requests a month): %s"
                         .formatted(billingProperties.getGrowthMonthlyRequests(), app)
                 : "Need more? Reply to this email and we'll help.";
 

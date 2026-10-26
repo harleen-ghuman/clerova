@@ -110,17 +110,18 @@ class BillingTest {
         when(stripe.get("/v1/subscriptions/sub_1")).thenReturn(stripeJson.readTree("""
                 {
                   "id": "sub_1",
-                  "customer": "cus_1",
+                  "customer": "cus_%s",
                   "status": "%s",
                   "cancel_at_period_end": false,
                   "trial_end": 1900000000,
                   "metadata": {"organization_id": "%s"},
                   "items": {"data": [{
+                    "id": "si_1",
                     "current_period_end": 1900000000,
                     "price": {"lookup_key": "%s", "recurring": {"interval": "month"}}
                   }]}
                 }
-                """.formatted(status, organizationId, lookupKey)));
+                """.formatted(organizationId, status, organizationId, lookupKey)));
     }
 
     @Test
@@ -169,6 +170,39 @@ class BillingTest {
                 .containsEntry("payment_method_collection", "always")
                 .containsEntry("subscription_data[trial_period_days]", "14")
                 .containsEntry("client_reference_id", organizationIdOf(user));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void starterCanUpgradeToGrowthAtTheSameInterval() throws Exception {
+        RequestPostProcessor user = onboardNewUser(mockMvc);
+        String organizationId = organizationIdOf(user);
+
+        stubSubscription(organizationId, "active", "starter_monthly");
+        sendSignedWebhook("""
+                {"type":"customer.subscription.updated","data":{"object":{"id":"sub_1"}}}
+                """).andExpect(status().isOk());
+
+        when(stripe.get("/v1/prices?active=true&lookup_keys%5B%5D=growth_monthly"))
+                .thenReturn(stripeJson.readTree("{\"data\":[{\"id\":\"price_growth\"}]}"));
+        tools.jackson.databind.JsonNode upgraded = stripeJson.readTree(
+                stripe.get("/v1/subscriptions/sub_1").toString().replace("starter_monthly", "growth_monthly"));
+        when(stripe.post(eq("/v1/subscriptions/sub_1"), anyMap())).thenReturn(upgraded);
+
+        mockMvc.perform(post("/api/billing/upgrade").with(user)).andExpect(status().isOk());
+
+        ArgumentCaptor<Map<String, String>> form = ArgumentCaptor.forClass(Map.class);
+        verify(stripe).post(eq("/v1/subscriptions/sub_1"), form.capture());
+        assertThat(form.getValue())
+                .containsEntry("items[0][id]", "si_1")
+                .containsEntry("items[0][price]", "price_growth");
+
+        mockMvc.perform(get("/api/me").with(user))
+                .andExpect(jsonPath("$.organization.plan").value("GROWTH"))
+                .andExpect(jsonPath("$.organization.aiMonthlyLimit").value(1500));
+
+        // Growth can't be upgraded again
+        mockMvc.perform(post("/api/billing/upgrade").with(user)).andExpect(status().isConflict());
     }
 
     @Test

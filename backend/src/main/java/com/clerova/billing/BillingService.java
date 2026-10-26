@@ -172,11 +172,8 @@ public class BillingService {
         }
     }
 
-    /**
-     * @param upgrade open the plan change screen directly
-     * @return the Stripe billing portal page for the organization
-     */
-    public String openPortal(UUID organizationId, boolean upgrade) {
+    /** @return the Stripe billing portal page for the organization */
+    public String openPortal(UUID organizationId) {
         requireEnabled();
 
         Organization organization = findOrganization(organizationId);
@@ -185,16 +182,47 @@ public class BillingService {
             throw new ApiException(HttpStatus.CONFLICT, "NO_SUBSCRIPTION", "Choose a plan first.");
         }
 
-        Map<String, String> form = new LinkedHashMap<>();
-        form.put("customer", organization.getStripeCustomerId());
-        form.put("return_url", properties.getAppUrl() + "/");
+        return stripe.post("/v1/billing_portal/sessions", Map.of(
+                "customer", organization.getStripeCustomerId(),
+                "return_url", properties.getAppUrl() + "/"
+        )).path("url").asString();
+    }
 
-        if (upgrade && organization.getStripeSubscriptionId() != null) {
-            form.put("flow_data[type]", "subscription_update");
-            form.put("flow_data[subscription_update][subscription]", organization.getStripeSubscriptionId());
+    /**
+     * Moves a Starter subscription to Growth, keeping its billing period and
+     * founding price. The difference for the current period is added to
+     * the next invoice; during the trial nothing is charged.
+     */
+    public void upgradeToGrowth(UUID organizationId) {
+        requireEnabled();
+
+        Organization organization = findOrganization(organizationId);
+
+        if (organization.getPlan() != Plan.STARTER
+                || organization.getStripeSubscriptionId() == null
+                || requiresSubscription(organization)) {
+            throw new ApiException(HttpStatus.CONFLICT, "CANNOT_UPGRADE", "Only an active Starter plan can be upgraded.");
         }
 
-        return stripe.post("/v1/billing_portal/sessions", form).path("url").asString();
+        JsonNode subscription = fetchSubscription(organization.getStripeSubscriptionId());
+        JsonNode item = subscription.path("items").path("data").path(0);
+        String interval = item.path("price").path("recurring").path("interval").asString("month");
+        boolean founding = organization.isFoundingCustomer();
+
+        String priceId = findPrice(lookupKey(Plan.GROWTH, interval, founding))
+                .or(() -> founding ? findPrice(lookupKey(Plan.GROWTH, interval, false)) : Optional.empty())
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "BILLING_ERROR",
+                        "Growth is not available yet. Please contact hello@clerova-ai.com."
+                ));
+
+        Map<String, String> form = new LinkedHashMap<>();
+        form.put("items[0][id]", item.path("id").asString());
+        form.put("items[0][price]", priceId);
+        form.put("proration_behavior", "create_prorations");
+
+        syncSubscription(stripe.post("/v1/subscriptions/" + encode(subscription.path("id").asString()), form));
     }
 
     public void handleWebhook(String payload, String signatureHeader) {

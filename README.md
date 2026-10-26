@@ -229,6 +229,7 @@ GET  /api/billing/offer
 POST /api/billing/checkout                        ({"plan":"STARTER","interval":"month"})
 POST /api/billing/checkout/{sessionId}/complete
 POST /api/billing/portal
+POST /api/billing/upgrade                         (Starter to Growth)
 POST /api/stripe/webhook                          (Stripe webhook, signed)
 
 GET  /api/summary                                 (last 7 days, for Today)
@@ -433,8 +434,9 @@ first, then repeat in live mode.
    organizations get the founding prices and keep them. The amounts shown in
    the app are in `frontend/src/utils/plans.ts`, so keep them in sync.
 2. **Customer portal** (Settings → Billing → Customer portal): allow updating
-   payment methods, switching between the Starter and Growth prices, and
-   cancelling at the end of the billing period.
+   payment methods, viewing invoices, and cancelling at the end of the
+   billing period. Leave plan switching off: upgrades happen in the app, so
+   founding customers keep their founding price.
 3. **Webhook** (Developers → Webhooks): add the endpoint
    `https://api.clerova-ai.com/api/stripe/webhook` with the events
    `checkout.session.completed` and `customer.subscription.created`,
@@ -456,7 +458,8 @@ How it works:
   requests. Suggestions and replies on an existing request don't count.
 - At 80% and at 100% of the monthly requests, owners get an email and the
   app shows a banner. On Starter both suggest upgrading to Growth, which
-  opens Stripe's plan change screen. At the limit, new emails are saved but
+  upgrades the subscription in place (same billing period, founding price kept,
+  the difference added to the next invoice). At the limit, new emails are saved but
   not organized until the next month; they can be retried from the Inbox
   after upgrading.
 - Stripe is the source of truth. Webhooks and the return from Checkout read

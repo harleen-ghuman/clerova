@@ -9,7 +9,8 @@ import {
 import { getMaintenanceRequests } from "./api/MaintenanceRequests";
 import { getEmailSettings } from "./api/email";
 import { errorMessage } from "./api/client";
-import { openBillingPortal } from "./api/billing";
+import { openBillingPortal, upgradeToGrowth } from "./api/billing";
+import { PLANS, planPrice } from "./utils/plans";
 import { getMe } from "./api/account";
 import { Sidebar, type AppView } from "./components/Sidebar";
 import { RequestsPage, type RequestFilter } from "./pages/RequestsPage";
@@ -186,8 +187,8 @@ function App({ organization: initialOrganization, userEmail, onSignOut }: AppPro
 
   const [billingError, setBillingError] = useState<string | null>(null);
 
-  function manageBilling(upgrade = false) {
-    openBillingPortal(upgrade)
+  function manageBilling() {
+    openBillingPortal()
       .then(({ url }) => window.location.assign(url))
       .catch((err) =>
         setBillingError(errorMessage(err, "Unable to open billing. Please try again."))
@@ -212,6 +213,36 @@ function App({ organization: initialOrganization, userEmail, onSignOut }: AppPro
     void loadRequests();
     void loadJobs();
     void loadOrganization();
+  }
+
+  const [upgrading, setUpgrading] = useState(false);
+
+  function upgrade() {
+    const growth = PLANS.find((item) => item.plan === "GROWTH")!;
+    const price = planPrice(
+      organization.foundingCustomer ? growth.foundingMonthly : growth.monthly,
+      organization.billingInterval === "year" ? "year" : "month"
+    );
+    const when =
+      organization.subscriptionStatus === "trialing"
+        ? "You won't be charged until your trial ends."
+        : "The difference for the rest of this billing period is added to your next bill.";
+
+    if (
+      !window.confirm(
+        `Upgrade to Growth for $${price.amount.toLocaleString()} / ${price.per}? You get ${growth.requests.toLocaleString()} requests a month starting now. ${when}`
+      )
+    ) {
+      return;
+    }
+
+    setUpgrading(true);
+    upgradeToGrowth()
+      .then(() => loadOrganization())
+      .catch((err) =>
+        setBillingError(errorMessage(err, "Unable to upgrade. Please try again."))
+      )
+      .finally(() => setUpgrading(false));
   }
 
   // Warn from 80% of the monthly requests, and suggest upgrading
@@ -249,7 +280,7 @@ function App({ organization: initialOrganization, userEmail, onSignOut }: AppPro
         userEmail={userEmail}
         onNavigate={navigate}
         onSignOut={onSignOut}
-        onManageBilling={() => manageBilling()}
+        onManageBilling={manageBilling}
       />
 
       <nav className="mobile-nav" aria-label="Mobile navigation">
@@ -273,12 +304,12 @@ function App({ organization: initialOrganization, userEmail, onSignOut }: AppPro
           <div className="billing-banner" role="status">
             <span>{billingError ?? billingNotice}</span>
             {organization.subscriptionStatus === "past_due" && (
-              <button type="button" className="rq-button rq-button-small" onClick={() => manageBilling()}>
+              <button type="button" className="rq-button rq-button-small" onClick={manageBilling}>
                 Update card
               </button>
             )}
             {organization.cancelAtPeriodEnd && (
-              <button type="button" className="rq-button rq-button-small" onClick={() => manageBilling()}>
+              <button type="button" className="rq-button rq-button-small" onClick={manageBilling}>
                 Keep my plan
               </button>
             )}
@@ -300,9 +331,10 @@ function App({ organization: initialOrganization, userEmail, onSignOut }: AppPro
               <button
                 type="button"
                 className="rq-button rq-button-small rq-button-primary"
-                onClick={() => manageBilling(true)}
+                onClick={upgrade}
+                disabled={upgrading}
               >
-                Upgrade to Growth
+                {upgrading ? "Upgrading..." : "Upgrade to Growth"}
               </button>
             )}
           </div>
