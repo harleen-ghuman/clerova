@@ -568,7 +568,3 @@ Clerova's suggestion, ready to edit and approve.
   policies) through retrieval (RAG)
 - Vendor assignment and dispatch
 - New verticals, starting with real estate brokerages
-
----
-
-Built by **Harleen Ghuman**
