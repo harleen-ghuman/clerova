@@ -13,3 +13,13 @@ export function completeOnboarding(
     body: details,
   });
 }
+
+export function updateAccount(details: {
+  fullName: string;
+  organizationName: string;
+}): Promise<Me> {
+  return apiRequest("/api/me", {
+    method: "PATCH",
+    body: details,
+  });
+}

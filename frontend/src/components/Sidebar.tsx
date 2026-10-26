@@ -1,7 +1,13 @@
 import type { Organization } from "../types/Account";
 import { planName } from "../utils/plans";
 
-export type AppView = "today" | "requests" | "jobs" | "inbox" | "email-setup";
+export type AppView =
+  | "today"
+  | "requests"
+  | "jobs"
+  | "inbox"
+  | "email-setup"
+  | "settings";
 
 interface SidebarProps {
   activeView: AppView;
@@ -75,6 +81,7 @@ export function Sidebar({
     { view: "jobs", label: "Jobs", count: openJobCount },
     { view: "inbox", label: "Inbox" },
     { view: "email-setup", label: "Email setup" },
+    { view: "settings", label: "Settings" },
   ];
 
   return (

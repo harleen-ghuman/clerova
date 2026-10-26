@@ -37,6 +37,8 @@ export function Root() {
   const [checkoutReturn] = useState(readCheckoutReturn);
 
   const userId = session?.user.id;
+  // Changes once a new sign-in email is confirmed, so the account reloads
+  const sessionEmail = session?.user.email;
 
   useEffect(() => {
     if (checkoutReturn.result) {
@@ -92,7 +94,7 @@ export function Root() {
     return () => {
       cancelled = true;
     };
-  }, [userId, checkoutReturn]);
+  }, [userId, sessionEmail, checkoutReturn]);
 
   // Stripe may confirm a few seconds after the user is sent back, so keep
   // checking instead of asking them to refresh.
@@ -192,6 +194,7 @@ export function Root() {
     return (
       <OnboardingPage
         email={currentMe.email || session.user.email || ""}
+        suggestedName={String(session.user.user_metadata.full_name ?? "")}
         onComplete={setMe}
         onSignOut={handleSignOut}
       />
@@ -219,6 +222,8 @@ export function Root() {
       welcome={checkoutReturn.result === "success"}
       organization={currentMe.organization}
       userEmail={currentMe.email}
+      fullName={currentMe.fullName}
+      onAccountUpdated={setMe}
       onSignOut={handleSignOut}
     />
   );

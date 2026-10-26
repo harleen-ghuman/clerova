@@ -85,7 +85,9 @@ Email forwarded              Request typed in the app
 - Conversation view and activity history for each request (newest first)
 - Inbox view of every received email with its status, and a retry for
   failed ones
-- Open sign-up with Supabase Auth, onboarding and a free trial
+- Open sign-up with Supabase Auth (email or Google), onboarding and a free
+  trial
+- Settings: name, company name, sign-in email, password and billing
 - Get-started checklist for new workspaces: copy the address, forward,
   send a test email, approve the first reply
 - Multi-tenant organizations: each organization only sees its own data
@@ -228,6 +230,7 @@ Background processor (every 5 seconds)
 GET  /api/health
 
 GET  /api/me
+PATCH /api/me                                    ({"fullName":"...","organizationName":"..."})
 POST /api/onboarding
 
 GET  /api/billing/offer
@@ -388,7 +391,11 @@ connects as the table owner and is unaffected.
 ### Supabase
 
 - **Authentication, Email provider:** enable sign-up and keep "Confirm
-  email" on.
+  email" on. Turn "Secure email change" off, so a new email only needs a
+  click from the new address (people often signed up with an old one).
+- **Authentication, Google provider:** turn it on with the client ID and
+  secret of a Google Cloud OAuth client (Web application) whose authorized
+  redirect URI is `https://<project-ref>.supabase.co/auth/v1/callback`.
 - **URL Configuration:** set the Site URL to `https://app.clerova-ai.com`
   and add it to the redirect URLs.
 - **SMTP:** send auth emails through Postmark so they come from the Clerova

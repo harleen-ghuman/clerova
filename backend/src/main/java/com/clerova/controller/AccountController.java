@@ -2,6 +2,7 @@ package com.clerova.controller;
 
 import com.clerova.dto.MeResponse;
 import com.clerova.dto.OnboardingRequest;
+import com.clerova.dto.UpdateAccountRequest;
 import com.clerova.service.AccountService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -20,6 +21,11 @@ public class AccountController {
     @GetMapping("/me")
     public MeResponse getMe() {
         return accountService.getMe();
+    }
+
+    @PatchMapping("/me")
+    public MeResponse updateAccount(@Valid @RequestBody UpdateAccountRequest request) {
+        return accountService.updateAccount(request);
     }
 
     @PostMapping("/onboarding")

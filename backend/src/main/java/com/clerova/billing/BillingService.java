@@ -172,6 +172,24 @@ public class BillingService {
         }
     }
 
+    /**
+     * Copies a changed name or email to the organization's Stripe customer,
+     * so invoices match. A Stripe error is logged and does not undo the
+     * change in Clerova.
+     */
+    public void updateCustomer(Organization organization, String field, String value) {
+        if (!isEnabled() || organization.getStripeCustomerId() == null) {
+            return;
+        }
+
+        try {
+            stripe.post("/v1/customers/" + organization.getStripeCustomerId(), Map.of(field, value));
+        } catch (ApiException e) {
+            log.warn("Could not update the Stripe customer of organization {}: {}",
+                    organization.getId(), e.getMessage());
+        }
+    }
+
     /** @return the Stripe billing portal page for the organization */
     public String openPortal(UUID organizationId) {
         requireEnabled();

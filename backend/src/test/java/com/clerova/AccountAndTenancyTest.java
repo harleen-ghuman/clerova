@@ -26,7 +26,9 @@ import static com.clerova.WorkItemWorkflowTest.userToken;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -90,6 +92,51 @@ class AccountAndTenancyTest {
 
         mockMvc.perform(get("/api/health"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void settingsUpdateNameAndCompanyAndPickUpANewEmail() throws Exception {
+        UUID userId = UUID.randomUUID();
+        RequestPostProcessor user = userToken(userId);
+
+        mockMvc.perform(post("/api/onboarding")
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"organizationName":"Acme","industry":"PROPERTY_MANAGEMENT","fullName":"Sam"}
+                                """))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(patch("/api/me")
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName":"  Sam Lee ","organizationName":" Maple Property Group "}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fullName").value("Sam Lee"))
+                .andExpect(jsonPath("$.organization.name").value("Maple Property Group"));
+
+        mockMvc.perform(patch("/api/me")
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName":"Sam","organizationName":" "}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        // After the user confirms a new address in Supabase, the token carries it
+        RequestPostProcessor changedEmail = jwt().jwt(token -> token
+                .subject(userId.toString())
+                .claim("email", "sam@maple.com"));
+
+        mockMvc.perform(get("/api/me").with(changedEmail))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("sam@maple.com"));
+
+        String stored = jdbcTemplate.queryForObject(
+                "select email from app_users where id = ?", String.class, userId);
+        org.assertj.core.api.Assertions.assertThat(stored).isEqualTo("sam@maple.com");
     }
 
     @Test
