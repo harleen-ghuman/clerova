@@ -501,40 +501,6 @@ p {
   background: var(--surface);
 }
 
-/* Setup */
-
-.setup-card {
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 8px 22px 22px;
-  display: flex;
-  flex-direction: column;
-}
-
-.setup-row {
-  padding: 14px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.setup-row span {
-  font-weight: 600;
-}
-
-.setup-row p {
-  margin-top: 4px !important;
-  font-size: 15px !important;
-}
-
-.setup-card code {
-  margin-top: 18px;
-  padding: 12px 14px;
-  border-radius: 8px;
-  background: var(--accent-soft);
-  color: var(--accent-dark);
-  font-size: 14px;
-  overflow-wrap: anywhere;
-}
-
 /* FAQ */
 
 .faq {

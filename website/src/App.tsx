@@ -7,7 +7,7 @@ const SIGN_UP_URL = "https://app.clerova-ai.com/?utm_source=website";
 const steps = [
   {
     title: "Forward your inbox",
-    text: "Sign up and get your own Clerova address. Forward your requests email to it, or only the emails you choose.",
+    text: "Forward the emails you want Clerova to handle. Your inbox stays yours, and you never share your password.",
   },
   {
     title: "Clerova organizes each request",
@@ -33,7 +33,7 @@ const requestTypes = [
 const faqs = [
   {
     q: "Do I have to change my email?",
-    a: "No. You keep your current inbox and add a forwarding rule. Gmail and Outlook both support it, and setup takes about five minutes.",
+    a: "No. You keep your current inbox and forward the emails you want Clerova to handle. We show you how right after you sign up.",
   },
   {
     q: "Does Clerova send anything without me?",
@@ -41,11 +41,11 @@ const faqs = [
   },
   {
     q: "Who do residents see the reply from?",
-    a: "Replies come from your Clerova address with your company name, and their answers come straight back to the same request.",
+    a: "Replies are sent with your company name, and their answers come straight back to the same request.",
   },
   {
     q: "What does it cost?",
-    a: "The 14-day trial is free and needs no credit card. It includes 100 AI-processed requests.",
+    a: "Your first 14 days are free. Cancel anytime before the trial ends and you won't be charged. If you cancel, you can keep using Clerova until your trial's end date.",
   },
 ];
 
@@ -149,7 +149,7 @@ function App() {
 
         <nav className="nav-links">
           <a href="#how-it-works">How it works</a>
-          <a href="#setup">Setup</a>
+          <a href="#setup">Getting started</a>
           <a href="#faq">FAQ</a>
         </nav>
 
@@ -176,7 +176,7 @@ function App() {
                 See how it works
               </a>
             </div>
-            <p className="note">14 days free · No credit card · Keep your current email</p>
+            <p className="note">14 days free · Cancel anytime before your trial ends · Keep your current email</p>
           </div>
 
           <div className="hero-visual">
@@ -251,28 +251,20 @@ function App() {
 
         <section className="section split" id="setup">
           <div>
-            <span className="kicker">Setup in five minutes</span>
-            <h2>Keep your inbox. Add one forwarding rule.</h2>
+            <span className="kicker">Easy to start</span>
+            <h2>Keep your inbox. No need to share it.</h2>
             <p>
-              Your Clerova address is shown right after sign-up, with
-              step-by-step instructions for Gmail and Outlook.
+              Clerova never asks for your email password or access to your
+              mailbox. You forward the emails you want it to handle, and you
+              can stop at any time.
             </p>
           </div>
-          <div className="setup-card">
-            <div className="setup-row">
-              <span>Gmail</span>
-              <p>Settings → Forwarding and POP/IMAP → Add a forwarding address</p>
-            </div>
-            <div className="setup-row">
-              <span>Outlook</span>
-              <p>Settings → Mail → Forwarding → Enable forwarding</p>
-            </div>
-            <div className="setup-row">
-              <span>Only some emails?</span>
-              <p>Create a filter, for example "to: maintenance@" or "subject: repair", and forward only those.</p>
-            </div>
-            <code>maple-property-k3j9x2@in.clerova-ai.com</code>
-          </div>
+          <ul className="checks">
+            <li>Works with Gmail, Outlook and any other email</li>
+            <li>Forward everything, or only the emails you choose</li>
+            <li>Replies go out under your company name</li>
+            <li>Set up in about five minutes after you sign up</li>
+          </ul>
         </section>
 
         <section className="section" id="faq">
@@ -292,7 +284,7 @@ function App() {
 
         <section className="cta">
           <h2>See your inbox organized today.</h2>
-          <p>Start a 14-day free trial. No credit card required.</p>
+          <p>Start your 14-day free trial. Cancel anytime before it ends and you won't be charged.</p>
           <a className="button button-light" href={SIGN_UP_URL}>
             Start free trial
           </a>
