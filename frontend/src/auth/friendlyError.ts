@@ -10,8 +10,36 @@ export function friendlyError(message: string): string {
     return "Please confirm your email first. We can send the link again.";
   }
 
-  if (lower.includes("already registered")) {
+  if (lower.includes("already registered") || lower.includes("already been registered")) {
     return "There's already an account with this email. Sign in instead.";
+  }
+
+  if (lower.includes("different from the old")) {
+    return "That's already your password.";
+  }
+
+  if (lower.includes("reauthenticat")) {
+    return "For your security, sign out and sign back in, then try again.";
+  }
+
+  if (lower.includes("weak") || lower.includes("pwned") || lower.includes("breach")) {
+    return "Choose a stronger password. This one is too common or has appeared in a data breach.";
+  }
+
+  if (lower.includes("password should be at least")) {
+    return "Use at least 8 characters.";
+  }
+
+  if (lower.includes("invalid format") || (lower.includes("email address") && lower.includes("invalid"))) {
+    return "Please enter a valid email.";
+  }
+
+  if (lower.includes("session missing") || lower.includes("jwt expired")) {
+    return "Your session has ended. Sign in again to continue.";
+  }
+
+  if (lower.includes("failed to fetch") || lower.includes("network")) {
+    return "Can't reach Clerova. Check your connection and try again.";
   }
 
   if (lower.includes("for security purposes") || lower.includes("rate limit")) {

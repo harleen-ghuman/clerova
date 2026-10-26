@@ -135,19 +135,19 @@ public class ReplyService {
         if (action.getStatus() != ProposedActionStatus.APPROVED) {
             throw new IllegalStateException(
                     action.getStatus() == ProposedActionStatus.EXECUTED
-                            ? "This reply was already sent"
+                            ? "This reply was already sent."
                             : "Only approved responses can be sent"
             );
         }
 
         if (action.getActionType() == ActionType.NO_ACTION) {
-            throw new IllegalStateException("There is no response to send for this action");
+            throw new IllegalStateException("There's no reply to send.");
         }
 
         WorkItem workItem = action.getWorkItem();
 
         if (workItem.getSource() != WorkItemSource.EMAIL || workItem.getSenderEmail() == null) {
-            throw new IllegalStateException("This request did not come in by email");
+            throw new IllegalStateException("This request didn't come in by email, so there's no one to reply to.");
         }
 
         String body = action.getFinalResponse() != null
@@ -155,7 +155,7 @@ public class ReplyService {
                 : action.getDraftedResponse();
 
         if (body == null || body.isBlank()) {
-            throw new IllegalStateException("The approved response is empty");
+            throw new IllegalStateException("The reply is empty. Add a message before sending.");
         }
 
         Organization organization = organizationRepository.findById(organizationId).orElseThrow();

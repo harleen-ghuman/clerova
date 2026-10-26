@@ -66,7 +66,7 @@ public class StripeClient {
             throw unavailable("Could not reach Stripe", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw unavailable("The request to Stripe was interrupted", e);
+            throw unavailable("Couldn't reach Stripe. Please try again.", e);
         }
 
         JsonNode result = objectMapper.readTree(response.body());

@@ -73,7 +73,7 @@ public class AiRateLimitInterceptor implements HandlerInterceptor {
                 : "ip:" + request.getRemoteAddr();
 
         if (!tryAcquireClient(clientKey)) {
-            reject(response, "Too many AI requests. Please wait a minute and try again.");
+            reject(response, "Too many requests. Please wait a minute and try again.");
             return false;
         }
 

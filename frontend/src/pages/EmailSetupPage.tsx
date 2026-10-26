@@ -157,10 +157,10 @@ export function EmailSetupPage({ settings, error }: EmailSetupPageProps) {
   if (!settings.intakeEnabled || !settings.forwardingAddress) {
     return (
       <div className="empty-view">
-        <h2>Email intake is not available yet</h2>
+        <h2>Email forwarding isn't ready yet</h2>
         <p>
-          Email intake has not been turned on for this Clerova deployment. You
-          can still add requests with "New request" on the Requests page.
+          Your Clerova address is still being set up. In the meantime, add
+          requests with "New request" on the Requests page.
         </p>
       </div>
     );

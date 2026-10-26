@@ -71,7 +71,7 @@ public class AccountService {
 
         if (currentUserService.findCurrentUser().isPresent()) {
             throw new IllegalStateException(
-                    "Your organization is already set up"
+                    "Your workspace is already set up."
             );
         }
 

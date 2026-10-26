@@ -60,7 +60,7 @@ export function OnboardingPage({
 
       onComplete(me);
     } catch (err) {
-      setError(errorMessage(err, "Unable to set up your organization."));
+      setError(errorMessage(err, "Couldn't set up your workspace. Please try again."));
     } finally {
       setSubmitting(false);
     }

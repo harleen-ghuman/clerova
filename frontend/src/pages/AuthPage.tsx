@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { prefilledEmail, wantsSignIn } from "../auth/referral";
 import { friendlyError } from "../auth/friendlyError";
-import { supabase } from "../auth/supabase";
+import { fetchGoogleSignInEnabled, supabase } from "../auth/supabase";
 
 type AuthMode =
   | "sign-in"
@@ -18,6 +18,17 @@ interface AuthPageProps {
 }
 
 const MIN_PASSWORD_LENGTH = 8;
+
+const GOOGLE_KEY = "clerova.googleSignIn";
+
+/** Last known answer, so the button doesn't jump in on every visit. */
+function cachedGoogleSignIn(): boolean {
+  try {
+    return window.localStorage.getItem(GOOGLE_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
 
 /** Set when Google sends the user back without signing them in. */
 function oauthError(): string | null {
@@ -47,6 +58,25 @@ export function AuthPage({
   const [error, setError] = useState<string | null>(oauthError);
   const [notice, setNotice] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
+
+  const [googleEnabled, setGoogleEnabled] = useState(cachedGoogleSignIn);
+
+  useEffect(() => {
+    fetchGoogleSignInEnabled().then((enabled) => {
+      // Unknown (offline) keeps the last answer
+      if (enabled === null) {
+        return;
+      }
+
+      setGoogleEnabled(enabled);
+
+      try {
+        window.localStorage.setItem(GOOGLE_KEY, enabled ? "on" : "off");
+      } catch {
+        // Not remembered; asked again next time
+      }
+    });
+  }, []);
 
   useEffect(() => {
     // Drop Google's error from the address bar once it is shown
@@ -226,7 +256,7 @@ export function AuthPage({
 
   const needsEmail = mode !== "reset-password";
   const needsPassword = mode !== "forgot-password";
-  const offersGoogle = mode === "sign-up" || mode === "sign-in";
+  const offersGoogle = googleEnabled && (mode === "sign-up" || mode === "sign-in");
 
   return (
     <div className="auth-shell">

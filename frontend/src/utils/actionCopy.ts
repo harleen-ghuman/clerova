@@ -17,8 +17,8 @@ export function decisionCopy(
 ): DecisionCopy {
   if (action.status === "REJECTED") {
     return {
-      title: "Action rejected",
-      description: "The recommendation was rejected and no action was executed.",
+      title: "Suggestion dismissed",
+      description: "Nothing was sent and no job was created.",
     };
   }
 
@@ -48,8 +48,8 @@ export function decisionCopy(
   }
 
   const sendInstruction = canEmailReply
-    ? "Send the approved response below to the sender."
-    : "Copy the approved response and send it to the resident.";
+    ? "Send the approved reply below."
+    : "Copy the approved reply below and send it to the resident.";
 
   switch (action.actionType) {
     case "CREATE_MAINTENANCE_REQUEST":
@@ -59,31 +59,31 @@ export function decisionCopy(
       };
     case "RESPOND_TO_CUSTOMER":
       return {
-        title: "Response approved",
+        title: "Reply approved",
         description: `${sendInstruction} The request has been closed.`,
       };
     case "REQUEST_MORE_INFORMATION":
       return {
-        title: "Information request approved",
+        title: "Question approved",
         description: canEmailReply
-          ? "Send the approved message below. When the sender replies, the request comes back for review automatically."
-          : "Copy the approved message and send it. The request stays open until you resolve it.",
+          ? "Send the approved reply below. When they answer, the request comes back for review."
+          : "Copy the approved reply below and send it. The request stays open until you close it.",
       };
     case "ESCALATE_TO_HUMAN":
       return {
-        title: "Escalated for human handling",
+        title: "Escalated to your team",
         description:
-          "The request stays open as escalated until someone resolves it.",
+          "The request stays open until someone on your team resolves it.",
       };
     case "NO_ACTION":
       return {
         title: "Closed with no action",
-        description: "No further action is required for this request.",
+        description: "Nothing else is needed for this request.",
       };
     default:
       return {
-        title: "Action approved",
-        description: "The recommendation was approved.",
+        title: "Approved",
+        description: "Clerova's suggestion was approved.",
       };
   }
 }

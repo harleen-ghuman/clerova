@@ -47,8 +47,9 @@ export function SettingsPage({
           <>
             <h2>Plan and billing</h2>
             <p>
-              Change your card, see invoices or cancel. Cancelling keeps
-              Clerova working until the end of the period you paid for.
+              Change your card, see invoices or cancel. If you cancel,
+              Clerova keeps working until the end of your trial or billing
+              period.
             </p>
           </>
         ) : (
@@ -132,7 +133,10 @@ function DetailsSection({
             }}
             disabled={saving}
           />
-          <span className="auth-hint">Residents see this name on your replies.</span>
+          <span className="auth-hint">
+            Residents see this name on your replies. Your Clerova address
+            stays the same.
+          </span>
         </label>
 
         {error && <p className="action-error">{error}</p>}
@@ -252,11 +256,7 @@ function PasswordSection() {
     setSaving(false);
 
     if (updateError) {
-      setError(
-        updateError.message.toLowerCase().includes("different from the old")
-          ? "That's already your password."
-          : friendlyError(updateError.message)
-      );
+      setError(friendlyError(updateError.message));
     } else {
       setSaved(true);
       setPassword("");
