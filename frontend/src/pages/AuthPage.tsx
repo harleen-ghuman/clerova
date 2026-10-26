@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { prefilledEmail, wantsSignIn } from "../auth/referral";
+import { friendlyError } from "../auth/friendlyError";
 import { supabase } from "../auth/supabase";
 
 type AuthMode =
@@ -18,27 +19,19 @@ interface AuthPageProps {
 
 const MIN_PASSWORD_LENGTH = 8;
 
-/** Supabase's messages, in plain words, with what to do next. */
-function friendlyError(message: string): string {
-  const lower = message.toLowerCase();
+/** Set when Google sends the user back without signing them in. */
+function oauthError(): string | null {
+  const params = new URLSearchParams(
+    window.location.search + "&" + window.location.hash.replace(/^#/, "")
+  );
 
-  if (lower.includes("invalid login credentials")) {
-    return "That email and password don't match. Try again, or reset your password.";
+  if (!params.get("error")) {
+    return null;
   }
 
-  if (lower.includes("email not confirmed")) {
-    return "Please confirm your email first. We can send the link again.";
-  }
-
-  if (lower.includes("already registered")) {
-    return "There's already an account with this email. Sign in instead.";
-  }
-
-  if (lower.includes("for security purposes") || lower.includes("rate limit")) {
-    return "Please wait a minute before trying again.";
-  }
-
-  return message;
+  return params.get("error") === "access_denied"
+    ? "Google sign-in was cancelled. Try again, or use your email."
+    : "Google sign-in didn't work. Try again, or use your email.";
 }
 
 export function AuthPage({
@@ -51,9 +44,16 @@ export function AuthPage({
   const [email, setEmail] = useState(prefilledEmail);
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(oauthError);
   const [notice, setNotice] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
+
+  useEffect(() => {
+    // Drop Google's error from the address bar once it is shown
+    if (window.location.hash.includes("error") || window.location.search.includes("error")) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
 
   function switchMode(next: AuthMode) {
     setMode(next);

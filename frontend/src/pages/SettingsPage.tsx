@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { updateAccount } from "../api/account";
 import { errorMessage } from "../api/client";
+import { friendlyError } from "../auth/friendlyError";
 import { supabase } from "../auth/supabase";
 import type { Me, Organization } from "../types/Account";
 
@@ -109,6 +110,7 @@ function DetailsSection({
           Your name
           <input
             autoComplete="name"
+            maxLength={255}
             value={name}
             onChange={(event) => {
               setName(event.target.value);
@@ -122,6 +124,7 @@ function DetailsSection({
           <input
             autoComplete="organization"
             required
+            maxLength={255}
             value={company}
             onChange={(event) => {
               setCompany(event.target.value);
@@ -175,7 +178,7 @@ function EmailSection({ email }: { email: string }) {
       setError(
         updateError.message.toLowerCase().includes("already")
           ? "There's already an account with that email."
-          : updateError.message
+          : friendlyError(updateError.message)
       );
     } else {
       setSentTo(address);
@@ -249,7 +252,11 @@ function PasswordSection() {
     setSaving(false);
 
     if (updateError) {
-      setError(updateError.message);
+      setError(
+        updateError.message.toLowerCase().includes("different from the old")
+          ? "That's already your password."
+          : friendlyError(updateError.message)
+      );
     } else {
       setSaved(true);
       setPassword("");

@@ -91,7 +91,10 @@ public class AccountService {
 
         user.setId(currentUserService.currentUserId());
         user.setEmail(currentUserService.currentEmail());
-        user.setFullName(blankToNull(request.fullName()));
+        // Left out means unchanged; an empty string clears it
+        if (request.fullName() != null) {
+            user.setFullName(blankToNull(request.fullName()));
+        }
         user.setOrganization(savedOrganization);
         user.setRole(UserRole.OWNER);
 

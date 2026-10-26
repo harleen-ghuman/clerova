@@ -117,6 +117,16 @@ class AccountAndTenancyTest {
                 .andExpect(jsonPath("$.fullName").value("Sam Lee"))
                 .andExpect(jsonPath("$.organization.name").value("Maple Property Group"));
 
+        // Leaving the name out keeps it
+        mockMvc.perform(patch("/api/me")
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"organizationName":"Maple Homes"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fullName").value("Sam Lee"));
+
         mockMvc.perform(patch("/api/me")
                         .with(user)
                         .contentType(MediaType.APPLICATION_JSON)
