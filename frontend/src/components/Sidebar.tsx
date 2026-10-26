@@ -1,7 +1,7 @@
 import type { Organization } from "../types/Account";
 import { planName } from "../utils/plans";
 
-export type AppView = "requests" | "jobs" | "inbox" | "email-setup";
+export type AppView = "today" | "requests" | "jobs" | "inbox" | "email-setup";
 
 interface SidebarProps {
   activeView: AppView;
@@ -70,6 +70,7 @@ export function Sidebar({
   onManageBilling,
 }: SidebarProps) {
   const items: { view: AppView; label: string; count?: number; badge?: boolean }[] = [
+    { view: "today", label: "Today" },
     { view: "requests", label: "Requests", count: reviewCount, badge: true },
     { view: "jobs", label: "Jobs", count: openJobCount },
     { view: "inbox", label: "Inbox" },
@@ -81,8 +82,8 @@ export function Sidebar({
       <button
         type="button"
         className="sidebar-brand"
-        onClick={() => onNavigate("requests")}
-        aria-label="Go to requests"
+        onClick={() => onNavigate("today")}
+        aria-label="Go to Today"
       >
         <span className="sidebar-mark">C</span>
         <span>

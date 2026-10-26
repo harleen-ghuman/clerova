@@ -73,6 +73,8 @@ Email forwarded              Request typed in the app
   automatically for every new request
 - Human approval, with editable drafts, rejection and regeneration
 - Replies sent by email from the app, threaded onto the same request
+- Today page: what needs you now (to review, urgent, customers who haven't
+  answered in 3+ days, open jobs) and the last 7 days, with time saved
 - One Requests list with search and filters: needs review, waiting on
   customer, in progress, done
 - "Approve & send" emails the edited reply in one step
@@ -228,6 +230,8 @@ POST /api/billing/checkout                        ({"plan":"STARTER","interval":
 POST /api/billing/checkout/{sessionId}/complete
 POST /api/billing/portal
 POST /api/stripe/webhook                          (Stripe webhook, signed)
+
+GET  /api/summary                                 (last 7 days, for Today)
 
 GET  /api/inbox
 POST /api/inbox/{id}/reprocess
@@ -503,6 +507,10 @@ calls.
 ---
 
 ## Screenshots
+
+**Today:** what needs you now and the last 7 days.
+
+![Today](docs/screenshots/today.png)
 
 **Requests:** one list with filters. Each request shows the conversation and
 Clerova's suggestion, ready to edit and approve.

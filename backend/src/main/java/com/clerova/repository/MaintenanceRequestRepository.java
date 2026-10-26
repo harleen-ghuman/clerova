@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.time.Instant;
 import java.util.UUID;
 
 public interface MaintenanceRequestRepository
@@ -28,6 +29,12 @@ public interface MaintenanceRequestRepository
     List<MaintenanceRequest> findByWorkItemIdAndOrganizationIdOrderByCreatedAtDesc(
             UUID workItemId,
             UUID organizationId
+    );
+
+    long countByOrganizationIdAndStatusAndUpdatedAtAfter(
+            UUID organizationId,
+            MaintenanceRequestStatus status,
+            Instant after
     );
 
     boolean existsByWorkItemIdAndStatusIn(

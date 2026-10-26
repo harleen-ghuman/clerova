@@ -170,6 +170,23 @@ class WorkItemWorkflowTest {
     }
 
     @Test
+    void weekSummaryCountsThisOrganizationsRequests() throws Exception {
+        createWorkItem();
+        createWorkItem();
+
+        mockMvc.perform(get("/api/summary").with(user))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requestsOrganized").value(2))
+                .andExpect(jsonPath("$.repliesSent").value(0))
+                .andExpect(jsonPath("$.minutesSaved").value(10))
+                .andExpect(jsonPath("$.medianReplyMinutes").isEmpty());
+
+        // Another organization starts from zero
+        mockMvc.perform(get("/api/summary").with(onboardNewUser(mockMvc)))
+                .andExpect(jsonPath("$.requestsOrganized").value(0));
+    }
+
+    @Test
     void unknownWorkItemReturns404() throws Exception {
         mockMvc.perform(get("/api/work-items/{id}", UUID.randomUUID()).with(user))
                 .andExpect(status().isNotFound())

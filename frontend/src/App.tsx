@@ -11,7 +11,8 @@ import { getEmailSettings } from "./api/email";
 import { errorMessage } from "./api/client";
 import { openBillingPortal } from "./api/billing";
 import { Sidebar, type AppView } from "./components/Sidebar";
-import { RequestsPage } from "./pages/RequestsPage";
+import { RequestsPage, type RequestFilter } from "./pages/RequestsPage";
+import { TodayPage } from "./pages/TodayPage";
 import { JobsPage } from "./pages/JobsPage";
 import { InboxPage } from "./pages/InboxPage";
 import { EmailSetupPage } from "./pages/EmailSetupPage";
@@ -28,6 +29,7 @@ interface AppProps {
 }
 
 const MOBILE_NAV: { view: AppView; label: string }[] = [
+  { view: "today", label: "Today" },
   { view: "requests", label: "Requests" },
   { view: "jobs", label: "Jobs" },
   { view: "inbox", label: "Inbox" },
@@ -35,7 +37,8 @@ const MOBILE_NAV: { view: AppView; label: string }[] = [
 ];
 
 function App({ organization, userEmail, onSignOut }: AppProps) {
-  const [activeView, setActiveView] = useState<AppView>("requests");
+  const [activeView, setActiveView] = useState<AppView>("today");
+  const [requestFilter, setRequestFilter] = useState<RequestFilter>("review");
 
   const [openRequests, setOpenRequests] = useState<WorkItem[]>([]);
   const [closedRequests, setClosedRequests] = useState<WorkItem[]>([]);
@@ -242,12 +245,33 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
           </div>
         )}
 
+        {activeView === "today" && (
+          <TodayPage
+            organizationName={organization.name}
+            requests={openRequests}
+            jobs={jobs}
+            refreshKey={refreshTick}
+            onOpenRequests={(filter) => {
+              setRequestFilter(filter);
+              selectRequest(null);
+              setActiveView("requests");
+            }}
+            onOpenRequest={(workItemId) => {
+              setRequestFilter("all");
+              void openRequest(workItemId);
+            }}
+            onOpenJobs={() => navigate("jobs")}
+          />
+        )}
+
         {activeView === "requests" && (
           <RequestsPage
             requests={requests}
             loading={requestsLoading}
             error={requestsError}
             selected={selected}
+            filter={requestFilter}
+            onFilterChange={setRequestFilter}
             emailSendingEnabled={emailSettings?.sendingEnabled ?? false}
             onSelect={selectRequest}
             onCreate={handleCreate}

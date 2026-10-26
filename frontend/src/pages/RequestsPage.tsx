@@ -13,9 +13,9 @@ import {
   type RequestBucket,
 } from "../utils/requestStatus";
 
-type Filter = RequestBucket | "all";
+export type RequestFilter = RequestBucket | "all";
 
-const FILTERS: Filter[] = ["review", "waiting", "progress", "done", "all"];
+const FILTERS: RequestFilter[] = ["review", "waiting", "progress", "done", "all"];
 
 interface RequestsPageProps {
   /** Open requests followed by recently closed ones. */
@@ -23,6 +23,8 @@ interface RequestsPageProps {
   loading: boolean;
   error: string | null;
   selected: WorkItem | null;
+  filter: RequestFilter;
+  onFilterChange: (filter: RequestFilter) => void;
   emailSendingEnabled: boolean;
   onSelect: (workItem: WorkItem | null) => void;
   onCreate: (message: string) => Promise<WorkItem>;
@@ -35,13 +37,14 @@ export function RequestsPage({
   loading,
   error,
   selected,
+  filter,
+  onFilterChange: setFilter,
   emailSendingEnabled,
   onSelect,
   onCreate,
   onChanged,
   onOpenJobs,
 }: RequestsPageProps) {
-  const [filter, setFilter] = useState<Filter>("review");
   const [search, setSearch] = useState("");
   const [composing, setComposing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -66,7 +69,7 @@ export function RequestsPage({
     (item) => filter === "all" || requestBucket(item) === filter
   );
 
-  function countFor(key: Filter) {
+  function countFor(key: RequestFilter) {
     return key === "all"
       ? matching.length
       : matching.filter((item) => requestBucket(item) === key).length;
