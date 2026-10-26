@@ -179,7 +179,9 @@ class WorkItemWorkflowTest {
                 .andExpect(jsonPath("$.requestsOrganized").value(2))
                 .andExpect(jsonPath("$.repliesSent").value(0))
                 .andExpect(jsonPath("$.minutesSaved").value(10))
-                .andExpect(jsonPath("$.medianReplyMinutes").isEmpty());
+                .andExpect(jsonPath("$.medianReplyMinutes").isEmpty())
+                .andExpect(jsonPath("$.allTimeRequests").value(2))
+                .andExpect(jsonPath("$.allTimeApprovals").value(0));
 
         // Another organization starts from zero
         mockMvc.perform(get("/api/summary").with(onboardNewUser(mockMvc)))

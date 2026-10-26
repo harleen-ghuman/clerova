@@ -27,7 +27,9 @@ export function OnboardingPage({
   onComplete,
   onSignOut,
 }: OnboardingPageProps) {
-  const trackedSource = getReferralSource();
+  // "website" only says they came through our site, so still ask
+  const storedSource = getReferralSource();
+  const trackedSource = storedSource === "website" ? null : storedSource;
 
   const [fullName, setFullName] = useState("");
   const [organizationName, setOrganizationName] = useState("");
@@ -50,7 +52,7 @@ export function OnboardingPage({
         organizationName,
         industry: "PROPERTY_MANAGEMENT",
         companySize,
-        referralSource,
+        referralSource: referralSource || storedSource || "",
       });
 
       onComplete(me);

@@ -26,6 +26,8 @@ public interface WorkItemRepository
 
     long countByOrganizationIdAndCreatedAtAfter(UUID organizationId, Instant after);
 
+    long countByOrganizationId(UUID organizationId);
+
     Optional<WorkItem> findByIdAndOrganizationId(
             UUID id,
             UUID organizationId

@@ -1,8 +1,14 @@
 import { useState, type FormEvent } from "react";
 
+import { prefilledEmail, wantsSignIn } from "../auth/referral";
 import { supabase } from "../auth/supabase";
 
-type AuthMode = "sign-in" | "sign-up" | "forgot-password" | "reset-password";
+type AuthMode =
+  | "sign-in"
+  | "sign-up"
+  | "check-email"
+  | "forgot-password"
+  | "reset-password";
 
 interface AuthPageProps {
   /** Set when the user arrived from a password reset email. */
@@ -12,18 +18,42 @@ interface AuthPageProps {
 
 const MIN_PASSWORD_LENGTH = 8;
 
+/** Supabase's messages, in plain words, with what to do next. */
+function friendlyError(message: string): string {
+  const lower = message.toLowerCase();
+
+  if (lower.includes("invalid login credentials")) {
+    return "That email and password don't match. Try again, or reset your password.";
+  }
+
+  if (lower.includes("email not confirmed")) {
+    return "Please confirm your email first. We can send the link again.";
+  }
+
+  if (lower.includes("already registered")) {
+    return "There's already an account with this email. Sign in instead.";
+  }
+
+  if (lower.includes("for security purposes") || lower.includes("rate limit")) {
+    return "Please wait a minute before trying again.";
+  }
+
+  return message;
+}
+
 export function AuthPage({
   recoveringPassword,
   onPasswordReset,
 }: AuthPageProps) {
-  const [mode, setMode] = useState<AuthMode>(
-    recoveringPassword ? "reset-password" : "sign-up"
+  const [mode, setMode] = useState<AuthMode>(() =>
+    recoveringPassword ? "reset-password" : wantsSignIn() ? "sign-in" : "sign-up"
   );
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(prefilledEmail);
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
 
   function switchMode(next: AuthMode) {
     setMode(next);
@@ -50,11 +80,9 @@ export function AuthPage({
           throw signUpError;
         }
 
+        // With email confirmation on, the user signs in by clicking the link
         if (!data.session) {
-          setNotice(
-            "Check your email to confirm your account, then sign in."
-          );
-          setMode("sign-in");
+          setMode("check-email");
         }
       }
 
@@ -94,7 +122,7 @@ export function AuthPage({
     } catch (err) {
       setError(
         err instanceof Error && err.message
-          ? err.message
+          ? friendlyError(err.message)
           : "Something went wrong. Please try again."
       );
     } finally {
@@ -102,9 +130,64 @@ export function AuthPage({
     }
   }
 
+  async function resendConfirmation() {
+    setResending(true);
+    setError(null);
+    setNotice(null);
+
+    const { error: resendError } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: window.location.origin },
+    });
+
+    setResending(false);
+
+    if (resendError) {
+      setError(friendlyError(resendError.message));
+    } else {
+      setNotice("Sent. Check your inbox and spam folder.");
+    }
+  }
+
+  if (mode === "check-email") {
+    return (
+      <div className="auth-shell">
+        <div className="auth-card">
+          <div className="auth-brand">
+            <div className="brand-mark">C</div>
+            <strong>Clerova</strong>
+          </div>
+
+          <h1>Check your email</h1>
+          <p className="auth-description">
+            We sent a link to <strong>{email}</strong>. Click it to confirm
+            your account and you'll go straight to setting up your workspace.
+          </p>
+          <p className="auth-description">
+            It usually arrives within a minute. If not, check your spam folder.
+          </p>
+
+          {error && <p className="action-error">{error}</p>}
+          {notice && <p className="request-success">{notice}</p>}
+
+          <div className="auth-links">
+            <button type="button" onClick={resendConfirmation} disabled={resending}>
+              {resending ? "Sending..." : "Send the link again"}
+            </button>
+            <button type="button" onClick={() => switchMode("sign-up")}>
+              Use a different email
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const copy = {
+    "check-email": { title: "", description: "", submit: "" },
     "sign-up": {
-      title: "Start your free trial",
+      title: "Create your account",
       description:
         "Turn your property requests inbox into organized work, with replies ready for you to approve. 14 days free, and you can cancel anytime before it ends.",
       submit: "Create account",
@@ -143,7 +226,7 @@ export function AuthPage({
         <form className="auth-form" onSubmit={handleSubmit}>
           {needsEmail && (
             <label>
-              Work email
+              Email
               <input
                 type="email"
                 autoComplete="email"
@@ -164,6 +247,8 @@ export function AuthPage({
                   mode === "sign-in" ? "current-password" : "new-password"
                 }
                 required
+                // Arriving from the website with the email filled in
+                autoFocus={mode === "sign-up" && prefilledEmail() !== ""}
                 minLength={mode === "sign-in" ? undefined : MIN_PASSWORD_LENGTH}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
@@ -179,6 +264,17 @@ export function AuthPage({
 
           {error && <p className="action-error">{error}</p>}
           {notice && <p className="request-success">{notice}</p>}
+
+          {mode === "sign-in" && error?.startsWith("Please confirm your email") && (
+            <button
+              type="button"
+              className="secondary-action-button"
+              onClick={resendConfirmation}
+              disabled={resending}
+            >
+              {resending ? "Sending..." : "Send the confirmation link again"}
+            </button>
+          )}
 
           <button
             type="submit"
@@ -218,7 +314,7 @@ export function AuthPage({
               <span>
                 New to Clerova?{" "}
                 <button type="button" onClick={() => switchMode("sign-up")}>
-                  Start a free trial
+                  Sign up
                 </button>
               </span>
 

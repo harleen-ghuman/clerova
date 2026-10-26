@@ -1,6 +1,7 @@
 package com.clerova.repository;
 
 import com.clerova.domain.ProposedAction;
+import com.clerova.domain.ProposedActionStatus;
 import com.clerova.domain.WorkItemStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -13,6 +14,12 @@ import java.util.UUID;
 
 public interface ProposedActionRepository
         extends JpaRepository<ProposedAction, UUID> {
+
+    long countByWorkItem_OrganizationIdAndStatusIn(
+            UUID organizationId,
+            Collection<ProposedActionStatus> statuses
+    );
+
 
     List<ProposedAction> findByWorkItemIdOrderByCreatedAtDesc(
             UUID workItemId

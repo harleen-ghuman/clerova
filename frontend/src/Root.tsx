@@ -94,6 +94,43 @@ export function Root() {
     };
   }, [userId, checkoutReturn]);
 
+  // Stripe may confirm a few seconds after the user is sent back, so keep
+  // checking instead of asking them to refresh.
+  const waitingForPlan =
+    checkoutReturn.result === "success" &&
+    Boolean(me?.organization?.subscriptionRequired);
+
+  useEffect(() => {
+    if (!waitingForPlan) {
+      return;
+    }
+
+    let cancelled = false;
+    let attempts = 0;
+
+    const interval = window.setInterval(() => {
+      attempts += 1;
+
+      if (attempts > 15) {
+        window.clearInterval(interval);
+        return;
+      }
+
+      getMe()
+        .then((result) => {
+          if (!cancelled) {
+            setMe(result);
+          }
+        })
+        .catch((err) => console.error("Failed to refresh the account:", err));
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [waitingForPlan]);
+
   async function handleSignOut() {
     await supabase.auth.signOut();
     setMe(null);
@@ -169,7 +206,7 @@ export function Root() {
           checkoutReturn.result === "cancelled"
             ? "Checkout was cancelled. Choose a plan when you're ready."
             : checkoutReturn.result === "success"
-              ? "We're confirming your payment. Refresh in a moment if this page doesn't change."
+              ? "Confirming your card with Stripe. This takes a few seconds."
               : null
         }
         onSignOut={handleSignOut}
@@ -179,6 +216,7 @@ export function Root() {
 
   return (
     <App
+      welcome={checkoutReturn.result === "success"}
       organization={currentMe.organization}
       userEmail={currentMe.email}
       onSignOut={handleSignOut}

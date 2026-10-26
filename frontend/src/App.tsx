@@ -25,6 +25,8 @@ import type { WorkItem } from "./types/WorkItem";
 import { requestBucket } from "./utils/requestStatus";
 
 interface AppProps {
+  /** Just came back from checkout. */
+  welcome?: boolean;
   /** As loaded at sign-in; usage and billing refresh in the background. */
   organization: Organization;
   userEmail: string;
@@ -39,7 +41,12 @@ const MOBILE_NAV: { view: AppView; label: string }[] = [
   { view: "email-setup", label: "Email setup" },
 ];
 
-function App({ organization: initialOrganization, userEmail, onSignOut }: AppProps) {
+function App({
+  welcome = false,
+  organization: initialOrganization,
+  userEmail,
+  onSignOut,
+}: AppProps) {
   const [organization, setOrganization] = useState(initialOrganization);
   const [activeView, setActiveView] = useState<AppView>("today");
   const [requestFilter, setRequestFilter] = useState<RequestFilter>("review");
@@ -343,6 +350,12 @@ function App({ organization: initialOrganization, userEmail, onSignOut }: AppPro
         {activeView === "today" && (
           <TodayPage
             organizationName={organization.name}
+            welcome={welcome}
+            forwardingAddress={
+              emailSettings?.intakeEnabled ? emailSettings.forwardingAddress : null
+            }
+            hasAnyRequest={openRequests.length + closedRequests.length > 0}
+            onOpenEmailSetup={() => navigate("email-setup")}
             requests={openRequests}
             jobs={jobs}
             refreshKey={refreshTick}
