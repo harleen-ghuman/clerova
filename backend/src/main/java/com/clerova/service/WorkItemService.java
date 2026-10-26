@@ -87,10 +87,13 @@ public class WorkItemService {
             UUID actorUserId
     ) {
 
-        aiUsageService.consumeRequest(organizationId);
+        aiUsageService.requireQuota(organizationId);
 
         ExtractionResult extraction =
                 aiService.extract(message);
+
+        // Counted only once the AI has read it
+        aiUsageService.consumeRequest(organizationId);
 
         WorkItem workItem = new WorkItem();
 
@@ -107,7 +110,7 @@ public class WorkItemService {
                     organizationId,
                     saved.getId(),
                     WorkItemEventType.CREATED,
-                    "Entered manually",
+                    "Added with New request",
                     actorUserId
             );
 
@@ -144,7 +147,7 @@ public class WorkItemService {
 
         UUID organizationId = email.getOrganizationId();
 
-        aiUsageService.consumeRequest(organizationId);
+        aiUsageService.requireQuota(organizationId);
 
         String content = email.getContentText() != null ? email.getContentText() : "";
 
@@ -164,6 +167,9 @@ public class WorkItemService {
         );
 
         ExtractionResult extraction = aiService.extract(extractionInput);
+
+        // Counted only once the AI has read it, so retries don't add up
+        aiUsageService.consumeRequest(organizationId);
 
         WorkItem workItem = new WorkItem();
 
@@ -276,7 +282,7 @@ public class WorkItemService {
                     organizationId,
                     workItemId,
                     WorkItemEventType.PROPOSAL_GENERATED,
-                    "Recommended " + humanize(result.actionType.name()),
+                    "Clerova suggested " + describe(result.actionType),
                     actorUserId
             );
 
@@ -351,7 +357,7 @@ public class WorkItemService {
                                     organizationId,
                                     workItemId,
                                     WorkItemEventType.PROPOSAL_REJECTED,
-                                    "Superseded by a new email",
+                                    "Suggestion replaced because a new email arrived",
                                     null
                             );
                         });
@@ -435,7 +441,7 @@ public class WorkItemService {
                 organizationId,
                 workItem.getId(),
                 WorkItemEventType.PROPOSAL_APPROVED,
-                "Approved " + humanize(savedAction.getActionType().name()),
+                "Approved " + describe(savedAction.getActionType()),
                 actorUserId
         );
 
@@ -468,7 +474,7 @@ public class WorkItemService {
                 organizationId,
                 workItem.getId(),
                 WorkItemEventType.PROPOSAL_REJECTED,
-                "Rejected " + humanize(proposedAction.getActionType().name()),
+                "Dismissed the suggestion",
                 actorUserId
         );
 
@@ -548,7 +554,7 @@ public class WorkItemService {
                 organizationId,
                 workItemId,
                 WorkItemEventType.CLOSED,
-                status == WorkItemStatus.COMPLETED ? "Marked resolved" : "Cancelled",
+                status == WorkItemStatus.COMPLETED ? "Marked done" : "Request cancelled",
                 actorUserId
         );
 
@@ -582,7 +588,14 @@ public class WorkItemService {
         return new ArrayList<>(latestByWorkItem.values());
     }
 
-    static String humanize(String enumName) {
-        return enumName.toLowerCase().replace('_', ' ');
+    /** How a suggestion reads in a request's activity. */
+    static String describe(com.clerova.domain.ActionType actionType) {
+        return switch (actionType) {
+            case CREATE_MAINTENANCE_REQUEST -> "a maintenance job and a reply";
+            case RESPOND_TO_CUSTOMER -> "a reply";
+            case REQUEST_MORE_INFORMATION -> "asking for more details";
+            case ESCALATE_TO_HUMAN -> "escalating to your team";
+            case NO_ACTION -> "closing with no action";
+        };
     }
 }

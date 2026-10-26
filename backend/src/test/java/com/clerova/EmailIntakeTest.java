@@ -233,6 +233,22 @@ class EmailIntakeTest {
     }
 
     @Test
+    void clerovaOwnEmailsAndBouncesDontBecomeRequests() throws Exception {
+        deliver(payload(forwardingAddress, "<own@x>", null, null, "notifications@in.test.clerova", "Usage"))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        deliver(payload(forwardingAddress, "<bounce@x>", null, null, "MAILER-DAEMON@gmail.com", "Undeliverable"))
+                .andExpect(jsonPath("$.status").value("STORED"));
+
+        processor.processDue();
+
+        JsonNode inbox = json(mockMvc.perform(get("/api/inbox").with(user)));
+
+        assertThat(inbox).hasSize(2);
+        inbox.forEach(message -> assertThat(message.get("status").asText()).isEqualTo("IGNORED"));
+        verify(aiService, never()).extract(anyString());
+    }
+
+    @Test
     void automatedEmailIsIgnoredUntilRestored() throws Exception {
         deliver(payload(forwardingAddress, "<news@x>", null, "List-Unsubscribe", "news@vendor.com", "Sale!"))
                 .andExpect(jsonPath("$.status").value("STORED"));
@@ -453,6 +469,10 @@ class EmailIntakeTest {
                 .andExpect(jsonPath("$[0].status").value("RECEIVED"))
                 .andExpect(jsonPath("$[0].statusReason").value(
                         "Couldn't read this email yet. Clerova will try again in a few minutes."));
+
+        // A failed attempt doesn't use up the plan
+        mockMvc.perform(get("/api/me").with(user))
+                .andExpect(jsonPath("$.organization.aiRequestsUsedThisMonth").value(0));
     }
 
     @Test

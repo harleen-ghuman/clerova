@@ -109,7 +109,12 @@ public class ActionExecutionService {
                     organizationId,
                     request.getWorkItem().getId(),
                     WorkItemEventType.MAINTENANCE_UPDATED,
-                    "Maintenance " + status.name().toLowerCase().replace('_', ' '),
+                    switch (status) {
+                        case OPEN -> "Job reopened";
+                        case IN_PROGRESS -> "Job started";
+                        case COMPLETED -> "Job done";
+                        case CANCELLED -> "Job cancelled";
+                    },
                     actorUserId
             );
         }
