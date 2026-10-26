@@ -702,3 +702,305 @@ p {
 .nav-sign-in:hover {
   color: var(--ink);
 }
+
+/* Founding offer bar */
+
+.offer-bar {
+  display: block;
+  padding: 10px 16px;
+  background: var(--ink);
+  color: #e8ebf5;
+  font-size: 14px;
+  text-align: center;
+}
+
+.offer-bar strong {
+  color: var(--white);
+}
+
+.offer-bar:hover {
+  color: var(--white);
+}
+
+/* Hero form and trust line */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.hero-form {
+  margin-top: 28px;
+  display: flex;
+  gap: 10px;
+  max-width: 500px;
+}
+
+.hero-form input {
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 16px;
+}
+
+.hero-form input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.hero-form .button {
+  height: 48px;
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.trust {
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.trust li::before {
+  content: "✓";
+  margin-right: 6px;
+  color: var(--done);
+  font-weight: 700;
+}
+
+/* Animated hero demo */
+
+.demo {
+  margin: 0;
+}
+
+.demo-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.demo-stages li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.demo-stages li span {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.demo-stages li.past {
+  color: var(--text);
+}
+
+.demo-stages li.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+.demo-stages li.active span,
+.demo-stages li.past span {
+  background: var(--accent);
+  color: var(--white);
+}
+
+.tag-new {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  border: 1px solid var(--accent-soft);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 0 7px;
+}
+
+.preview-row.arriving {
+  animation: slide-in 0.5s ease;
+}
+
+.preview-meta {
+  transition: color 0.3s ease;
+}
+
+.preview-meta.shown {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.preview-sent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid #c9e7d5;
+  border-radius: 12px;
+  background: #f1f8f4;
+  color: #1b5e3a;
+}
+
+.preview-sent span {
+  color: #2d6b49;
+}
+
+.preview-thinking {
+  display: flex;
+  gap: 6px;
+  padding: 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+  background: var(--white);
+}
+
+.preview-thinking span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: pulse 1.2s infinite ease-in-out;
+}
+
+.preview-thinking span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.preview-thinking span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.appear {
+  animation: appear 0.45s ease;
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-row.arriving,
+  .appear,
+  .preview-thinking span {
+    animation: none;
+  }
+}
+
+/* Sticky call to action on phones */
+
+.sticky-cta {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .sticky-cta {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: var(--white);
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -8px 24px rgba(22, 24, 29, 0.08);
+    font-size: 14px;
+    font-weight: 600;
+    transform: translateY(110%);
+    transition: transform 0.25s ease;
+  }
+
+  .sticky-cta.shown {
+    transform: translateY(0);
+  }
+
+  .footer {
+    padding-bottom: 96px;
+  }
+
+  .hero-form {
+    flex-direction: column;
+  }
+
+  .hero-form .button {
+    width: 100%;
+  }
+
+  .offer-bar {
+    font-size: 13px;
+  }
+}
+
+/* Keep the demo the same size at every stage so the page doesn't jump */
+.demo .preview {
+  min-height: 410px;
+}
+
+.demo .preview-row div {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 640px) {
+  .hero-form input {
+    flex: none;
+    width: 100%;
+  }
+
+  .demo .preview {
+    min-height: 0;
+  }
+}

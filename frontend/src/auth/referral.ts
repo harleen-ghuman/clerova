@@ -52,3 +52,12 @@ export function wantsSignIn(): boolean {
     return false;
   }
 }
+
+/** Email typed on the website's sign-up box (?email=), to prefill sign-up. */
+export function prefilledEmail(): string {
+  try {
+    return new URLSearchParams(window.location.search).get("email")?.slice(0, 200) ?? "";
+  } catch {
+    return "";
+  }
+}

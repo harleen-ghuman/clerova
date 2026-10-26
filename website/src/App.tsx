@@ -1,6 +1,9 @@
 import "./App.css";
 
+import { useEffect, useRef, useState, type FormEvent } from "react";
+
 import { SIGN_IN_URL, signUpUrl } from "./appLinks";
+import { HeroDemo } from "./HeroDemo";
 
 const steps = [
   {
@@ -56,68 +59,6 @@ const faqs = [
   },
 ];
 
-function ProductPreview() {
-  return (
-    <div className="preview" aria-label="Clerova request review screen">
-      <div className="preview-list">
-        <div className="preview-row active">
-          <span className="dot dot-review" />
-          <div>
-            <strong>Tina Alvarez</strong>
-            <span>Kitchen sink leaking</span>
-          </div>
-          <em className="tag-urgent">Urgent</em>
-        </div>
-        <div className="preview-row">
-          <span className="dot dot-review" />
-          <div>
-            <strong>Marcus Lee</strong>
-            <span>Question about late fee</span>
-          </div>
-        </div>
-        <div className="preview-row">
-          <span className="dot dot-waiting" />
-          <div>
-            <strong>Dan Ortiz</strong>
-            <span>Noise from upstairs unit</span>
-          </div>
-        </div>
-        <div className="preview-row">
-          <span className="dot dot-done" />
-          <div>
-            <strong>Sam Rivera</strong>
-            <span>Guest parking</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="preview-detail">
-        <div className="preview-title">
-          <strong>Kitchen sink leaking</strong>
-          <span>12 Oak St, Unit 4B · Maintenance · High priority</span>
-        </div>
-        <p className="preview-message">
-          Hi, water is leaking under the kitchen sink and the floor is getting
-          wet. Unit 4B.
-        </p>
-        <div className="preview-suggestion">
-          <span className="kicker">Clerova suggests</span>
-          <strong>Create a maintenance job and reply</strong>
-          <p>
-            Hi Tina, thanks for letting us know. Please turn off the valve under
-            the sink if you can. We are arranging a plumber and will confirm a
-            time shortly.
-          </p>
-          <div className="preview-buttons">
-            <span className="btn-approve">Approve &amp; send</span>
-            <span className="btn-other">Suggest something else</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function JobsPreview() {
   const columns = [
     { title: "Open", dot: "dot-review", cards: [["Kitchen sink leak", "12 Oak St, Unit 4B · From Tina Alvarez"], ["Replace bathroom fan", "310 Cedar Ave · From Marcus Lee"]] },
@@ -145,9 +86,46 @@ function JobsPreview() {
   );
 }
 
+const TRUST = [
+  "No password sharing",
+  "You approve every reply",
+  "Never used to train AI",
+  "Cancel anytime",
+];
+
 function App() {
+  const [email, setEmail] = useState("");
+  const [showStickyCta, setShowStickyCta] = useState(false);
+  const heroRef = useRef<HTMLElement>(null);
+
+  // On phones, keep a Start free trial button in reach after the hero
+  useEffect(() => {
+    const hero = heroRef.current;
+
+    if (!hero || !("IntersectionObserver" in window)) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(([entry]) =>
+      setShowStickyCta(!entry.isIntersecting)
+    );
+    observer.observe(hero);
+
+    return () => observer.disconnect();
+  }, []);
+
+  function startTrial(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    window.location.assign(signUpUrl(undefined, email));
+  }
+
   return (
     <div className="site">
+      <a className="offer-bar" href="#pricing">
+        <strong>Founding offer:</strong> Starter for $79/month for as long as you
+        stay. Only 20 spots. <span aria-hidden="true">→</span>
+      </a>
+
       <header className="navbar">
         <a className="brand" href="#top" aria-label="Clerova home">
           <span className="brand-mark">C</span>
@@ -172,7 +150,7 @@ function App() {
       </header>
 
       <main id="top">
-        <section className="hero">
+        <section className="hero" ref={heroRef}>
           <div className="hero-copy">
             <span className="kicker">For property managers</span>
             <h1>Your requests inbox, sorted and drafted before you open it.</h1>
@@ -181,19 +159,32 @@ function App() {
               request, suggests the next step and drafts the reply. You approve
               and it's sent.
             </p>
-            <div className="hero-actions">
-              <a className="button button-primary" href={signUpUrl()}>
+            <form className="hero-form" onSubmit={startTrial}>
+              <label className="visually-hidden" htmlFor="hero-email">
+                Your email
+              </label>
+              <input
+                id="hero-email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@company.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+              <button type="submit" className="button button-primary">
                 Start free trial
-              </a>
-              <a className="button button-plain" href="#how-it-works">
-                See how it works
-              </a>
-            </div>
-            <p className="note">14 days free · Cancel anytime before your trial ends · Keep your current email</p>
+              </button>
+            </form>
+            <p className="note">14 days free. Set up in about five minutes.</p>
+            <ul className="trust">
+              {TRUST.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
           </div>
 
           <div className="hero-visual">
-            <ProductPreview />
+            <HeroDemo />
           </div>
         </section>
 
@@ -341,6 +332,13 @@ function App() {
           </a>
         </section>
       </main>
+
+      <div className={`sticky-cta ${showStickyCta ? "shown" : ""}`} aria-hidden={!showStickyCta}>
+        <span>14 days free</span>
+        <a className="button button-primary" href={signUpUrl()} tabIndex={showStickyCta ? 0 : -1}>
+          Start free trial
+        </a>
+      </div>
 
       <footer className="footer">
         <a className="brand" href="#top">

@@ -23,11 +23,16 @@ function readSource(): string {
 
 const source = readSource();
 
-export function signUpUrl(plan?: "starter" | "growth"): string {
+export function signUpUrl(plan?: "starter" | "growth", email?: string): string {
   const params = new URLSearchParams({ utm_source: source });
 
   if (plan) {
     params.set("plan", plan);
+  }
+
+  // Prefills the sign-up form so only a password is left to choose
+  if (email) {
+    params.set("email", email.trim());
   }
 
   return `${APP_URL}?${params}`;

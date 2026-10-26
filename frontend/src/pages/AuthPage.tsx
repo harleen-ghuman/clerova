@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 
-import { wantsSignIn } from "../auth/referral";
+import { prefilledEmail, wantsSignIn } from "../auth/referral";
 import { supabase } from "../auth/supabase";
 
 type AuthMode =
@@ -48,7 +48,7 @@ export function AuthPage({
   const [mode, setMode] = useState<AuthMode>(() =>
     recoveringPassword ? "reset-password" : wantsSignIn() ? "sign-in" : "sign-up"
   );
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(prefilledEmail);
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -247,6 +247,8 @@ export function AuthPage({
                   mode === "sign-in" ? "current-password" : "new-password"
                 }
                 required
+                // Arriving from the website with the email filled in
+                autoFocus={mode === "sign-up" && prefilledEmail() !== ""}
                 minLength={mode === "sign-in" ? undefined : MIN_PASSWORD_LENGTH}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
