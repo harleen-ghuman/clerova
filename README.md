@@ -17,15 +17,18 @@ Property management is the live focus.
 
 ## How It Works
 
-1. **Sign up** at app.clerova-ai.com and confirm your email.
-2. **Set up your workspace:** company name, industry, size and how you heard
-   about Clerova.
+1. **Sign up** from the website or at app.clerova-ai.com and confirm your
+   email. The website's buttons carry the email you typed and the plan you
+   picked, so sign-up is filled in for you.
+2. **Set up your workspace:** your name, company name, units managed and how
+   you heard about Clerova.
 3. **Choose a plan and add a card.** The first 14 days are free. Nothing is
    charged until the trial ends, and cancelling before then costs nothing.
 4. **Forward your email** to your Clerova address (shown on the Email Setup
    page), for example `maple-property-k3j9x2@in.clerova-ai.com`. You can
    forward everything or set a filter. You can also type or paste a request
-   with **New request**.
+   with **New request**. A get-started checklist on the Today page walks
+   through this and sends a test email for you.
 5. **Clerova organizes it.** Each new request gets an address, category,
    priority and summary, a recommended next step with its reasoning, and a
    drafted reply.
@@ -83,6 +86,8 @@ Email forwarded              Request typed in the app
 - Inbox view of every received email with its status, and a retry for
   failed ones
 - Open sign-up with Supabase Auth, onboarding and a free trial
+- Get-started checklist for new workspaces: copy the address, forward,
+  send a test email, approve the first reply
 - Multi-tenant organizations: each organization only sees its own data
 - Stripe billing: card up front, 14-day free trial, founding prices,
   self-service billing portal
@@ -139,7 +144,7 @@ terms, so the reviewer adds them before sending.
 +------------------------------+
 
 Hosting: Render (frontend and backend), Supabase (database and auth),
-Postmark (email), Cloudflare (DNS)
+Postmark (email), Stripe (billing), Cloudflare (DNS)
 ```
 
 ### Tech Stack
@@ -486,8 +491,19 @@ set plan = 'STARTER', ai_monthly_limit = 1000, trial_ends_at = null
 where name = 'Acme Property Group';
 ```
 
+Every workspace, newest first, with its owner and billing status (an empty
+status means no card yet):
+
+```sql
+select o.created_at, o.name as company, u.email, o.referral_source,
+       o.plan, o.billing_interval, o.subscription_status, o.founding_customer
+from organizations o
+join app_users u on u.organization_id = o.id
+order by o.created_at desc;
+```
+
 Where sign-ups come from (links can carry `?utm_source=instagram` or
-`?ref=...`):
+`?ref=...`; the website passes it on to the app):
 
 ```sql
 select industry, company_size, referral_source, count(*)
@@ -508,6 +524,7 @@ Management` organization.
 cd backend && ./mvnw test        # H2 in PostgreSQL mode, runs the Flyway migrations
 cd frontend && npm run build     # type-check and production build
 cd frontend && npm run lint
+cd website && npm run build && npm run lint
 ```
 
 AI evaluation tests are kept separate so normal builds don't make live model
