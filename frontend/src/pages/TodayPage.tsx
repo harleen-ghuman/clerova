@@ -26,6 +26,71 @@ interface TodayPageProps {
   onOpenJobs: () => void;
 }
 
+// The time-saved ring fills toward one working week
+const WORK_WEEK_MINUTES = 40 * 60;
+
+/** Time saved as a ring showing its share of a 40-hour work week. */
+function TimeSavedRing({ minutes }: { minutes: number }) {
+  const size = 112;
+  const stroke = 10;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const share = Math.min(minutes / WORK_WEEK_MINUTES, 1);
+  const percent = Math.round((minutes / WORK_WEEK_MINUTES) * 100);
+  const description =
+    percent >= 100
+      ? "More than a full 40\u2011hour work week"
+      : `About ${Math.max(percent, minutes > 0 ? 1 : 0)}% of a 40\u2011hour work week`;
+
+  return (
+    <div className="today-ring">
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        role="img"
+        aria-label={`${formatMinutes(minutes)} saved. ${description}.`}
+      >
+        <title>{`${formatMinutes(minutes)} saved · ${description}`}</title>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="var(--border)"
+          strokeWidth={stroke}
+        />
+        {share > 0 && (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="var(--success)"
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={`${circumference * share} ${circumference}`}
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          />
+        )}
+        <text
+          x="50%"
+          y="50%"
+          dominantBaseline="central"
+          textAnchor="middle"
+          className="today-ring-value"
+        >
+          {formatMinutes(minutes)}
+        </text>
+      </svg>
+      <div>
+        <strong>Time saved</strong>
+        <p>{description}</p>
+      </div>
+    </div>
+  );
+}
+
 function formatMinutes(minutes: number): string {
   if (minutes < 60) {
     return `${minutes} min`;
@@ -155,32 +220,31 @@ export function TodayPage({
 
         {summary ? (
           <>
-            <dl className="today-stats">
-              <div>
-                <dt>Requests organized</dt>
-                <dd>{summary.requestsOrganized}</dd>
-              </div>
-              <div>
-                <dt>Replies sent</dt>
-                <dd>{summary.repliesSent}</dd>
-              </div>
-              <div>
-                <dt>Typical time to reply</dt>
-                <dd>
-                  {summary.medianReplyMinutes === null
-                    ? "–"
-                    : formatMinutes(summary.medianReplyMinutes)}
-                </dd>
-              </div>
-              <div>
-                <dt>Jobs completed</dt>
-                <dd>{summary.jobsCompleted}</dd>
-              </div>
-              <div className="today-saved">
-                <dt>Time saved</dt>
-                <dd>{formatMinutes(summary.minutesSaved)}</dd>
-              </div>
-            </dl>
+            <div className="today-week-grid">
+              <TimeSavedRing minutes={summary.minutesSaved} />
+              <dl className="today-stats">
+                <div>
+                  <dt>Requests organized</dt>
+                  <dd>{summary.requestsOrganized}</dd>
+                </div>
+                <div>
+                  <dt>Replies sent</dt>
+                  <dd>{summary.repliesSent}</dd>
+                </div>
+                <div>
+                  <dt>Typical time to reply</dt>
+                  <dd>
+                    {summary.medianReplyMinutes === null
+                      ? "–"
+                      : formatMinutes(summary.medianReplyMinutes)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Jobs completed</dt>
+                  <dd>{summary.jobsCompleted}</dd>
+                </div>
+              </dl>
+            </div>
             <p className="today-footnote">
               Time saved is an estimate of {summary.minutesPerRequest} minutes
               per request to read, sort and draft a reply by hand.

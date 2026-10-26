@@ -106,7 +106,7 @@ export function AuthPage({
     "sign-up": {
       title: "Start your free trial",
       description:
-        "Turn incoming requests into organized, AI-reviewed work. 14 days free, no card required.",
+        "Turn your property requests inbox into organized work, with replies ready for you to approve. 14 days free, and you can cancel anytime before it ends.",
       submit: "Create account",
     },
     "sign-in": {
