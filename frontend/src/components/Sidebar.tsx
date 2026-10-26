@@ -1,16 +1,11 @@
 import type { Organization } from "../types/Account";
 
-export type AppView =
-  | "dashboard"
-  | "inbox"
-  | "work-items"
-  | "maintenance"
-  | "pending-actions"
-  | "email-setup";
+export type AppView = "requests" | "jobs" | "inbox" | "email-setup";
 
 interface SidebarProps {
   activeView: AppView;
-  pendingActionCount: number;
+  reviewCount: number;
+  openJobCount: number;
   organization: Organization;
   userEmail: string;
   onNavigate: (view: AppView) => void;
@@ -32,7 +27,8 @@ function trialDaysLeft(trialEndsAt: string | null): number | null {
 
 export function Sidebar({
   activeView,
-  pendingActionCount,
+  reviewCount,
+  openJobCount,
   organization,
   userEmail,
   onNavigate,
@@ -43,114 +39,56 @@ export function Sidebar({
       ? trialDaysLeft(organization.trialEndsAt)
       : null;
 
+  const items: { view: AppView; label: string; count?: number; badge?: boolean }[] = [
+    { view: "requests", label: "Requests", count: reviewCount, badge: true },
+    { view: "jobs", label: "Jobs", count: openJobCount },
+    { view: "inbox", label: "Inbox" },
+    { view: "email-setup", label: "Email setup" },
+  ];
+
   return (
     <aside className="sidebar">
       <button
         type="button"
-        className="brand brand-button"
-        onClick={() => onNavigate("dashboard")}
-        aria-label="Go to dashboard"
+        className="sidebar-brand"
+        onClick={() => onNavigate("requests")}
+        aria-label="Go to requests"
       >
-        <div className="brand-mark">C</div>
-
-        <div>
+        <span className="sidebar-mark">C</span>
+        <span>
           <strong>Clerova</strong>
-          <span>
-            {organization.industry === "TRUCKING"
-              ? "Trucking Operations"
-              : "Property Operations"}
-          </span>
-        </div>
+          <small>{organization.name}</small>
+        </span>
       </button>
 
-      <button
-        type="button"
-        className="sidebar-mobile-signout"
-        onClick={onSignOut}
-      >
-        Sign out
-      </button>
-
-      <nav className="sidebar-nav">
-        <button
-          type="button"
-          className={`nav-item ${
-            activeView === "dashboard" ? "active" : ""
-          }`}
-          onClick={() => onNavigate("dashboard")}
-        >
-          Dashboard
-        </button>
-
-        <button
-          type="button"
-          className={`nav-item ${
-            activeView === "inbox" ? "active" : ""
-          }`}
-          onClick={() => onNavigate("inbox")}
-        >
-          Inbox
-        </button>
-
-        <button
-          type="button"
-          className={`nav-item ${
-            activeView === "work-items" ? "active" : ""
-          }`}
-          onClick={() => onNavigate("work-items")}
-        >
-          Work Items
-        </button>
-
-        <button
-          type="button"
-          className={`nav-item ${
-            activeView === "maintenance" ? "active" : ""
-          }`}
-          onClick={() => onNavigate("maintenance")}
-        >
-          Maintenance
-        </button>
-
-        <button
-          type="button"
-          className={`nav-item ${
-            activeView === "pending-actions" ? "active" : ""
-          }`}
-          onClick={() => onNavigate("pending-actions")}
-        >
-          <span>Pending Actions</span>
-
-          {pendingActionCount > 0 && (
-            <span className="nav-count">
-              {pendingActionCount}
-            </span>
-          )}
-        </button>
-
-        <button
-          type="button"
-          className={`nav-item ${
-            activeView === "email-setup" ? "active" : ""
-          }`}
-          onClick={() => onNavigate("email-setup")}
-        >
-          Email Setup
-        </button>
+      <nav className="sidebar-nav" aria-label="Main">
+        {items.map((item) => (
+          <button
+            key={item.view}
+            type="button"
+            className={`sidebar-link ${activeView === item.view ? "active" : ""}`}
+            aria-current={activeView === item.view ? "page" : undefined}
+            onClick={() => onNavigate(item.view)}
+          >
+            {item.label}
+            {item.count !== undefined && item.count > 0 && (
+              <span className={item.badge ? "sidebar-badge" : "sidebar-count"}>
+                {item.count}
+              </span>
+            )}
+          </button>
+        ))}
       </nav>
 
       <div className="sidebar-footer">
-        <span>Organization</span>
-        <strong>{organization.name}</strong>
-
         {daysLeft !== null && (
-          <p className="sidebar-trial">
+          <p>
             {daysLeft === 0
               ? "Free trial ended"
               : `Free trial · ${daysLeft} ${daysLeft === 1 ? "day" : "days"} left`}
             <br />
-            {organization.aiRequestsUsedThisMonth} /{" "}
-            {organization.aiMonthlyLimit} AI requests this month
+            {organization.aiRequestsUsedThisMonth} / {organization.aiMonthlyLimit}{" "}
+            AI requests
           </p>
         )}
 

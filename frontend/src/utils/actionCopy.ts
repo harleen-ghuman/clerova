@@ -23,10 +23,28 @@ export function decisionCopy(
   }
 
   if (action.status === "EXECUTED") {
-    return {
-      title: "Reply sent",
-      description: "The approved response was emailed to the sender.",
-    };
+    switch (action.actionType) {
+      case "CREATE_MAINTENANCE_REQUEST":
+        return {
+          title: "Reply sent and job created",
+          description: "The job is on your Jobs board.",
+        };
+      case "REQUEST_MORE_INFORMATION":
+        return {
+          title: "Reply sent",
+          description: "When they answer, the request comes back here for review.",
+        };
+      case "ESCALATE_TO_HUMAN":
+        return {
+          title: "Reply sent and escalated",
+          description: "The request stays open until someone on your team resolves it.",
+        };
+      default:
+        return {
+          title: "Reply sent",
+          description: "The request is closed. If they reply, it comes back for review.",
+        };
+    }
   }
 
   const sendInstruction = canEmailReply
@@ -36,9 +54,8 @@ export function decisionCopy(
   switch (action.actionType) {
     case "CREATE_MAINTENANCE_REQUEST":
       return {
-        title: "Maintenance request created",
-        description:
-          "The maintenance request was created and is now available in Maintenance.",
+        title: "Maintenance job created",
+        description: "The job is on your Jobs board.",
       };
     case "RESPOND_TO_CUSTOMER":
       return {

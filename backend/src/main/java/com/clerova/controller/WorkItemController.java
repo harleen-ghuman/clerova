@@ -68,9 +68,14 @@ public class WorkItemController {
         );
     }
 
+    /** Open requests, or with ?closed=true those closed in the last 30 days. */
     @GetMapping
-    public List<WorkItem> getAllWorkItems() {
-        return workItemService.getAllWorkItems(organizationId());
+    public List<WorkItem> getAllWorkItems(
+            @RequestParam(defaultValue = "false") boolean closed
+    ) {
+        return closed
+                ? workItemService.getRecentlyClosedWorkItems(organizationId())
+                : workItemService.getAllWorkItems(organizationId());
     }
 
     @GetMapping("/{id}")

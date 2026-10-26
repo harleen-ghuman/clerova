@@ -22,6 +22,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -202,6 +204,16 @@ public class WorkItemService {
                 .findByOrganizationIdAndStatusNotInOrderByCreatedAtDesc(
                         organizationId,
                         CLOSED_STATUSES
+                );
+    }
+
+    /** Requests closed in the last 30 days, most recently closed first. */
+    public List<WorkItem> getRecentlyClosedWorkItems(UUID organizationId) {
+        return workItemRepository
+                .findTop100ByOrganizationIdAndStatusInAndUpdatedAtAfterOrderByUpdatedAtDesc(
+                        organizationId,
+                        CLOSED_STATUSES,
+                        Instant.now().minus(Duration.ofDays(30))
                 );
     }
 

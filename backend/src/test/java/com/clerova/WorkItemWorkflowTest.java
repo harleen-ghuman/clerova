@@ -157,6 +157,19 @@ class WorkItemWorkflowTest {
     }
 
     @Test
+    void closedRequestsAreListedSeparately() throws Exception {
+        proposeAction(ActionType.RESPOND_TO_CUSTOMER);
+        String workItemId = createWorkItem();
+        approve(pendingAction(workItemId), null).andExpect(status().isOk());
+
+        JsonNode open = json(mockMvc.perform(get("/api/work-items").with(user)));
+        JsonNode closed = json(mockMvc.perform(get("/api/work-items?closed=true").with(user)));
+
+        assertThat(open.findValuesAsText("id")).doesNotContain(workItemId);
+        assertThat(closed.findValuesAsText("id")).contains(workItemId);
+    }
+
+    @Test
     void unknownWorkItemReturns404() throws Exception {
         mockMvc.perform(get("/api/work-items/{id}", UUID.randomUUID()).with(user))
                 .andExpect(status().isNotFound())

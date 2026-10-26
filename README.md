@@ -71,7 +71,10 @@ Email forwarded              Request typed in the app
   automatically for every new request
 - Human approval, with editable drafts, rejection and regeneration
 - Replies sent by email from the app, threaded onto the same request
-- Maintenance jobs with a tracked lifecycle and notes
+- One Requests list with search and filters: needs review, waiting on
+  customer, in progress, done
+- "Approve & send" emails the edited reply in one step
+- Jobs board for maintenance: open, in progress, done, with notes
 - Conversation view and activity history for each request (newest first)
 - Inbox view of every received email with its status, and a retry for
   failed ones
@@ -221,7 +224,7 @@ POST /api/inbox/{id}/reprocess
 GET  /api/email-settings
 POST /api/inbound/postmark                        (Postmark webhook, basic auth)
 
-GET  /api/work-items
+GET  /api/work-items                              (?closed=true: closed in the last 30 days)
 GET  /api/work-items/{id}
 POST /api/work-items                              (creates and suggests)
 POST /api/work-items/{id}/close
@@ -427,15 +430,23 @@ calls.
 
 ## Screenshots
 
-![Dashboard](docs/screenshots/dashboard.png)
-![AI suggestion and review](docs/screenshots/ai-review.png)
-![Maintenance jobs](docs/screenshots/maintenance.png)
+**Requests:** one list with filters. Each request shows the conversation and
+Clerova's suggestion, ready to edit and approve.
+
+![Requests](docs/screenshots/requests.png)
+
+**Jobs:** approved repairs, moved from open to in progress to done.
+
+![Jobs board](docs/screenshots/jobs.png)
+
+**Email setup:** the forwarding address and step-by-step Gmail pictures.
+
+![Email setup](docs/screenshots/email-setup.png)
 
 ---
 
 ## Roadmap
 
-- Redesigned review screen: one Requests list with filters, plus a Jobs board
 - Gmail and Microsoft 365 connections (OAuth) instead of forwarding
 - Attachment storage and document extraction
 - Answers grounded in your own documents and records (leases, ledgers,
