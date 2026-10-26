@@ -1,455 +1,216 @@
 # Clerova
 
-**AI-assisted property operations with human oversight**
+**Your requests inbox, organized by AI and approved by you.**
 
-Clerova is a full-stack application that turns incoming resident and property messages into structured operational work.
+Clerova turns the emails and messages a property team receives into
+structured requests. For each one it extracts the details, recommends the
+next step and drafts a reply. Nothing is sent or created until a person
+approves it.
 
-Instead of requiring staff to manually read, classify, prioritize, and route every request, Clerova uses AI to extract key information, recommend the next action, and place consequential actions behind human approval.
+Property management is the live focus.
 
-The current MVP focuses on property-management operations and includes end-to-end AI intake, human review, and maintenance workflows.
-
-**Live Application:** https://app.clerova-ai.com  
+**App:** https://app.clerova-ai.com  
 **API:** https://api.clerova-ai.com  
 **Website:** https://clerova-ai.com
 
 ---
 
-## What Clerova Does
+## How It Works
 
-A property manager can submit an incoming message such as:
-
-> Water is leaking rapidly from under the kitchen sink at 742 Evergreen Terrace. The cabinet and floor are getting wet.
-
-Clerova can:
-
-1. Extract the property address
-2. Classify the request
-3. Assign a priority
-4. Generate an operational summary
-5. Recommend the next action
-6. Draft a response to the resident
-7. Require human approval before consequential execution
-8. Create and track a maintenance request when appropriate
-9. Record operational notes and progress
-10. Synchronize completion with the original work item
-
----
-
-## Workflow
+1. **Sign up** at app.clerova-ai.com and confirm your email.
+2. **Set up your workspace:** company name, industry, size and how you heard
+   about Clerova. This starts a 14-day free trial.
+3. **Forward your email** to your Clerova address (shown on the Email Setup
+   page), for example `maple-property-k3j9x2@in.clerova-ai.com`. You can
+   forward everything or set a filter. You can also type or paste a request
+   with **New request**.
+4. **Clerova organizes it.** Each new request gets an address, category,
+   priority and summary, a recommended next step with its reasoning, and a
+   drafted reply.
+5. **You review.** Edit the draft, then approve or reject. Rejecting returns
+   the request so a new suggestion can be generated.
+6. **Clerova acts on approval.**
+   - Replies are emailed from your Clerova address with **Send**.
+   - Maintenance recommendations create a maintenance job that you move from
+     open to in progress to completed.
+   - Escalations and requests for more information stay open until you close
+     them.
+7. **Replies come back to the same request.** When the resident answers,
+   their email joins the request's conversation and returns it to review.
+   This also applies to requests closed in the last 14 days.
 
 ```text
-Incoming Request
-       |
-       v
-AI Classification
-       |
-       v
-Structured Work Item
-       |
-       v
-AI Proposed Action
-       |
-       v
-Human Approval
-       |
-       +--------------------------+
-       |                          |
-       v                          v
-Maintenance Request        Other Workflow
-       |
-       v
-OPEN -> IN_PROGRESS -> COMPLETED
-       |
-       v
-Parent Work Item COMPLETED
+Email forwarded              Request typed in the app
+        \                          /
+         v                        v
+      Inbox (stored, duplicates skipped)
+                   |
+                   v
+   AI: extract details -> recommend next step -> draft reply
+                   |
+                   v
+          Human review (edit, approve, reject)
+                   |
+     +-------------+--------------+------------------+
+     v             v              v                  v
+ Send reply   Maintenance job   Escalate /     No action
+     |        OPEN -> IN_PROGRESS  ask for info
+     |           -> COMPLETED     (closed by you)
+     v
+ Resident replies -> back to review
 ```
 
 ---
 
-## Key Features
+## Features
 
-- AI-powered request classification and summarization
-- Address, category, and priority extraction
-- Support for maintenance, billing, leasing, complaint, and general requests
-- AI-generated operational recommendations and resident responses
-- Human-in-the-loop approval workflow
-- Maintenance request creation from approved actions
-- Maintenance lifecycle and operational notes
-- Work-item and maintenance-status synchronization
-- Rejection and proposal regeneration flow
-- Dashboard and AI approval queue
+- Email intake through a per-organization forwarding address (Postmark)
+- AI extraction of address, category, priority and summary
+- Categories: maintenance, billing, leasing, complaint, general
+- AI recommendation with reasoning and a drafted reply, created
+  automatically for every new request
+- Human approval, with editable drafts, rejection and regeneration
+- Replies sent by email from the app, threaded onto the same request
+- Maintenance jobs with a tracked lifecycle and notes
+- Conversation view and activity history for each request (newest first)
+- Inbox view of every received email with its status, and a retry for
+  failed ones
+- Open sign-up with Supabase Auth, onboarding and a free trial
+- Multi-tenant organizations: each organization only sees its own data
+- Monthly AI quota per organization and per-client rate limits
 - Responsive desktop and mobile interface
-- PostgreSQL persistence
-- REST API backend
-- Environment-based production configuration
-- Health endpoint and centralized API error handling
-- AI usage and latency logging
 
 ---
 
-## Human-in-the-Loop AI
+## Human Review
 
-Clerova intentionally separates AI recommendations from execution.
-
-```text
-AI recommendation
-        |
-        v
-Human review
-        |
-        v
-Approved execution
-```
-
-For example, the model may recommend creating a high-priority maintenance request, but the maintenance request is not created until a user approves the proposed action.
-
-Proposed actions have their own lifecycle:
+Clerova separates AI suggestions from actions.
 
 ```text
-PENDING_APPROVAL
-APPROVED
-REJECTED
-EXECUTED
+AI suggestion -> Human review -> Approved action
 ```
 
-Rejected recommendations can be regenerated and reviewed again.
+A suggestion to create a maintenance job, for example, does not create the
+job until someone approves it. Suggestions have their own lifecycle:
 
-This provides a foundation for expanding AI-assisted automation while retaining human oversight over operational decisions.
+```text
+PENDING_APPROVAL -> APPROVED -> EXECUTED (reply sent)
+                 -> REJECTED
+```
+
+The AI is told not to invent information it doesn't have. A late-fee
+question, for example, gets a reply that promises to check the ledger rather
+than a made-up answer.
 
 ---
 
 ## Architecture
 
 ```text
-+--------------------------------+
-|       React Frontend           |
-|      TypeScript + Vite         |
-|   app.clerova-ai.com           |
-+---------------+----------------+
-                |
-                | HTTPS / REST
-                v
-+--------------------------------+
-|      Spring Boot Backend       |
-|           Java 21              |
-|   api.clerova-ai.com           |
-+--------------------------------+
-| Work Item Service              |
-| AI Service                     |
-| Approval Workflow              |
-| Action Execution Service       |
-| Maintenance Service            |
-+------------+-------------------+
-             |
-       +-----+------+
-       |            |
-       v            v
-+-------------+  +-------------+
-| OpenAI API  |  | PostgreSQL  |
-|             |  |  Supabase   |
-+-------------+  +-------------+
++------------------------------+     +---------------------------+
+| React + TypeScript (Vite)    |     | Supabase Auth             |
+| app.clerova-ai.com           |<--->| sign-up, sign-in, tokens  |
++--------------+---------------+     +---------------------------+
+               | HTTPS, Bearer token
+               v
++------------------------------+     +---------------------------+
+| Spring Boot (Java 21)        |<----| Postmark inbound webhook  |
+| api.clerova-ai.com           |---->| Postmark outbound (send)  |
+|                              |     +---------------------------+
+| Work items and approvals     |
+| Email intake and processor   |     +---------------------------+
+| Replies and threading        |---->| OpenAI (structured output)|
+| Accounts, trials, AI quota   |     +---------------------------+
++--------------+---------------+
+               |
+               v
++------------------------------+
+| PostgreSQL (Supabase)        |
+| Flyway migrations, RLS on    |
++------------------------------+
 
-Frontend + Backend: Render
-Database: Supabase
+Hosting: Render (frontend and backend), Supabase (database and auth),
+Postmark (email), Cloudflare (DNS)
 ```
+
+### Tech Stack
+
+- **Backend:** Java 21, Spring Boot, Spring Security (OAuth2 resource
+  server), Spring Data JPA, Flyway, PostgreSQL, OpenAI Java SDK, Maven
+- **Frontend:** React, TypeScript, Vite, `@supabase/supabase-js`
+- **Website:** React + Vite landing page (`website/`)
+- **Testing:** JUnit and Spring Boot Test on H2 (PostgreSQL mode), with
+  separate AI evaluation tests
+- **Infrastructure:** Render, Supabase, Postmark, Cloudflare, Docker Compose
+  for local PostgreSQL
 
 ---
 
-## Tech Stack
+## Domain Model
 
-### Backend
+| Entity | What it is |
+| --- | --- |
+| Organization | A customer workspace with its plan, trial end date, AI quota and forwarding address |
+| Work item | One request: original message, summary, address, category, priority, status |
+| Proposed action | Clerova's suggestion for a work item: action type, reasoning, draft and final reply |
+| Maintenance request | A job created from an approved maintenance suggestion |
+| Inbound / outbound message | Emails received and sent, linked to their work item |
+| Work item event | The activity history shown on each request |
 
-- Java 21
-- Spring Boot
-- Spring Web
-- Spring Data JPA
-- Hibernate
-- PostgreSQL
-- Maven
-- OpenAI Java SDK
+Work item statuses:
 
-### Frontend
+```text
+NEW, WAITING_FOR_APPROVAL, IN_PROGRESS, WAITING_FOR_INFORMATION,
+ESCALATED, COMPLETED, CANCELLED
+```
 
-- React
-- TypeScript
-- Vite
-- CSS
-- Fetch-based REST API integration
+Action types:
 
-### Development & Testing
+```text
+CREATE_MAINTENANCE_REQUEST, RESPOND_TO_CUSTOMER,
+REQUEST_MORE_INFORMATION, ESCALATE_TO_HUMAN, NO_ACTION
+```
 
-- Docker Compose
-- PostgreSQL 17
-- H2 in-memory database for backend tests
-- JUnit / Spring Boot Test
-- Git / GitHub
-
-### Infrastructure
-
-- Render
-- Supabase PostgreSQL
-- Docker / Docker Compose
-- Custom production domains
-- Environment-based secrets and configuration
+Completing or cancelling a maintenance job also completes or cancels its
+work item. A work item can't be closed while its maintenance job is open.
 
 ---
 
-## Core Domain Model
-
-### Work Item
-
-Represents the structured version of an incoming resident or property request.
-
-A work item contains:
-
-- Original message
-- AI-generated summary
-- Address
-- Category
-- Priority
-- Organization
-- Workflow status
-- Creation and update timestamps
-
-Current categories include:
+## Email Intake
 
 ```text
-MAINTENANCE
-BILLING
-LEASING
-COMPLAINT
-GENERAL
+Email forwarded to <token>@in.clerova-ai.com
+        |
+        v
+Postmark inbound webhook -> stored (duplicates skipped)
+        |
+        v
+Background processor (every 5 seconds)
+  - automated or bulk email ........ Ignored (can be processed anyway)
+  - Gmail forwarding confirmation .. Ignored, code shown on Email Setup
+  - reply to a request ............. Added to that request's conversation
+                                     and returned to review
+  - anything else .................. New work item + AI suggestion
 ```
 
-Work items move through lifecycle states such as:
-
-```text
-NEW
-IN_PROGRESS
-WAITING_FOR_APPROVAL
-WAITING_FOR_INFORMATION
-ESCALATED
-COMPLETED
-CANCELLED
-```
-
-### Proposed Action
-
-Represents Clerova's recommended next step.
-
-Current action types include:
-
-```text
-CREATE_MAINTENANCE_REQUEST
-RESPOND_TO_CUSTOMER
-REQUEST_MORE_INFORMATION
-ESCALATE_TO_HUMAN
-NO_ACTION
-```
-
-Reviewers can edit the drafted response before approving. Approved escalations
-and information requests stay open until a user closes them.
-
-Proposed actions begin in `PENDING_APPROVAL` and can be explicitly approved or rejected.
-
-The recommendation is stored separately from the work item so AI output can be reviewed and managed independently from deterministic application state.
-
-### Maintenance Request
-
-An approved maintenance recommendation can create a maintenance request linked to both the originating work item and proposed action.
-
-Maintenance requests progress through:
-
-```text
-OPEN -> IN_PROGRESS -> COMPLETED
-```
-
-or can be cancelled.
-
-Completing or cancelling a maintenance request also updates the parent work item's lifecycle.
-
----
-
-## Example End-to-End Flow
-
-### Incoming Message
-
-```text
-Water is leaking rapidly from under the kitchen sink at
-742 Evergreen Terrace. The cabinet and floor are getting wet.
-```
-
-### AI Extraction
-
-```text
-Address: 742 Evergreen Terrace
-Category: MAINTENANCE
-Priority: HIGH
-Status: NEW
-```
-
-### AI Recommendation
-
-```text
-CREATE_MAINTENANCE_REQUEST
-```
-
-Clerova also generates reasoning for the recommendation and drafts a response for the resident.
-
-### Human Review
-
-Before the recommendation is executed:
-
-```text
-Work Item: WAITING_FOR_APPROVAL
-Proposed Action: PENDING_APPROVAL
-```
-
-The user can approve or reject the recommendation.
-
-### After Human Approval
-
-```text
-Proposed Action: APPROVED
-Work Item: IN_PROGRESS
-Maintenance Request: OPEN
-```
-
-### Maintenance Execution
-
-The maintenance request can then progress through:
-
-```text
-OPEN -> IN_PROGRESS -> COMPLETED
-```
-
-Operational notes can be recorded as the work progresses.
-
-### After Maintenance Completion
-
-```text
-Maintenance Request: COMPLETED
-Work Item: COMPLETED
-```
-
----
-
-## Beyond Maintenance
-
-Clerova's workflow is not limited to maintenance requests.
-
-### Billing
-
-For example, a resident disputing a late fee can be classified as:
-
-```text
-Category: BILLING
-Priority: MEDIUM
-```
-
-Clerova can recommend:
-
-```text
-RESPOND_TO_CUSTOMER
-```
-
-and draft a response while explicitly requiring payment and ledger information to be verified rather than inventing information the system does not have.
-
-### Leasing
-
-Leasing inquiries can also be classified and routed appropriately.
-
-For example, a resident asking about move-in instructions, key pickup, or office hours can receive an AI-drafted response while Clerova recognizes when property-specific information must be verified before giving a definitive answer.
-
-This demonstrates an important design principle in Clerova:
-
-**AI assists with reasoning and communication, while unavailable business data and consequential operational actions remain bounded by the surrounding software workflow.**
-
----
-
-## Screenshots
-
-### Operations Dashboard
-
-Monitor incoming requests, approval queues, and maintenance operations from a single dashboard.
-
-![Clerova Operations Dashboard](docs/screenshots/dashboard.png)
-
-### AI Recommendation & Human Review
-
-Clerova analyzes incoming requests, recommends the next operational action, explains its reasoning, and requires human review before consequential execution.
-
-![Clerova AI Review Workflow](docs/screenshots/ai-review.png)
-
-### Maintenance Workflow
-
-Approved maintenance actions become operational maintenance requests that can be tracked from open through completion.
-
-![Clerova Maintenance Workflow](docs/screenshots/maintenance.png)
-
----
-
-## AI Processing
-
-Clerova currently uses AI at two primary stages of the workflow.
-
-### 1. Request Extraction
-
-Incoming unstructured text is transformed into structured operational data.
-
-For example:
-
-```json
-{
-  "address": "742 Evergreen Terrace",
-  "category": "MAINTENANCE",
-  "priority": "HIGH",
-  "summary": "Rapid water leak from under the kitchen sink..."
-}
-```
-
-The resulting data becomes a persistent work item rather than remaining only as model output.
-
-### 2. Action Recommendation
-
-Using the structured work item and original resident message, Clerova generates:
-
-- Recommended action type
-- Reasoning
-- Drafted resident response
-
-The proposed action is persisted separately and must move through the application's workflow before consequential actions are executed.
-
----
-
-## Reliability and AI Safety
-
-Clerova combines model-driven reasoning with deterministic application workflows.
-
-Current safeguards and reliability mechanisms include:
-
-- Human approval before consequential operational actions
-- Structured enum-based categories, priorities, statuses, and action types
-- Separation of AI recommendations from executed actions
-- Persistent workflow state in PostgreSQL
-- Centralized API exception handling
-- AI token-usage and latency logging
-- Environment-based secrets and configuration
-- Restricted production CORS
-- Backend automated tests
-- AI evaluation coverage
-- Prompt-injection resistance in extraction behavior
-
-The application is intentionally designed so that model-generated recommendations are not equivalent to executed operational actions.
+- Replies go out from the organization's Clerova address. Their reply-to
+  address carries the work item (`token+wi-<id>@...`), so answers thread
+  onto the same request even if the mail client drops the threading
+  headers. In-Reply-To and References headers are matched too.
+- Requests closed in the last 14 days reopen when the customer replies.
+  Older ones start a new request.
+- Each new email uses two AI requests from the monthly quota (extraction and
+  suggestion). AI failures are retried after 1 minute and then 5 minutes.
+  The Inbox shows the reason for any failure, and failed emails can be
+  retried from there.
+- Attachment names, types and sizes are recorded. File contents are not
+  stored yet.
 
 ---
 
 ## API Overview
 
-Core API routes include:
-
 ```text
-GET  /
 GET  /api/health
 
 GET  /api/me
@@ -458,19 +219,17 @@ POST /api/onboarding
 GET  /api/inbox
 POST /api/inbox/{id}/reprocess
 GET  /api/email-settings
-POST /api/inbound/postmark          (Postmark webhook, basic auth)
+POST /api/inbound/postmark                        (Postmark webhook, basic auth)
 
 GET  /api/work-items
 GET  /api/work-items/{id}
-POST /api/work-items
-
-GET  /api/work-items/{id}/proposed-actions
-POST /api/work-items/{id}/proposed-actions
-
+POST /api/work-items                              (creates and suggests)
 POST /api/work-items/{id}/close
 GET  /api/work-items/{id}/conversation
 GET  /api/work-items/{id}/events
 
+GET  /api/work-items/{id}/proposed-actions
+POST /api/work-items/{id}/proposed-actions        (new suggestion after a rejection)
 GET  /api/work-items/proposed-actions/latest
 POST /api/work-items/proposed-actions/{id}/approve
 POST /api/work-items/proposed-actions/{id}/reject
@@ -480,178 +239,101 @@ GET   /api/maintenance-requests
 PATCH /api/maintenance-requests/{id}
 ```
 
-All routes except `/` and `/api/health` require a Supabase access token:
-
-```http
-Authorization: Bearer <supabase-access-token>
-```
-
-Data is scoped to the signed-in user's organization.
-
-### Example: Create Work Item
+Every route except `/`, `/api/health` and the Postmark webhook needs a
+Supabase access token (`Authorization: Bearer <token>`), and data is scoped
+to the user's organization.
 
 ```http
 POST /api/work-items
 Content-Type: application/json
 
-{
-  "message": "Water is leaking from the bathroom sink at 225 Market Street."
-}
+{ "message": "Water is leaking from the bathroom sink at 225 Market Street." }
 ```
 
-### Example: Generate Proposed Action
-
 ```http
-POST /api/work-items/{workItemId}/proposed-actions
-```
-
-### Example: Approve Proposed Action
-
-```http
-POST /api/work-items/proposed-actions/{proposedActionId}/approve
+POST /api/work-items/proposed-actions/{id}/approve
 Content-Type: application/json
 
-{
-  "finalResponse": "Optional edited response. Defaults to the AI draft."
-}
+{ "finalResponse": "Optional edited reply. Defaults to the AI draft." }
 ```
 
-### Example: Close an Escalated or Waiting Work Item
-
-```http
-POST /api/work-items/{workItemId}/close
-Content-Type: application/json
-
-{
-  "status": "COMPLETED"
-}
-```
-
-Requests that trigger AI calls (`POST /api/work-items` and
-`POST /api/work-items/{id}/proposed-actions`) are rate limited per client and
-capped per day. Limited requests return `429`.
+Requests that call the AI are rate limited per client and per day (`429`),
+and count against the organization's monthly quota (`429
+AI_QUOTA_EXCEEDED`). An expired trial returns `403 TRIAL_EXPIRED`, but
+existing data stays readable.
 
 ---
 
 ## Running Locally
 
-### Prerequisites
-
-- Java 21
-- Node.js and npm
-- Docker
-- OpenAI API key
-
-### 1. Clone the Repository
+Prerequisites: Java 21, Node.js, Docker, an OpenAI API key and a Supabase
+project (for sign-in).
 
 ```bash
 git clone git@github.com:harleen-ghuman/clerova.git
 cd clerova
+docker compose up -d                  # local PostgreSQL
 ```
 
-### 2. Start PostgreSQL
-
-```bash
-docker compose up -d
-```
-
-The local development database is configured by `compose.yaml`.
-
-### 3. Configure OpenAI
-
-Set your API key:
-
-```bash
-export OPENAI_API_KEY="your-api-key"
-```
-
-Do not commit API keys or other secrets to the repository.
-
-### 4. Start the Backend
+**Backend:**
 
 ```bash
 cd backend
-./mvnw spring-boot:run
+export OPENAI_API_KEY="..."
+export SUPABASE_URL="https://<project-ref>.supabase.co"
+./mvnw spring-boot:run                # http://localhost:8080
 ```
 
-Backend:
-
-```text
-http://localhost:8080
-```
-
-Health check:
-
-```bash
-curl http://localhost:8080/api/health
-```
-
-### 5. Start the Frontend
-
-In another terminal:
+**Frontend:** copy `frontend/.env.example` to `frontend/.env.local` and fill
+in the Supabase URL and anon key.
 
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev                           # http://localhost:5173
 ```
 
-Frontend:
+Add `http://localhost:5173` to the Supabase redirect URLs so confirmation
+links work locally. Email intake stays off locally unless the Postmark
+variables are set. You can still type requests in the app.
 
-```text
-http://localhost:5173
-```
+Never commit API keys or passwords. `.env.local` is git-ignored.
 
 ---
 
-## Environment Configuration
+## Configuration
 
 ### Backend
 
-```text
-OPENAI_API_KEY
-DATABASE_URL
-DATABASE_USERNAME
-DATABASE_PASSWORD
-CORS_ALLOWED_ORIGIN
-PORT
-SUPABASE_URL          (e.g. https://abcd1234.supabase.co)
-```
+| Variable | Purpose |
+| --- | --- |
+| `OPENAI_API_KEY` | OpenAI key |
+| `DATABASE_URL`, `DATABASE_USERNAME`, `DATABASE_PASSWORD` | PostgreSQL connection (Supabase session mode, port 5432) |
+| `SUPABASE_URL` | Supabase project URL, used to verify access tokens |
+| `CORS_ALLOWED_ORIGIN` | App origin, e.g. `https://app.clerova-ai.com` |
+| `INBOUND_EMAIL_DOMAIN` | e.g. `in.clerova-ai.com`; enables email intake |
+| `INBOUND_WEBHOOK_PASSWORD` | Basic-auth password for the Postmark webhook |
+| `POSTMARK_SERVER_TOKEN` | Enables sending replies |
+| `PORT` | Server port (default 8080) |
 
-Optional configuration:
+Optional:
 
-```text
-SHOW_SQL
-FORMAT_SQL
-AI_RATE_LIMIT_PER_CLIENT_PER_MINUTE   (default 10)
-AI_RATE_LIMIT_GLOBAL_PER_DAY          (default 500)
-TRIAL_DAYS                            (default 14)
-TRIAL_AI_MONTHLY_LIMIT                (default 100)
-SUPABASE_JWT_SECRET                   (only for projects on the legacy JWT secret)
-OPENAI_BASE_URL                       (optional, defaults to api.openai.com)
-INBOUND_EMAIL_DOMAIN                  (e.g. in.clerova-ai.com; enables email intake)
-INBOUND_WEBHOOK_USERNAME              (default postmark)
-INBOUND_WEBHOOK_PASSWORD              (enables email intake)
-POSTMARK_SERVER_TOKEN                 (enables sending replies)
-EMAIL_PROCESSING_INTERVAL_MS          (default 5000)
-```
+| Variable | Default |
+| --- | --- |
+| `TRIAL_DAYS` | 14 |
+| `TRIAL_AI_MONTHLY_LIMIT` | 100 |
+| `AI_RATE_LIMIT_PER_CLIENT_PER_MINUTE` | 10 |
+| `AI_RATE_LIMIT_GLOBAL_PER_DAY` | 500 |
+| `DB_POOL_SIZE`, `DB_POOL_MIN_IDLE` | 5, 2 |
+| `INBOUND_WEBHOOK_USERNAME` | postmark |
+| `EMAIL_PROCESSING_INTERVAL_MS` | 5000 |
+| `SUPABASE_JWT_SECRET` | only for projects on the legacy JWT secret |
+| `OPENAI_BASE_URL`, `POSTMARK_API_URL` | official endpoints |
+| `SHOW_SQL`, `FORMAT_SQL` | false |
 
-### Database Migrations
-
-The schema is managed by Flyway migrations in
-`backend/src/main/resources/db/migration`, and Hibernate only validates it.
-Databases created before Flyway was introduced are baselined at version 1
-automatically on first start.
-
-On PostgreSQL, `db/vendor/postgresql/afterMigrate.sql` runs after every
-migration. It enables row level security on every table and revokes the
-Supabase Data API roles (`anon`, `authenticated`), so the anon key used by
-the frontend for sign-in cannot read or change application data. The
-backend connects as the table owner and is not affected.
-
-Flyway takes a PostgreSQL advisory lock while migrating, so `DATABASE_URL`
-should use a direct or session-mode connection (Supabase port `5432`), not the
-transaction-mode pooler (port `6543`).
+The connection pool is kept small because the Supabase session pooler has a
+fixed client limit, and old and new instances overlap during a Render
+deploy.
 
 ### Frontend
 
@@ -661,98 +343,52 @@ VITE_SUPABASE_URL
 VITE_SUPABASE_ANON_KEY
 ```
 
-See `frontend/.env.example`.
+### Database
+
+Flyway migrations live in `backend/src/main/resources/db/migration`, and
+Hibernate only validates the schema. On PostgreSQL,
+`db/vendor/postgresql/afterMigrate.sql` runs after every migration. It
+enables row level security on every table and revokes the Supabase Data API
+roles, so the public anon key can't read application data. The backend
+connects as the table owner and is unaffected.
 
 ---
 
-## Accounts and Sign-Up
+## Production Setup
 
-Anyone can sign up. Authentication is handled by Supabase Auth (email and
-password); the backend verifies Supabase access tokens.
+### Supabase
 
-1. A visitor creates an account and confirms their email.
-2. On first sign-in they set up their workspace: company name, industry
-   (property management or trucking), company size, and how they heard about
-   Clerova.
-3. This creates a trial organization with the user as its owner. All work
-   items, proposed actions and maintenance requests belong to that
-   organization and are invisible to others.
+- **Authentication, Email provider:** enable sign-up and keep "Confirm
+  email" on.
+- **URL Configuration:** set the Site URL to `https://app.clerova-ai.com`
+  and add it to the redirect URLs.
+- **SMTP:** send auth emails through Postmark so they come from the Clerova
+  domain.
+- **Optional:** turn on CAPTCHA under Attack Protection.
 
-New organizations get a free trial (`TRIAL_DAYS`) with a monthly AI request
-quota (`TRIAL_AI_MONTHLY_LIMIT`). When the trial ends, existing data stays
-readable but new AI processing is blocked until the plan is changed.
+### Postmark
 
-Marketing links can carry `?utm_source=instagram` (or `?ref=...`). The source
-is remembered in the browser and saved with the organization at onboarding.
-
----
-
-## Email Intake
-
-Each organization gets a forwarding address such as
-`oakridge-rentals-k3j9x2@in.clerova-ai.com` (shown on the Email Setup page).
-Users forward their requests inbox to it, or set a filter that forwards only
-some emails.
-
-```text
-Email forwarded to Clerova
-        |
-        v
-Postmark inbound webhook  ->  stored (duplicates skipped)
-        |
-        v
-Background processor
-  - automated / bulk email ........ Ignored (can be processed anyway)
-  - Gmail forwarding confirmation . Ignored, code shown on Email Setup
-  - reply to a request ............ Added to that request's conversation;
-                                    waiting/escalated requests, and requests
-                                    closed in the last 14 days, return to review
-                                    (older closed requests: new request)
-  - anything else ................. New work item + AI proposal
-        |
-        v
-Human review: edit, approve, then "Send" emails the reply
-```
-
-- Replies are sent from the organization's Clerova address. Their reply-to
-  address carries the work item (`token+wi-<id>@...`), so the sender's
-  answer is threaded onto the same request even if their mail client drops
-  the threading headers. In-Reply-To/References are matched as well.
-- Each new email uses two AI requests from the monthly quota (extraction and
-  proposal). AI failures are retried twice; quota or trial errors mark the
-  email as failed so it can be retried from the Inbox.
-- Attachment names, types and sizes are recorded; file contents are not
-  stored yet.
-
-### Postmark Setup
-
-1. **Inbound:** in a Postmark server, add an inbound domain (for example
-   `in.clerova-ai.com`) with an MX record pointing to
-   `inbound.postmarkapp.com`, and set the inbound webhook URL to
+1. **Inbound:** add the inbound domain `in.clerova-ai.com` (MX record to
+   `inbound.postmarkapp.com`), and set the webhook URL to
    `https://postmark:<INBOUND_WEBHOOK_PASSWORD>@api.clerova-ai.com/api/inbound/postmark`.
-2. **Outbound:** verify the same domain as a sender signature (DKIM and
-   Return-Path DNS records) and set `POSTMARK_SERVER_TOKEN` to the server's
-   API token.
+2. **Outbound:** verify `in.clerova-ai.com` as a sender domain (DKIM and
+   Return-Path records), then set `POSTMARK_SERVER_TOKEN`.
 3. Set `INBOUND_EMAIL_DOMAIN` and `INBOUND_WEBHOOK_PASSWORD` on the backend.
 
-Without these settings the app works as before: the Inbox explains that
-email intake is not available, and approved responses are copied manually.
+### DNS (Cloudflare)
 
-### Supabase Setup
+| Record | Value |
+| --- | --- |
+| `in` MX | `inbound.postmarkapp.com` |
+| Postmark DKIM TXT | for `clerova-ai.com` and `in.clerova-ai.com` |
+| `pm-bounces` CNAME | `pm.mtasv.net` (DNS only) |
+| Root MX | Google Workspace, for `hello@clerova-ai.com` |
 
-In the Supabase dashboard:
+---
 
-- **Authentication → Sign In / Providers → Email:** enable email sign-up and
-  keep "Confirm email" on.
-- **Authentication → URL Configuration:** set the Site URL to the app URL
-  (for example `https://app.clerova-ai.com`) and add it to the redirect URLs,
-  so confirmation and password reset links return to the app.
-- **Optional:** enable CAPTCHA protection (Authentication → Attack Protection)
-  to reduce bot sign-ups.
+## Admin
 
-### Managing Trials
-
-Trials can be extended or converted to a paid plan with SQL, for example:
+Extend a trial or move an organization to a paid plan:
 
 ```sql
 update organizations
@@ -760,7 +396,8 @@ set plan = 'STARTER', ai_monthly_limit = 1000, trial_ends_at = null
 where name = 'Acme Property Group';
 ```
 
-### Sign-Up Interest
+Where sign-ups come from (links can carry `?utm_source=instagram` or
+`?ref=...`):
 
 ```sql
 select industry, company_size, referral_source, count(*)
@@ -773,145 +410,37 @@ order by count(*) desc;
 Data created before accounts existed belongs to the `Demo Property
 Management` organization.
 
-Local development defaults are provided where appropriate.
-
-Production secrets are supplied through environment variables and are not stored in the repository.
-
 ---
 
 ## Testing
 
-### Backend
-
-Run the standard backend test suite:
-
 ```bash
-cd backend
-./mvnw test
+cd backend && ./mvnw test        # H2 in PostgreSQL mode, runs the Flyway migrations
+cd frontend && npm run build     # type-check and production build
+cd frontend && npm run lint
 ```
 
-Backend tests use an H2 in-memory database (PostgreSQL mode). The Flyway
-migrations run against it, so the tests also check that the migrations match
-the JPA entities.
-
-AI evaluation tests are kept separate from normal application tests so standard builds do not require live model calls.
-
-### Frontend
-
-Build the production frontend:
-
-```bash
-cd frontend
-npm run build
-```
-
-The build runs TypeScript validation followed by the Vite production build.
+AI evaluation tests are kept separate so normal builds don't make live model
+calls.
 
 ---
 
-## Production Deployment
+## Screenshots
 
-Clerova is deployed as a full-stack application.
-
-### Frontend
-
-```text
-https://app.clerova-ai.com
-```
-
-React and TypeScript frontend deployed on Render.
-
-### Backend
-
-```text
-https://api.clerova-ai.com
-```
-
-Spring Boot backend deployed as a containerized web service on Render.
-
-### Database
-
-Production application state is persisted in PostgreSQL hosted by Supabase.
-
-### Website
-
-```text
-https://clerova-ai.com
-```
+![Dashboard](docs/screenshots/dashboard.png)
+![AI suggestion and review](docs/screenshots/ai-review.png)
+![Maintenance jobs](docs/screenshots/maintenance.png)
 
 ---
 
-## Project Status
+## Roadmap
 
-Clerova is a deployed full-stack MVP demonstrating AI-assisted property operations with human oversight.
-
-### Implemented
-
-- AI request extraction and structured classification
-- Maintenance, billing, leasing, complaint, and general request categories
-- Work-item persistence
-- AI action recommendations
-- AI-drafted resident responses
-- Human approval and rejection
-- Proposal regeneration
-- Maintenance request execution
-- Maintenance lifecycle management
-- Operational notes
-- Parent/child workflow synchronization
-- Dashboard and operational UI
-- AI approval queue
-- Responsive desktop and mobile navigation
-- PostgreSQL persistence with Supabase
-- Backend automated tests
-- AI evaluation coverage
-- Environment-based production configuration
-- Production frontend and backend deployment
-- Custom frontend and API domains
-- Flyway database migrations
-- AI request rate limiting
-- Open sign-up with Supabase Auth
-- Email intake by forwarding address, with threading and replies
-- Work item audit trail
-- Multi-tenant organizations with free trials and AI quotas
-
-### Planned
-
-- Gmail and Microsoft 365 inbox connections (OAuth)
+- Redesigned review screen: one Requests list with filters, plus a Jobs board
+- Gmail and Microsoft 365 connections (OAuth) instead of forwarding
 - Attachment storage and document extraction
 - Vendor assignment and dispatch
-- Audit/event history
-- Additional operational workflows
-- Expanded automated test coverage
-
----
-
-## Live Demo
-
-The deployed Clerova MVP is available at:
-
-**https://app.clerova-ai.com**
-
-Production API:
-
-**https://api.clerova-ai.com**
-
-Project website:
-
-**https://clerova-ai.com**
-
-The demo includes sample property-management scenarios across maintenance, billing, and leasing workflows.
-
-> Clerova is currently an actively developed MVP. The public demo uses sample property-management data and is intended to demonstrate the product workflow.
-
----
-
-## Why I Built This
-
-Clerova explores how LLMs can be incorporated into operational software rather than used only as standalone chat interfaces.
-
-The project combines AI reasoning with traditional backend workflows, persistent state, deterministic business logic, human approval, and operational execution.
-
-I designed and implemented Clerova as a full-stack project spanning AI integration, backend architecture, persistence, REST API design, workflow orchestration, frontend product development, testing, and production deployment.
+- Paid plans and billing
+- New verticals, starting with real estate brokerages
 
 ---
 
