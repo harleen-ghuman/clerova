@@ -1,5 +1,6 @@
 package com.clerova.email;
 
+import com.clerova.exception.ConflictException;
 import com.clerova.domain.InboundMessage;
 import com.clerova.domain.InboundMessageStatus;
 import com.clerova.domain.Organization;
@@ -59,7 +60,7 @@ public class InboxService {
 
         if (message.getStatus() != InboundMessageStatus.IGNORED
                 && message.getStatus() != InboundMessageStatus.FAILED) {
-            throw new IllegalStateException("Only ignored or failed emails can be processed again");
+            throw new ConflictException("This email was already processed.");
         }
 
         message.setAutomated(false);

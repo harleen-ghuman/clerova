@@ -438,7 +438,7 @@ class EmailIntakeTest {
     }
 
     @Test
-    void failureReasonIsShownInTheInbox() throws Exception {
+    void failureReasonInTheInboxIsPlainAndHidesProviderErrors() throws Exception {
         when(aiService.extract(anyString())).thenThrow(new AiServiceException(
                 "Failed to process AI request",
                 new RuntimeException("401: Incorrect API key provided")
@@ -452,7 +452,7 @@ class EmailIntakeTest {
         mockMvc.perform(get("/api/inbox").with(user))
                 .andExpect(jsonPath("$[0].status").value("RECEIVED"))
                 .andExpect(jsonPath("$[0].statusReason").value(
-                        "Will retry. AI processing failed: 401: Incorrect API key provided"));
+                        "Couldn't read this email yet. Clerova will try again in a few minutes."));
     }
 
     @Test

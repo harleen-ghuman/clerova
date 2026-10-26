@@ -8,7 +8,7 @@ public record UpdateMaintenanceRequest(
 
         @Size(
                 max = 5000,
-                message = "Notes must not exceed 5000 characters"
+                message = "Notes must be 5,000 characters or fewer."
         )
         String notes
 ) {

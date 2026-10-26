@@ -1,5 +1,6 @@
 package com.clerova.service;
 
+import com.clerova.exception.ConflictException;
 import com.clerova.ai.AiService;
 import com.clerova.domain.InboundMessage;
 import com.clerova.domain.MaintenanceRequestStatus;
@@ -286,7 +287,7 @@ public class WorkItemService {
     private void ensureCanGenerateProposal(WorkItem workItem) {
 
         if (CLOSED_STATUSES.contains(workItem.getStatus())) {
-            throw new IllegalStateException(
+            throw new ConflictException(
                     "This request is already closed."
             );
         }
@@ -298,7 +299,7 @@ public class WorkItemService {
                     if (latestAction.getStatus()
                             == ProposedActionStatus.PENDING_APPROVAL) {
 
-                        throw new IllegalStateException(
+                        throw new ConflictException(
                                 "This request already has a suggestion waiting for review."
                         );
                     }
@@ -308,7 +309,7 @@ public class WorkItemService {
                     if (latestAction.getStatus() != ProposedActionStatus.REJECTED
                             && workItem.getStatus() != WorkItemStatus.NEW) {
 
-                        throw new IllegalStateException(
+                        throw new ConflictException(
                                 "A suggestion for this request was already approved."
                         );
                     }
@@ -492,8 +493,8 @@ public class WorkItemService {
         if (proposedAction.getStatus()
                 != ProposedActionStatus.PENDING_APPROVAL) {
 
-            throw new IllegalStateException(
-                    "Only pending proposed actions can be " + verb
+            throw new ConflictException(
+                    "This suggestion was already handled. Refresh to see the latest."
             );
         }
 
@@ -513,22 +514,22 @@ public class WorkItemService {
     ) {
 
         if (!CLOSED_STATUSES.contains(status)) {
-            throw new IllegalStateException(
-                    "Work items can only be closed as COMPLETED or CANCELLED"
+            throw new ConflictException(
+                    "Choose whether the request is done or cancelled."
             );
         }
 
         WorkItem workItem = getWorkItem(organizationId, workItemId);
 
         if (CLOSED_STATUSES.contains(workItem.getStatus())) {
-            throw new IllegalStateException(
+            throw new ConflictException(
                     "This request is already closed."
             );
         }
 
         if (workItem.getStatus() == WorkItemStatus.WAITING_FOR_APPROVAL) {
-            throw new IllegalStateException(
-                    "Approve or reject the pending proposed action first"
+            throw new ConflictException(
+                    "Approve or dismiss Clerova's suggestion first."
             );
         }
 
@@ -536,8 +537,8 @@ public class WorkItemService {
                 workItemId,
                 ACTIVE_MAINTENANCE_STATUSES
         )) {
-            throw new IllegalStateException(
-                    "Complete or cancel the maintenance request to close this work item"
+            throw new ConflictException(
+                    "Finish or cancel the job for this request first."
             );
         }
 

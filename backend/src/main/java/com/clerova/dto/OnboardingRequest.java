@@ -7,20 +7,20 @@ import jakarta.validation.constraints.Size;
 
 public record OnboardingRequest(
 
-        @NotBlank(message = "Organization name is required")
-        @Size(max = 255, message = "Organization name must not exceed 255 characters")
+        @NotBlank(message = "Company name is required.")
+        @Size(max = 255, message = "Company name must be 255 characters or fewer.")
         String organizationName,
 
-        @NotNull(message = "Industry is required")
+        @NotNull(message = "Choose an industry.")
         Industry industry,
 
-        @Size(max = 50, message = "Company size must not exceed 50 characters")
+        @Size(max = 50, message = "Units managed must be 50 characters or fewer.")
         String companySize,
 
-        @Size(max = 255, message = "Referral source must not exceed 255 characters")
+        @Size(max = 255, message = "How you heard about us must be 255 characters or fewer.")
         String referralSource,
 
-        @Size(max = 255, message = "Name must not exceed 255 characters")
+        @Size(max = 255, message = "Name must be 255 characters or fewer.")
         String fullName
 
 ) {

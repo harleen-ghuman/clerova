@@ -1,5 +1,6 @@
 package com.clerova.email;
 
+import com.clerova.exception.ConflictException;
 import com.clerova.domain.ActionType;
 import com.clerova.domain.InboundMessage;
 import com.clerova.domain.Organization;
@@ -77,7 +78,7 @@ public class ReplyService {
             throw new ApiException(
                     HttpStatus.CONFLICT,
                     "EMAIL_SENDING_DISABLED",
-                    "Sending email is not set up yet. Copy the response and send it yourself."
+                    "Sending email isn't set up yet. Copy the reply and send it from your own email."
             );
         }
 
@@ -133,21 +134,21 @@ public class ReplyService {
                 .orElseThrow(() -> new NotFoundException("Proposed action not found: " + proposedActionId));
 
         if (action.getStatus() != ProposedActionStatus.APPROVED) {
-            throw new IllegalStateException(
+            throw new ConflictException(
                     action.getStatus() == ProposedActionStatus.EXECUTED
                             ? "This reply was already sent."
-                            : "Only approved responses can be sent"
+                            : "Approve the reply before sending it."
             );
         }
 
         if (action.getActionType() == ActionType.NO_ACTION) {
-            throw new IllegalStateException("There's no reply to send.");
+            throw new ConflictException("There's no reply to send.");
         }
 
         WorkItem workItem = action.getWorkItem();
 
         if (workItem.getSource() != WorkItemSource.EMAIL || workItem.getSenderEmail() == null) {
-            throw new IllegalStateException("This request didn't come in by email, so there's no one to reply to.");
+            throw new ConflictException("This request didn't come in by email, so there's no one to reply to.");
         }
 
         String body = action.getFinalResponse() != null
@@ -155,7 +156,7 @@ public class ReplyService {
                 : action.getDraftedResponse();
 
         if (body == null || body.isBlank()) {
-            throw new IllegalStateException("The reply is empty. Add a message before sending.");
+            throw new ConflictException("The reply is empty. Add a message before sending.");
         }
 
         Organization organization = organizationRepository.findById(organizationId).orElseThrow();

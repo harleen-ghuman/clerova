@@ -1,5 +1,6 @@
 package com.clerova.service;
 
+import com.clerova.exception.ConflictException;
 import com.clerova.domain.MaintenanceRequest;
 import com.clerova.domain.MaintenanceRequestStatus;
 import com.clerova.domain.ProposedAction;
@@ -87,8 +88,8 @@ public class ActionExecutionService {
         MaintenanceRequestStatus currentStatus = request.getStatus();
 
         if (currentStatus.isTerminal()) {
-            throw new IllegalStateException(
-                    "Completed or cancelled maintenance requests cannot be changed"
+            throw new ConflictException(
+                    "This job is already done or cancelled."
             );
         }
 
@@ -96,9 +97,8 @@ public class ActionExecutionService {
                 status != null && status != currentStatus;
 
         if (statusChanged && !currentStatus.canTransitionTo(status)) {
-            throw new IllegalStateException(
-                    "Cannot move a maintenance request from "
-                            + currentStatus + " to " + status
+            throw new ConflictException(
+                    "This job can't move to that step. Refresh and try again."
             );
         }
 

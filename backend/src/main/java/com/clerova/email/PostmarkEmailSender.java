@@ -1,5 +1,7 @@
 package com.clerova.email;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -22,6 +24,10 @@ import java.util.Map;
  */
 @Component
 public class PostmarkEmailSender implements EmailSender {
+
+    private static final Logger log = LoggerFactory.getLogger(PostmarkEmailSender.class);
+    private static final String UNAVAILABLE =
+            "Couldn't reach the email service. Please try again in a minute.";
 
     private final URI apiUrl;
     private final EmailProperties emailProperties;
@@ -78,19 +84,32 @@ public class PostmarkEmailSender implements EmailSender {
         try {
             response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         } catch (IOException e) {
-            throw new EmailSendException("Could not reach the email service", e);
+            throw new EmailSendException(UNAVAILABLE, e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new EmailSendException("Sending was interrupted", e);
+            throw new EmailSendException(UNAVAILABLE, e);
         }
 
-        JsonNode result = objectMapper.readTree(response.body());
+        JsonNode result;
 
-        if (response.statusCode() != 200 || result.path("ErrorCode").asInt(-1) != 0) {
-            throw new EmailSendException(
-                    "The email service rejected the message: " + result.path("Message").asString("unknown error"),
-                    null
-            );
+        try {
+            result = objectMapper.readTree(response.body());
+        } catch (RuntimeException e) {
+            log.warn("Postmark returned {} with a body that isn't JSON", response.statusCode());
+            throw new EmailSendException(UNAVAILABLE, e);
+        }
+
+        int errorCode = result.path("ErrorCode").asInt(-1);
+
+        if (response.statusCode() != 200 || errorCode != 0) {
+            log.warn("Postmark rejected an email ({}): {}", errorCode, result.path("Message").asString(""));
+
+            // Messages are shown to the person sending the reply
+            throw new EmailSendException(switch (errorCode) {
+                case 300 -> "That email address doesn't look valid, so the reply wasn't sent.";
+                case 406 -> "This address bounced or blocked an earlier email, so the reply wasn't sent. Copy it and send it from your own email.";
+                default -> "The email service couldn't send this reply. Please try again in a minute.";
+            }, null);
         }
 
         return result.path("MessageID").asString(null);

@@ -10,7 +10,7 @@ public record ApproveProposedActionRequest(
 
         @Size(
                 max = 10000,
-                message = "Response must not exceed 10000 characters"
+                message = "The reply must be 10,000 characters or fewer."
         )
         String finalResponse
 
