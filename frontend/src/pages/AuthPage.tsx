@@ -143,7 +143,7 @@ export function AuthPage({
         <form className="auth-form" onSubmit={handleSubmit}>
           {needsEmail && (
             <label>
-              Work email
+              Email
               <input
                 type="email"
                 autoComplete="email"
