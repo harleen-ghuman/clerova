@@ -195,7 +195,7 @@ export function RequestDetail({
   const meta = [
     workItem.address,
     capitalize(workItem.category),
-    `${capitalize(workItem.priority)} priority`,
+    workItem.priority ? `${capitalize(workItem.priority)} priority` : null,
   ].filter(Boolean);
 
   return (
