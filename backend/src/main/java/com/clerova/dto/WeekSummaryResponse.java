@@ -15,6 +15,10 @@ public record WeekSummaryResponse(
         long jobsCompleted,
         Long medianReplyMinutes,
         long minutesSaved,
-        int minutesPerRequest
+        int minutesPerRequest,
+        /** Since the workspace started, for the get-started checklist. */
+        long allTimeRequests,
+        /** Suggestions approved, whether the reply was emailed or copied. */
+        long allTimeApprovals
 ) {
 }

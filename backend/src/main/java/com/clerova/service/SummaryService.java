@@ -2,10 +2,12 @@ package com.clerova.service;
 
 import com.clerova.domain.MaintenanceRequestStatus;
 import com.clerova.domain.OutboundMessage;
+import com.clerova.domain.ProposedActionStatus;
 import com.clerova.dto.WeekSummaryResponse;
 import com.clerova.repository.InboundMessageRepository;
 import com.clerova.repository.MaintenanceRequestRepository;
 import com.clerova.repository.OutboundMessageRepository;
+import com.clerova.repository.ProposedActionRepository;
 import com.clerova.repository.WorkItemRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,17 +30,20 @@ public class SummaryService {
     private final InboundMessageRepository inboundMessageRepository;
     private final OutboundMessageRepository outboundMessageRepository;
     private final MaintenanceRequestRepository maintenanceRequestRepository;
+    private final ProposedActionRepository proposedActionRepository;
 
     public SummaryService(
             WorkItemRepository workItemRepository,
             InboundMessageRepository inboundMessageRepository,
             OutboundMessageRepository outboundMessageRepository,
-            MaintenanceRequestRepository maintenanceRequestRepository
+            MaintenanceRequestRepository maintenanceRequestRepository,
+            ProposedActionRepository proposedActionRepository
     ) {
         this.workItemRepository = workItemRepository;
         this.inboundMessageRepository = inboundMessageRepository;
         this.outboundMessageRepository = outboundMessageRepository;
         this.maintenanceRequestRepository = maintenanceRequestRepository;
+        this.proposedActionRepository = proposedActionRepository;
     }
 
     @Transactional(readOnly = true)
@@ -57,7 +62,12 @@ public class SummaryService {
                         organizationId, MaintenanceRequestStatus.COMPLETED, since),
                 medianReplyMinutes(organizationId, replies),
                 requests * MINUTES_PER_REQUEST,
-                MINUTES_PER_REQUEST
+                MINUTES_PER_REQUEST,
+                workItemRepository.countByOrganizationId(organizationId),
+                proposedActionRepository.countByWorkItem_OrganizationIdAndStatusIn(
+                        organizationId,
+                        List.of(ProposedActionStatus.APPROVED, ProposedActionStatus.EXECUTED)
+                )
         );
     }
 

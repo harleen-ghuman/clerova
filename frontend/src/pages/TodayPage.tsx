@@ -177,16 +177,19 @@ export function TodayPage({
       </header>
 
       {(() => {
-        const hasReply = (summary?.repliesSent ?? 0) > 0;
-        const finished = hasAnyRequest && hasReply;
+        // All-time totals, so established workspaces never see it again
+        const hasRequest = hasAnyRequest || (summary?.allTimeRequests ?? 0) > 0;
+        const hasReply = (summary?.allTimeApprovals ?? 0) > 0;
+        const finished = hasRequest && hasReply;
 
         return (
+          summary !== null &&
           !checklistHidden &&
           !finished && (
             <GetStarted
               welcome={welcome}
               forwardingAddress={forwardingAddress}
-              hasRequest={hasAnyRequest}
+              hasRequest={hasRequest}
               hasReply={hasReply}
               onOpenEmailSetup={onOpenEmailSetup}
               onOpenRequests={() => onOpenRequests("review")}
@@ -203,7 +206,7 @@ export function TodayPage({
         );
       })()}
 
-      {hasAnyRequest && (
+      {(hasAnyRequest || (summary?.allTimeRequests ?? 0) > 0) && (
       <>
       <section aria-labelledby="needs-you">
         <h2 id="needs-you" className="today-heading">Needs you now</h2>

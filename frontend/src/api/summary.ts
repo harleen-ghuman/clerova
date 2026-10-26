@@ -9,6 +9,10 @@ export interface WeekSummary {
   medianReplyMinutes: number | null;
   minutesSaved: number;
   minutesPerRequest: number;
+  /** Since the workspace started. */
+  allTimeRequests: number;
+  /** Suggestions approved, emailed or copied. */
+  allTimeApprovals: number;
 }
 
 export function getWeekSummary(): Promise<WeekSummary> {

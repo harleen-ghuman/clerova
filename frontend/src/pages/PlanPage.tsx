@@ -64,7 +64,7 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
       <div className="auth-card plan-card">
         <div className="auth-brand">
           <span className="brand-mark">C</span>
-          Clerova
+          <strong>Clerova</strong>
         </div>
 
         <h1>{firstTime ? "Start your free trial" : "Choose a plan"}</h1>
@@ -98,7 +98,8 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
         {founding && (
           <p className="plan-founding">
             Founding price, locked in for as long as you stay.
-            {foundingSpotsLeft > 0 && ` ${foundingSpotsLeft} of 20 spots left.`}
+            {foundingSpotsLeft > 0 &&
+              ` ${foundingSpotsLeft} ${foundingSpotsLeft === 1 ? "spot" : "spots"} left.`}
           </p>
         )}
 
