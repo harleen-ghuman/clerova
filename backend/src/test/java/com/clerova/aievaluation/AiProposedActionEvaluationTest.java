@@ -46,6 +46,12 @@ class AiProposedActionEvaluationTest {
 
         assertNotNull(result.draftedResponse);
         assertFalse(result.draftedResponse.isBlank());
+
+        // The resident gets this after approval, from the company
+        String reply = result.draftedResponse.toLowerCase();
+        assertFalse(reply.contains("approv"), "Should not mention approval");
+        assertFalse(reply.contains("pending"), "Should not say anything is pending");
+        assertFalse(reply.contains("clerova"), "Should not mention Clerova");
     }
 
     private WorkItem createWorkItem(

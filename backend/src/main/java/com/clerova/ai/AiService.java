@@ -123,12 +123,14 @@ public class AiService {
     public ProposedActionResult proposeAction(WorkItem workItem, String conversation) {
 
         String workItemContext = """
+            Sender name: %s
             Category: %s
             Priority: %s
             Address: %s
             Summary: %s
             Original message: %s
             """.formatted(
+                workItem.getSenderName() != null ? workItem.getSenderName() : "unknown",
                 workItem.getCategory(),
                 workItem.getPriority(),
                 workItem.getAddress(),
@@ -190,26 +192,39 @@ public class AiService {
                                 Provide a professional draftedResponse suitable for sending
                                 to the resident or customer.
 
-                                Do not claim or imply that any proposed action is currently happening
-                                or has already happened.
+                                HOW THE REPLY IS USED:
 
-                                The action you generate is only a proposal and is awaiting human approval.
+                                A property manager reviews the draftedResponse, may edit it,
+                                and approves it. Only then is it emailed to the resident from
+                                the property management company. So write it as the
+                                company's own reply to the resident:
+                                - Never mention approval, review, proposals, suggestions,
+                                  Clerova, AI, or anything being "pending".
+                                - Greet the sender by first name when the sender name is
+                                  known (for example "Hi Tina,"), otherwise "Hi there,".
+                                - Plain, warm and professional. Short paragraphs. No
+                                  placeholders like [Name] and no signature; the company
+                                  name is added by the email.
 
-                                Do not use phrases such as:
-                                - "we are creating"
-                                - "we have created"
-                                - "we are scheduling"
-                                - "we have scheduled"
-                                - "we are dispatching"
-                                - "we have dispatched"
-                                - "we contacted"
-                                - "we will send someone"
+                                Do not invent actions that nobody has taken. Do not say a
+                                technician, vendor or appointment has been scheduled,
+                                dispatched or contacted, and do not promise a time, date,
+                                cost or outcome.
 
-                                When an operational action is required, describe it as pending approval.
-
-                                For example:
-                                "This appears to require an urgent maintenance request. If approved,
-                                it should be escalated for immediate attention."
+                                What the reply may say for each action:
+                                - CREATE_MAINTENANCE_REQUEST: the issue has been logged as
+                                  a maintenance request and the team will follow up to
+                                  arrange the repair. For anything urgent or unsafe, include
+                                  brief safety steps the resident can take now (for example
+                                  shutting off a water valve) and, for fire, gas or other
+                                  danger, to call emergency services.
+                                - ESCALATE_TO_HUMAN: the message has been passed to the right
+                                  person on the team, who will follow up.
+                                - REQUEST_MORE_INFORMATION: ask only the specific questions
+                                  needed, as a short list.
+                                - RESPOND_TO_CUSTOMER: answer what can be answered from the
+                                  supplied information; otherwise say the team will look into
+                                  it and follow up.
 
                                 INTERNAL DATA AND CUSTOMER COMMUNICATION RULES:
 
@@ -232,8 +247,8 @@ public class AiService {
                                 - do not invent the information;
                                 - do not claim that you already reviewed it;
                                 - do not ask the customer to retrieve it;
-                                - draft a response acknowledging the request and indicate
-                                  that the relevant internal records need to be verified.
+                                - draft a response acknowledging the request and say the
+                                  team will check the records and follow up.
 
                                 Ask the customer for additional information only when it
                                 describes something only the customer can reasonably know,
@@ -258,8 +273,8 @@ public class AiService {
                                   documentation of a charge or payment. Staff will look
                                   up the charge in the account records.
                                 - If required account data is not present in the supplied
-                                  context, acknowledge the issue and indicate that the
-                                  relevant account records need to be verified.
+                                  context, acknowledge the issue and say the team will
+                                  check the account and follow up.
                                 - Do not claim that a fee is valid, invalid, refundable,
                                   or non-refundable without supporting account information.
                                 - Use RESPOND_TO_CUSTOMER for ordinary informational billing
