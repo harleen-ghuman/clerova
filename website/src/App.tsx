@@ -4,7 +4,7 @@ import { SIGN_IN_URL, signUpUrl } from "./appLinks";
 
 const steps = [
   {
-    title: "Forward your inbox",
+    title: "Forward your email",
     text: "Forward the emails you want Clerova to handle. Your inbox stays yours, and you never share your password.",
   },
   {
@@ -12,17 +12,17 @@ const steps = [
     text: "It pulls out the address, type and urgency, suggests the next step and drafts a reply.",
   },
   {
-    title: "You approve and send",
-    text: "Edit the reply if you want, then approve. Clerova emails it and creates the maintenance job if one is needed.",
+    title: "Approve & send",
+    text: "Edit the draft if you want, then click Approve & send. Clerova emails the reply and creates the job if one is needed.",
   },
   {
     title: "Replies come back to the same request",
-    text: "When the resident answers, the conversation continues in one place and returns to your review list.",
+    text: "When the resident answers, the conversation continues in one place and comes back to Needs review.",
   },
 ];
 
 const requestTypes = [
-  { name: "Maintenance", text: "Leaks, heating, appliances. Urgent issues are flagged and turn into jobs you can track." },
+  { name: "Maintenance", text: "Leaks, heating, appliances. Urgent requests are flagged and turn into jobs you can track." },
   { name: "Billing", text: "Late fees and payment questions, sorted and drafted for you to review before anything is sent." },
   { name: "Leasing", text: "Renewals, move-ins and showings, with drafts that leave property details for you to confirm." },
   { name: "Complaints and general", text: "Noise, parking and everything else, sorted so nothing sits unread." },
@@ -120,9 +120,9 @@ function ProductPreview() {
 
 function JobsPreview() {
   const columns = [
-    { title: "Open", dot: "dot-review", cards: [["Kitchen sink leak", "12 Oak St, 4B · Due today"], ["Replace bathroom fan", "310 Cedar Ave · Due Fri"]] },
-    { title: "In progress", dot: "dot-waiting", cards: [["AC not cooling", "5667 Sparrow St · Thu 10 to 12"]] },
-    { title: "Done", dot: "dot-done", cards: [["Smoke detector battery", "1200 Park Ave · Oct 22"]] },
+    { title: "Open", dot: "dot-review", cards: [["Kitchen sink leak", "12 Oak St, Unit 4B · From Tina Alvarez"], ["Replace bathroom fan", "310 Cedar Ave · From Marcus Lee"]] },
+    { title: "In progress", dot: "dot-waiting", cards: [["AC not cooling", "5667 Sparrow St · From Leah Kim"]] },
+    { title: "Done", dot: "dot-done", cards: [["Smoke detector battery", "1200 Park Ave · Done Oct 22"]] },
   ];
 
   return (
@@ -178,7 +178,7 @@ function App() {
             <h1>Your requests inbox, sorted and drafted before you open it.</h1>
             <p className="lead">
               Forward your email to Clerova. It organizes every resident
-              request, suggests the next step and writes the reply. You approve
+              request, suggests the next step and drafts the reply. You approve
               and it's sent.
             </p>
             <div className="hero-actions">
@@ -215,7 +215,7 @@ function App() {
 
         <section className="section split">
           <div>
-            <span className="kicker">You stay in control</span>
+            <span className="kicker">Your approval</span>
             <h2>Clerova suggests. You decide.</h2>
             <p>
               Nothing goes to a resident and no job is created until you
@@ -237,7 +237,7 @@ function App() {
 
         <section className="section">
           <div className="heading">
-            <span className="kicker">Track the work</span>
+            <span className="kicker">Jobs</span>
             <h2>Approved repairs land on your Jobs board</h2>
             <p>
               Move each job from open to in progress to done. When a job is
@@ -249,7 +249,7 @@ function App() {
 
         <section className="section">
           <div className="heading">
-            <span className="kicker">Every kind of request</span>
+            <span className="kicker">Request types</span>
             <h2>One list for everything residents send</h2>
           </div>
           <div className="types">
@@ -264,7 +264,7 @@ function App() {
 
         <section className="section split" id="setup">
           <div>
-            <span className="kicker">Easy to start</span>
+            <span className="kicker">Getting started</span>
             <h2>Keep your inbox. No need to share it.</h2>
             <p>
               Clerova never asks for your email password or access to your
@@ -298,7 +298,7 @@ function App() {
                   <strong>${plan.price}</strong> / month
                 </p>
                 <p className="price-founding">
-                  Founding customers: ${plan.founding} / month for life
+                  Founding customers: ${plan.founding} / month for as long as you stay
                 </p>
                 <ul>
                   <li>{plan.requests}</li>
@@ -313,8 +313,8 @@ function App() {
             ))}
           </div>
           <p className="pricing-footnote">
-            Founding prices are for our first 20 customers and stay as long as
-            you do. Need more requests? Email hello@clerova-ai.com.
+            Founding prices are for our first 20 customers and stay the same for
+            as long as you stay. Need more requests? Email hello@clerova-ai.com.
           </p>
         </section>
 
