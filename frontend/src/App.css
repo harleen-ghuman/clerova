@@ -1792,3 +1792,138 @@ h3 {
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================
+   Plans and billing
+   ========================================================= */
+
+.plan-card {
+  max-width: 620px;
+}
+
+.plan-notice {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--brand-line);
+  border-radius: var(--radius-sm);
+  background: var(--brand-soft);
+  font-size: 14px;
+}
+
+.plan-interval {
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--border-faint);
+}
+
+.plan-interval button {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.plan-interval button.active {
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.plan-interval span {
+  color: var(--success);
+  font-size: 12px;
+}
+
+.plan-founding {
+  margin: 0 0 14px;
+  color: var(--success);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.plan-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.plan-option {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+}
+
+.plan-option h2 {
+  font-size: 16px;
+}
+
+.plan-price {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.plan-price strong {
+  color: var(--text);
+  font-size: 26px;
+}
+
+.plan-price s {
+  margin-left: 8px;
+}
+
+.plan-requests {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.plan-option .primary-button {
+  margin-top: auto;
+}
+
+.billing-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 28px;
+  border-bottom: 1px solid #fedf89;
+  background: var(--warning-soft);
+  font-size: 14px;
+}
+
+.sidebar-billing {
+  display: block;
+  margin: 6px 0 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--brand);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .plan-options {
+    grid-template-columns: 1fr;
+  }
+
+  .billing-banner {
+    padding: 10px 16px;
+  }
+}
+
+.plan-card .auth-description {
+  margin-bottom: 16px;
+}

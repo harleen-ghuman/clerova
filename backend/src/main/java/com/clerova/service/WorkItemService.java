@@ -86,7 +86,7 @@ public class WorkItemService {
             UUID actorUserId
     ) {
 
-        aiUsageService.consumeAiRequest(organizationId);
+        aiUsageService.consumeRequest(organizationId);
 
         ExtractionResult extraction =
                 aiService.extract(message);
@@ -143,7 +143,7 @@ public class WorkItemService {
 
         UUID organizationId = email.getOrganizationId();
 
-        aiUsageService.consumeAiRequest(organizationId);
+        aiUsageService.consumeRequest(organizationId);
 
         String content = email.getContentText() != null ? email.getContentText() : "";
 
@@ -242,7 +242,7 @@ public class WorkItemService {
 
         ensureCanGenerateProposal(workItem);
 
-        aiUsageService.consumeAiRequest(organizationId);
+        aiUsageService.requireAccess(organizationId);
 
         ProposedActionResult result = aiService.proposeAction(
                 workItem,

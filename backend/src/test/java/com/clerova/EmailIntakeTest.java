@@ -472,7 +472,7 @@ class EmailIntakeTest {
         mockMvc.perform(get("/api/inbox").with(user))
                 .andExpect(jsonPath("$[0].status").value("FAILED"))
                 .andExpect(jsonPath("$[0].statusReason").value(
-                        "You have used all AI requests included in your plan this month."));
+                        "You have used all requests included in your plan this month."));
     }
 
     @Test

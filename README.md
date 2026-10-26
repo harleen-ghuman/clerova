@@ -19,23 +19,25 @@ Property management is the live focus.
 
 1. **Sign up** at app.clerova-ai.com and confirm your email.
 2. **Set up your workspace:** company name, industry, size and how you heard
-   about Clerova. This starts a 14-day free trial.
-3. **Forward your email** to your Clerova address (shown on the Email Setup
+   about Clerova.
+3. **Choose a plan and add a card.** The first 14 days are free. Nothing is
+   charged until the trial ends, and cancelling before then costs nothing.
+4. **Forward your email** to your Clerova address (shown on the Email Setup
    page), for example `maple-property-k3j9x2@in.clerova-ai.com`. You can
    forward everything or set a filter. You can also type or paste a request
    with **New request**.
-4. **Clerova organizes it.** Each new request gets an address, category,
+5. **Clerova organizes it.** Each new request gets an address, category,
    priority and summary, a recommended next step with its reasoning, and a
    drafted reply.
-5. **You review.** Edit the draft, then approve or reject. Rejecting returns
+6. **You review.** Edit the draft, then approve or reject. Rejecting returns
    the request so a new suggestion can be generated.
-6. **Clerova acts on approval.**
-   - Replies are emailed from your Clerova address with **Send**.
+7. **Clerova acts on approval.**
+   - Replies are emailed from your Clerova address with **Approve & send**.
    - Maintenance recommendations create a maintenance job that you move from
      open to in progress to completed.
    - Escalations and requests for more information stay open until you close
      them.
-7. **Replies come back to the same request.** When the resident answers,
+8. **Replies come back to the same request.** When the resident answers,
    their email joins the request's conversation and returns it to review.
    This also applies to requests closed in the last 14 days.
 
@@ -80,6 +82,8 @@ Email forwarded              Request typed in the app
   failed ones
 - Open sign-up with Supabase Auth, onboarding and a free trial
 - Multi-tenant organizations: each organization only sees its own data
+- Stripe billing: card up front, 14-day free trial, founding prices,
+  self-service billing portal
 - Monthly AI quota per organization and per-client rate limits
 - Responsive desktop and mobile interface
 
@@ -219,6 +223,12 @@ GET  /api/health
 GET  /api/me
 POST /api/onboarding
 
+GET  /api/billing/offer
+POST /api/billing/checkout                        ({"plan":"STARTER","interval":"month"})
+POST /api/billing/checkout/{sessionId}/complete
+POST /api/billing/portal
+POST /api/stripe/webhook                          (Stripe webhook, signed)
+
 GET  /api/inbox
 POST /api/inbox/{id}/reprocess
 GET  /api/email-settings
@@ -242,7 +252,7 @@ GET   /api/maintenance-requests
 PATCH /api/maintenance-requests/{id}
 ```
 
-Every route except `/`, `/api/health` and the Postmark webhook needs a
+Every route except `/`, `/api/health` and the Postmark and Stripe webhooks needs a
 Supabase access token (`Authorization: Bearer <token>`), and data is scoped
 to the user's organization.
 
@@ -318,20 +328,25 @@ Never commit API keys or passwords. `.env.local` is git-ignored.
 | `INBOUND_WEBHOOK_PASSWORD` | Basic-auth password for the Postmark webhook |
 | `POSTMARK_SERVER_TOKEN` | Enables sending replies |
 | `PORT` | Server port (default 8080) |
+| `STRIPE_SECRET_KEY` | Turns billing on (a plan is then required to use AI) |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret of the Stripe webhook endpoint |
+| `APP_URL` | Where Stripe sends users back, e.g. `https://app.clerova-ai.com` |
 
 Optional:
 
 | Variable | Default |
 | --- | --- |
 | `TRIAL_DAYS` | 14 |
-| `TRIAL_AI_MONTHLY_LIMIT` | 100 |
+| `TRIAL_AI_MONTHLY_LIMIT` | 100 (only when billing is off) |
+| `STARTER_MONTHLY_REQUESTS`, `GROWTH_MONTHLY_REQUESTS` | 600, 1500 |
+| `FOUNDING_SPOTS` | 20 |
 | `AI_RATE_LIMIT_PER_CLIENT_PER_MINUTE` | 10 |
 | `AI_RATE_LIMIT_GLOBAL_PER_DAY` | 500 |
 | `DB_POOL_SIZE`, `DB_POOL_MIN_IDLE` | 5, 2 |
 | `INBOUND_WEBHOOK_USERNAME` | postmark |
 | `EMAIL_PROCESSING_INTERVAL_MS` | 5000 |
 | `SUPABASE_JWT_SECRET` | only for projects on the legacy JWT secret |
-| `OPENAI_BASE_URL`, `POSTMARK_API_URL` | official endpoints |
+| `OPENAI_BASE_URL`, `POSTMARK_API_URL`, `STRIPE_API_URL` | official endpoints |
 | `SHOW_SQL`, `FORMAT_SQL` | false |
 
 The connection pool is kept small because the Supabase session pooler has a
@@ -389,9 +404,68 @@ connects as the table owner and is unaffected.
 
 ---
 
+### Stripe billing
+
+Billing stays off until `STRIPE_SECRET_KEY` is set. Set it up in test mode
+first, then repeat in live mode.
+
+1. **Products and prices.** Create two products, Starter and Growth, with
+   these recurring prices. Each price needs the **lookup key** shown, since
+   Clerova finds prices by lookup key.
+
+   | Lookup key | Price |
+   | --- | --- |
+   | `starter_monthly` | $99 / month |
+   | `starter_yearly` | $1,089 / year |
+   | `growth_monthly` | $189 / month |
+   | `growth_yearly` | $2,079 / year |
+   | `founding_starter_monthly` | $89 / month |
+   | `founding_starter_yearly` | $979 / year |
+   | `founding_growth_monthly` | $159 / month |
+   | `founding_growth_yearly` | $1,749 / year |
+
+   Yearly prices are 11 months (one month free). The first `FOUNDING_SPOTS`
+   organizations get the founding prices and keep them. The amounts shown in
+   the app are in `frontend/src/utils/plans.ts`, so keep them in sync.
+2. **Customer portal** (Settings → Billing → Customer portal): allow updating
+   payment methods, switching between the Starter and Growth prices, and
+   cancelling at the end of the billing period.
+3. **Webhook** (Developers → Webhooks): add the endpoint
+   `https://api.clerova-ai.com/api/stripe/webhook` with the events
+   `checkout.session.completed` and `customer.subscription.created`,
+   `.updated`, `.deleted`, `.paused` and `.resumed`. Put its signing secret
+   in `STRIPE_WEBHOOK_SECRET`.
+4. **Emails** (Settings → Billing → Subscriptions and emails): turn on the
+   reminder before a trial ends and emails for failed payments.
+5. Set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` and `APP_URL` on the
+   backend.
+
+How it works:
+
+- After onboarding, the app asks for a plan. Stripe Checkout collects a
+  card and starts the 14-day trial (one trial per organization).
+- Organizations can use AI while their subscription is `trialing`, `active`
+  or `past_due` (Stripe retries failed payments). Otherwise existing data
+  stays readable and new requests are blocked.
+- Each new email or typed request counts once against the plan's monthly
+  requests. Suggestions and replies on an existing request don't count.
+- Stripe is the source of truth. Webhooks and the return from Checkout read
+  the current subscription from Stripe and copy its status, plan and dates
+  to the organization.
+
 ## Admin
 
-Extend a trial or move an organization to a paid plan:
+Sign-ups so far (run in the Supabase SQL editor):
+
+```sql
+select
+  (select count(*) from auth.users) as accounts,
+  (select count(*) from auth.users where email_confirmed_at is not null) as confirmed,
+  (select count(*) from organizations where plan <> 'INTERNAL') as workspaces,
+  (select count(*) from organizations where subscription_status in ('trialing', 'active', 'past_due')) as with_card;
+```
+
+Without billing, extend a trial or move an organization to a paid plan:
 
 ```sql
 update organizations
@@ -452,7 +526,6 @@ Clerova's suggestion, ready to edit and approve.
 - Answers grounded in your own documents and records (leases, ledgers,
   policies) through retrieval (RAG)
 - Vendor assignment and dispatch
-- Paid plans and billing
 - New verticals, starting with real estate brokerages
 
 ---

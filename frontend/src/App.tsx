@@ -9,6 +9,7 @@ import {
 import { getMaintenanceRequests } from "./api/MaintenanceRequests";
 import { getEmailSettings } from "./api/email";
 import { errorMessage } from "./api/client";
+import { openBillingPortal } from "./api/billing";
 import { Sidebar, type AppView } from "./components/Sidebar";
 import { RequestsPage } from "./pages/RequestsPage";
 import { JobsPage } from "./pages/JobsPage";
@@ -166,6 +167,30 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
     return created;
   }
 
+  const [billingError, setBillingError] = useState<string | null>(null);
+
+  function manageBilling() {
+    openBillingPortal()
+      .then(({ url }) => window.location.assign(url))
+      .catch((err) =>
+        setBillingError(errorMessage(err, "Unable to open billing. Please try again."))
+      );
+  }
+
+  const planEnds = organization.currentPeriodEnd
+    ? new Date(organization.currentPeriodEnd).toLocaleDateString([], {
+        month: "long",
+        day: "numeric",
+      })
+    : null;
+
+  const billingNotice =
+    organization.subscriptionStatus === "past_due"
+      ? "Your last payment didn't go through. Update your card to keep Clerova running."
+      : organization.cancelAtPeriodEnd && planEnds
+        ? `Your plan is cancelled. You can keep using Clerova until ${planEnds}.`
+        : null;
+
   function handleChanged() {
     void loadRequests();
     void loadJobs();
@@ -181,6 +206,7 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
         userEmail={userEmail}
         onNavigate={navigate}
         onSignOut={onSignOut}
+        onManageBilling={manageBilling}
       />
 
       <nav className="mobile-nav" aria-label="Mobile navigation">
@@ -200,6 +226,22 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
       </nav>
 
       <main className="app-main">
+        {(billingNotice || billingError) && (
+          <div className="billing-banner" role="status">
+            <span>{billingError ?? billingNotice}</span>
+            {organization.subscriptionStatus === "past_due" && (
+              <button type="button" className="rq-button rq-button-small" onClick={manageBilling}>
+                Update card
+              </button>
+            )}
+            {organization.cancelAtPeriodEnd && (
+              <button type="button" className="rq-button rq-button-small" onClick={manageBilling}>
+                Keep my plan
+              </button>
+            )}
+          </div>
+        )}
+
         {activeView === "requests" && (
           <RequestsPage
             requests={requests}

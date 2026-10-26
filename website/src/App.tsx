@@ -30,6 +30,11 @@ const requestTypes = [
   { name: "Complaints and general", text: "Noise, parking and everything else, sorted so nothing sits unread." },
 ];
 
+const plans = [
+  { name: "Starter", price: 99, founding: 89, requests: "600 requests a month", note: "For small teams and portfolios" },
+  { name: "Growth", price: 189, founding: 159, requests: "1,500 requests a month", note: "For busy inboxes and growing portfolios" },
+];
+
 const faqs = [
   {
     q: "Do I have to change my email?",
@@ -44,8 +49,12 @@ const faqs = [
     a: "Replies are sent with your company name, and their answers come straight back to the same request.",
   },
   {
-    q: "What does it cost?",
-    a: "Your first 14 days are free. Cancel anytime before the trial ends and you won't be charged. If you cancel, you can keep using Clerova until your trial's end date.",
+    q: "How does the free trial work?",
+    a: "Your first 14 days are free. We ask for a card when you start, but you won't be charged until the trial ends. Cancel anytime before then and you pay nothing. If you cancel, you can keep using Clerova until your trial's end date.",
+  },
+  {
+    q: "What counts as a request?",
+    a: "One email or message that Clerova organizes for you. Replies in the same conversation don't count as new requests.",
   },
 ];
 
@@ -150,6 +159,7 @@ function App() {
         <nav className="nav-links">
           <a href="#how-it-works">How it works</a>
           <a href="#setup">Getting started</a>
+          <a href="#pricing">Pricing</a>
           <a href="#faq">FAQ</a>
         </nav>
 
@@ -265,6 +275,44 @@ function App() {
             <li>Replies go out under your company name</li>
             <li>Set up in about five minutes after you sign up</li>
           </ul>
+        </section>
+
+        <section className="section" id="pricing">
+          <div className="heading">
+            <span className="kicker">Pricing</span>
+            <h2>Simple plans. 14 days free.</h2>
+            <p>
+              Every plan includes all features. Pay yearly and get one month
+              free.
+            </p>
+          </div>
+          <div className="pricing">
+            {plans.map((plan) => (
+              <article key={plan.name} className="price-card">
+                <h3>{plan.name}</h3>
+                <p className="price-note">{plan.note}</p>
+                <p className="price">
+                  <strong>${plan.price}</strong> / month
+                </p>
+                <p className="price-founding">
+                  Founding customers: ${plan.founding} / month for life
+                </p>
+                <ul>
+                  <li>{plan.requests}</li>
+                  <li>Drafted replies and suggested next steps</li>
+                  <li>Approve &amp; send from your company name</li>
+                  <li>Jobs board for repairs</li>
+                </ul>
+                <a className="button button-primary" href={SIGN_UP_URL}>
+                  Start free trial
+                </a>
+              </article>
+            ))}
+          </div>
+          <p className="pricing-footnote">
+            Founding prices are for our first 20 customers and stay as long as
+            you do. Need more requests? Email hello@clerova-ai.com.
+          </p>
         </section>
 
         <section className="section" id="faq">

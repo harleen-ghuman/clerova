@@ -199,9 +199,15 @@ class AccountAndTenancyTest {
                 UUID.fromString(organizationIdOf(user))
         );
 
-        String workItemId = createWorkItem(user);
+        // The request and its automatic suggestion count once
+        createWorkItem(user);
 
-        mockMvc.perform(post("/api/work-items/{id}/proposed-actions", workItemId).with(user))
+        mockMvc.perform(post("/api/work-items")
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"message":"Another leak"}
+                                """))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.error").value("AI_QUOTA_EXCEEDED"));
 

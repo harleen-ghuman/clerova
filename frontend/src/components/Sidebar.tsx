@@ -1,4 +1,5 @@
 import type { Organization } from "../types/Account";
+import { planName } from "../utils/plans";
 
 export type AppView = "requests" | "jobs" | "inbox" | "email-setup";
 
@@ -10,9 +11,42 @@ interface SidebarProps {
   userEmail: string;
   onNavigate: (view: AppView) => void;
   onSignOut: () => void;
+  onManageBilling: () => void;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+function shortDate(value: string | null): string {
+  return value
+    ? new Date(value).toLocaleDateString([], { month: "short", day: "numeric" })
+    : "";
+}
+
+/** One line about the plan, e.g. "Starter · trial, 12 days left". */
+function planStatus(organization: Organization): string {
+  const days = trialDaysLeft(organization.trialEndsAt);
+
+  if (!organization.billingEnabled || organization.plan === "TRIAL") {
+    return days === null
+      ? planName(organization.plan)
+      : days === 0
+        ? "Free trial ended"
+        : `Free trial · ${days} ${days === 1 ? "day" : "days"} left`;
+  }
+
+  const name = planName(organization.plan);
+
+  switch (organization.subscriptionStatus) {
+    case "trialing":
+      return `${name} · trial, ${days ?? 0} ${days === 1 ? "day" : "days"} left`;
+    case "past_due":
+      return `${name} · payment failed`;
+    default:
+      return organization.cancelAtPeriodEnd
+        ? `${name} · ends ${shortDate(organization.currentPeriodEnd)}`
+        : `${name} plan`;
+  }
+}
 
 function trialDaysLeft(trialEndsAt: string | null): number | null {
   if (!trialEndsAt) {
@@ -33,12 +67,8 @@ export function Sidebar({
   userEmail,
   onNavigate,
   onSignOut,
+  onManageBilling,
 }: SidebarProps) {
-  const daysLeft =
-    organization.plan === "TRIAL"
-      ? trialDaysLeft(organization.trialEndsAt)
-      : null;
-
   const items: { view: AppView; label: string; count?: number; badge?: boolean }[] = [
     { view: "requests", label: "Requests", count: reviewCount, badge: true },
     { view: "jobs", label: "Jobs", count: openJobCount },
@@ -81,15 +111,19 @@ export function Sidebar({
       </nav>
 
       <div className="sidebar-footer">
-        {daysLeft !== null && (
+        {organization.plan !== "INTERNAL" && (
           <p>
-            {daysLeft === 0
-              ? "Free trial ended"
-              : `Free trial · ${daysLeft} ${daysLeft === 1 ? "day" : "days"} left`}
+            {planStatus(organization)}
             <br />
             {organization.aiRequestsUsedThisMonth} / {organization.aiMonthlyLimit}{" "}
-            AI requests
+            requests this month
           </p>
+        )}
+
+        {organization.billingEnabled && organization.subscriptionStatus && (
+          <button type="button" className="sidebar-billing" onClick={onManageBilling}>
+            Manage billing
+          </button>
         )}
 
         <div className="sidebar-account">

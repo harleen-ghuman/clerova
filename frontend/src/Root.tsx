@@ -3,11 +3,23 @@ import type { Session } from "@supabase/supabase-js";
 
 import App from "./App";
 import { getMe } from "./api/account";
+import { completeCheckout } from "./api/billing";
 import { errorMessage } from "./api/client";
 import { isAuthConfigured, supabase } from "./auth/supabase";
 import { AuthPage } from "./pages/AuthPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
+import { PlanPage } from "./pages/PlanPage";
 import type { Me } from "./types/Account";
+
+/** Stripe Checkout sends the user back with ?checkout=success|cancelled. */
+function readCheckoutReturn() {
+  const params = new URLSearchParams(window.location.search);
+
+  return {
+    result: params.get("checkout"),
+    sessionId: params.get("session_id"),
+  };
+}
 
 /**
  * Decides what the visitor sees: sign-in/sign-up, onboarding for a new
@@ -22,7 +34,15 @@ export function Root() {
   const [me, setMe] = useState<Me | null>(null);
   const [meError, setMeError] = useState<string | null>(null);
 
+  const [checkoutReturn] = useState(readCheckoutReturn);
+
   const userId = session?.user.id;
+
+  useEffect(() => {
+    if (checkoutReturn.result) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, [checkoutReturn]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -47,7 +67,16 @@ export function Root() {
 
     let cancelled = false;
 
-    getMe()
+    // Apply a finished checkout first so the new plan shows right away
+    const checkoutDone =
+      checkoutReturn.result === "success" && checkoutReturn.sessionId
+        ? completeCheckout(checkoutReturn.sessionId).catch((err) =>
+            console.error("Failed to confirm checkout:", err)
+          )
+        : Promise.resolve();
+
+    checkoutDone
+      .then(() => getMe())
       .then((result) => {
         if (!cancelled) {
           setMe(result);
@@ -63,7 +92,7 @@ export function Root() {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, checkoutReturn]);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -127,6 +156,22 @@ export function Root() {
       <OnboardingPage
         email={currentMe.email || session.user.email || ""}
         onComplete={setMe}
+        onSignOut={handleSignOut}
+      />
+    );
+  }
+
+  if (currentMe.organization.subscriptionRequired) {
+    return (
+      <PlanPage
+        organization={currentMe.organization}
+        notice={
+          checkoutReturn.result === "cancelled"
+            ? "Checkout was cancelled. Choose a plan when you're ready."
+            : checkoutReturn.result === "success"
+              ? "We're confirming your payment. Refresh in a moment if this page doesn't change."
+              : null
+        }
         onSignOut={handleSignOut}
       />
     );

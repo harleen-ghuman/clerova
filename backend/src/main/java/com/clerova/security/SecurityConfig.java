@@ -51,6 +51,7 @@ public class SecurityConfig {
                         .requestMatchers("/", "/api/health", "/error").permitAll()
                         // Authenticated by the webhook's own basic auth check
                         .requestMatchers(HttpMethod.POST, "/api/inbound/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/stripe/webhook").permitAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
