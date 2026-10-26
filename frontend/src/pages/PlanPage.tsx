@@ -8,6 +8,7 @@ import {
   type PaidPlan,
 } from "../api/billing";
 import type { Organization } from "../types/Account";
+import { getChosenPlan } from "../auth/referral";
 import { PLANS, planPrice } from "../utils/plans";
 
 interface PlanPageProps {
@@ -27,6 +28,7 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
   const [foundingSpotsLeft, setFoundingSpotsLeft] = useState(0);
   const [submitting, setSubmitting] = useState<PaidPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [chosenPlan] = useState(getChosenPlan);
   const [trialEnd] = useState(() =>
     new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toLocaleDateString(
       [],
@@ -106,8 +108,14 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
             const regular = planPrice(item.monthly, interval);
 
             return (
-              <article key={item.plan} className="plan-option">
-                <h2>{item.name}</h2>
+              <article
+                key={item.plan}
+                className={`plan-option ${chosenPlan === item.plan ? "plan-option-chosen" : ""}`}
+              >
+                <h2>
+                  {item.name}
+                  {chosenPlan === item.plan && <span className="plan-pick">Your pick</span>}
+                </h2>
                 <p className="plan-price">
                   <strong>${price.amount.toLocaleString()}</strong> / {price.per}
                   {founding && <s>${regular.amount.toLocaleString()}</s>}

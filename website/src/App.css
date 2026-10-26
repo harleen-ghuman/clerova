@@ -686,3 +686,19 @@ p {
   flex-wrap: wrap;
   gap: 16px;
 }
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.nav-sign-in {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.nav-sign-in:hover {
+  color: var(--ink);
+}

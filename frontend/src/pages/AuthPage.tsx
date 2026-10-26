@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 
+import { wantsSignIn } from "../auth/referral";
 import { supabase } from "../auth/supabase";
 
 type AuthMode =
@@ -44,8 +45,8 @@ export function AuthPage({
   recoveringPassword,
   onPasswordReset,
 }: AuthPageProps) {
-  const [mode, setMode] = useState<AuthMode>(
-    recoveringPassword ? "reset-password" : "sign-up"
+  const [mode, setMode] = useState<AuthMode>(() =>
+    recoveringPassword ? "reset-password" : wantsSignIn() ? "sign-in" : "sign-up"
   );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

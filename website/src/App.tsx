@@ -1,8 +1,6 @@
 import "./App.css";
 
-// Sign-up lives in the app; utm_source lets onboarding record where
-// the visitor came from.
-const SIGN_UP_URL = "https://app.clerova-ai.com/?utm_source=website";
+import { SIGN_IN_URL, signUpUrl } from "./appLinks";
 
 const steps = [
   {
@@ -31,8 +29,8 @@ const requestTypes = [
 ];
 
 const plans = [
-  { name: "Starter", price: 99, founding: 79, requests: "500 requests a month", note: "For small teams and portfolios" },
-  { name: "Growth", price: 189, founding: 149, requests: "1,500 requests a month", note: "For busy inboxes and growing portfolios" },
+  { name: "Starter", plan: "starter" as const, price: 99, founding: 79, requests: "500 requests a month", note: "For small teams and portfolios" },
+  { name: "Growth", plan: "growth" as const, price: 189, founding: 149, requests: "1,500 requests a month", note: "For busy inboxes and growing portfolios" },
 ];
 
 const faqs = [
@@ -163,9 +161,14 @@ function App() {
           <a href="#faq">FAQ</a>
         </nav>
 
-        <a className="button button-small button-dark" href={SIGN_UP_URL}>
-          Start free trial
-        </a>
+        <div className="nav-actions">
+          <a className="nav-sign-in" href={SIGN_IN_URL}>
+            Sign in
+          </a>
+          <a className="button button-small button-dark" href={signUpUrl()}>
+            Start free trial
+          </a>
+        </div>
       </header>
 
       <main id="top">
@@ -179,7 +182,7 @@ function App() {
               and it's sent.
             </p>
             <div className="hero-actions">
-              <a className="button button-primary" href={SIGN_UP_URL}>
+              <a className="button button-primary" href={signUpUrl()}>
                 Start free trial
               </a>
               <a className="button button-plain" href="#how-it-works">
@@ -303,7 +306,7 @@ function App() {
                   <li>Approve &amp; send from your company name</li>
                   <li>Jobs board for repairs</li>
                 </ul>
-                <a className="button button-primary" href={SIGN_UP_URL}>
+                <a className="button button-primary" href={signUpUrl(plan.plan)}>
                   Start free trial
                 </a>
               </article>
@@ -333,7 +336,7 @@ function App() {
         <section className="cta">
           <h2>See your inbox organized today.</h2>
           <p>Start your 14-day free trial. Cancel anytime before it ends and you won't be charged.</p>
-          <a className="button button-light" href={SIGN_UP_URL}>
+          <a className="button button-light" href={signUpUrl()}>
             Start free trial
           </a>
         </section>
