@@ -287,20 +287,44 @@ public class BillingService {
         }
 
         Organization organization = found.get();
+        String subscriptionId = subscription.path("id").asString();
+        String status = subscription.path("status").asString(null);
+
+        // A late event about an old, ended subscription must not replace a
+        // newer one the customer started since
+        boolean ended = "canceled".equals(status) || "incomplete_expired".equals(status);
+
+        if (ended
+                && organization.getStripeSubscriptionId() != null
+                && !organization.getStripeSubscriptionId().equals(subscriptionId)) {
+            log.info("Ignoring ended subscription {} for organization {}", subscriptionId, organization.getId());
+            return;
+        }
+
         JsonNode item = subscription.path("items").path("data").path(0);
         JsonNode price = item.path("price");
         String lookupKey = price.path("lookup_key").asString("");
 
         organization.setStripeCustomerId(customerId.isBlank() ? organization.getStripeCustomerId() : customerId);
-        organization.setStripeSubscriptionId(subscription.path("id").asString());
-        organization.setSubscriptionStatus(subscription.path("status").asString(null));
-        organization.setCancelAtPeriodEnd(subscription.path("cancel_at_period_end").asBoolean(false));
+        organization.setStripeSubscriptionId(subscriptionId);
+        organization.setSubscriptionStatus(status);
+
+        // Newer API versions schedule cancellations with cancel_at instead
+        // of cancel_at_period_end
+        JsonNode cancelAt = subscription.path("cancel_at");
+        boolean scheduledToEnd = !ended
+                && (subscription.path("cancel_at_period_end").asBoolean(false) || cancelAt.isNumber());
+        organization.setCancelAtPeriodEnd(scheduledToEnd);
         organization.setTrialEndsAt(epoch(subscription.path("trial_end")));
         organization.setBillingInterval(price.path("recurring").path("interval").asString(null));
 
         // Newer API versions keep the period on the item
         JsonNode periodEnd = item.path("current_period_end");
         organization.setCurrentPeriodEnd(epoch(periodEnd.isMissingNode() ? subscription.path("current_period_end") : periodEnd));
+
+        if (scheduledToEnd && cancelAt.isNumber()) {
+            organization.setCurrentPeriodEnd(epoch(cancelAt));
+        }
 
         Plan plan = lookupKey.contains("growth") ? Plan.GROWTH : Plan.STARTER;
         organization.setPlan(plan);

@@ -267,4 +267,63 @@ class BillingTest {
                 .andExpect(jsonPath("$.message").value(
                         "Your plan has ended. Choose a plan to keep using Clerova."));
     }
+
+    private void stubRawSubscription(String id, String json) {
+        when(stripe.get("/v1/subscriptions/" + id)).thenReturn(stripeJson.readTree(json));
+    }
+
+    private static String subscriptionJson(String id, String organizationId, String status, String cancelAt) {
+        return """
+                {
+                  "id": "%s",
+                  "customer": "cus_%s",
+                  "status": "%s",
+                  "cancel_at_period_end": false,
+                  "cancel_at": %s,
+                  "trial_end": 1900000000,
+                  "metadata": {"organization_id": "%s"},
+                  "items": {"data": [{
+                    "id": "si_1",
+                    "current_period_end": 1900000000,
+                    "price": {"lookup_key": "starter_monthly", "recurring": {"interval": "month"}}
+                  }]}
+                }
+                """.formatted(id, organizationId, status, cancelAt, organizationId);
+    }
+
+    @Test
+    void cancellationScheduledWithCancelAtShowsAsEnding() throws Exception {
+        RequestPostProcessor user = onboardNewUser(mockMvc);
+        String organizationId = organizationIdOf(user);
+
+        stubRawSubscription("sub_9", subscriptionJson("sub_9", organizationId, "trialing", "1800000000"));
+        sendSignedWebhook("""
+                {"type":"customer.subscription.updated","data":{"object":{"id":"sub_9"}}}
+                """).andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/me").with(user))
+                .andExpect(jsonPath("$.organization.cancelAtPeriodEnd").value(true))
+                .andExpect(jsonPath("$.organization.currentPeriodEnd").value("2027-01-15T08:00:00Z"))
+                .andExpect(jsonPath("$.organization.subscriptionRequired").value(false));
+    }
+
+    @Test
+    void lateEventForAnOldEndedSubscriptionDoesNotReplaceTheNewOne() throws Exception {
+        RequestPostProcessor user = onboardNewUser(mockMvc);
+        String organizationId = organizationIdOf(user);
+
+        stubRawSubscription("sub_new", subscriptionJson("sub_new", organizationId, "active", "null"));
+        sendSignedWebhook("""
+                {"type":"customer.subscription.created","data":{"object":{"id":"sub_new"}}}
+                """).andExpect(status().isOk());
+
+        stubRawSubscription("sub_old", subscriptionJson("sub_old", organizationId, "canceled", "null"));
+        sendSignedWebhook("""
+                {"type":"customer.subscription.deleted","data":{"object":{"id":"sub_old"}}}
+                """).andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/me").with(user))
+                .andExpect(jsonPath("$.organization.subscriptionStatus").value("active"))
+                .andExpect(jsonPath("$.organization.subscriptionRequired").value(false));
+    }
 }

@@ -105,7 +105,9 @@ public class WorkItemController {
                                 : actorEmails.computeIfAbsent(
                                         event.getActorUserId(),
                                         userId -> appUserRepository.findById(userId)
-                                                .map(user -> user.getEmail())
+                                                .map(user -> user.getFullName() != null
+                                                        ? user.getFullName()
+                                                        : user.getEmail())
                                                 .orElse("Former user")
                                 )
                 ))
