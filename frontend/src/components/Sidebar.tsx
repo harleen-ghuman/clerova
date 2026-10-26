@@ -1,23 +1,52 @@
 import type { Organization } from "../types/Account";
+import { planName } from "../utils/plans";
 
-export type AppView =
-  | "dashboard"
-  | "inbox"
-  | "work-items"
-  | "maintenance"
-  | "pending-actions"
-  | "email-setup";
+export type AppView = "today" | "requests" | "jobs" | "inbox" | "email-setup";
 
 interface SidebarProps {
   activeView: AppView;
-  pendingActionCount: number;
+  reviewCount: number;
+  openJobCount: number;
   organization: Organization;
   userEmail: string;
   onNavigate: (view: AppView) => void;
   onSignOut: () => void;
+  onManageBilling: () => void;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+function shortDate(value: string | null): string {
+  return value
+    ? new Date(value).toLocaleDateString([], { month: "short", day: "numeric" })
+    : "";
+}
+
+/** One line about the plan, e.g. "Starter · trial, 12 days left". */
+function planStatus(organization: Organization): string {
+  const days = trialDaysLeft(organization.trialEndsAt);
+
+  if (!organization.billingEnabled || organization.plan === "TRIAL") {
+    return days === null
+      ? planName(organization.plan)
+      : days === 0
+        ? "Free trial ended"
+        : `Free trial · ${days} ${days === 1 ? "day" : "days"} left`;
+  }
+
+  const name = planName(organization.plan);
+
+  switch (organization.subscriptionStatus) {
+    case "trialing":
+      return `${name} · trial, ${days ?? 0} ${days === 1 ? "day" : "days"} left`;
+    case "past_due":
+      return `${name} · payment failed`;
+    default:
+      return organization.cancelAtPeriodEnd
+        ? `${name} · ends ${shortDate(organization.currentPeriodEnd)}`
+        : `${name} plan`;
+  }
+}
 
 function trialDaysLeft(trialEndsAt: string | null): number | null {
   if (!trialEndsAt) {
@@ -32,126 +61,70 @@ function trialDaysLeft(trialEndsAt: string | null): number | null {
 
 export function Sidebar({
   activeView,
-  pendingActionCount,
+  reviewCount,
+  openJobCount,
   organization,
   userEmail,
   onNavigate,
   onSignOut,
+  onManageBilling,
 }: SidebarProps) {
-  const daysLeft =
-    organization.plan === "TRIAL"
-      ? trialDaysLeft(organization.trialEndsAt)
-      : null;
+  const items: { view: AppView; label: string; count?: number; badge?: boolean }[] = [
+    { view: "today", label: "Today" },
+    { view: "requests", label: "Requests", count: reviewCount, badge: true },
+    { view: "jobs", label: "Jobs", count: openJobCount },
+    { view: "inbox", label: "Inbox" },
+    { view: "email-setup", label: "Email setup" },
+  ];
 
   return (
     <aside className="sidebar">
       <button
         type="button"
-        className="brand brand-button"
-        onClick={() => onNavigate("dashboard")}
-        aria-label="Go to dashboard"
+        className="sidebar-brand"
+        onClick={() => onNavigate("today")}
+        aria-label="Go to Today"
       >
-        <div className="brand-mark">C</div>
-
-        <div>
+        <span className="sidebar-mark">C</span>
+        <span>
           <strong>Clerova</strong>
-          <span>
-            {organization.industry === "TRUCKING"
-              ? "Trucking Operations"
-              : "Property Operations"}
-          </span>
-        </div>
+          <small>{organization.name}</small>
+        </span>
       </button>
 
-      <button
-        type="button"
-        className="sidebar-mobile-signout"
-        onClick={onSignOut}
-      >
-        Sign out
-      </button>
-
-      <nav className="sidebar-nav">
-        <button
-          type="button"
-          className={`nav-item ${
-            activeView === "dashboard" ? "active" : ""
-          }`}
-          onClick={() => onNavigate("dashboard")}
-        >
-          Dashboard
-        </button>
-
-        <button
-          type="button"
-          className={`nav-item ${
-            activeView === "inbox" ? "active" : ""
-          }`}
-          onClick={() => onNavigate("inbox")}
-        >
-          Inbox
-        </button>
-
-        <button
-          type="button"
-          className={`nav-item ${
-            activeView === "work-items" ? "active" : ""
-          }`}
-          onClick={() => onNavigate("work-items")}
-        >
-          Work Items
-        </button>
-
-        <button
-          type="button"
-          className={`nav-item ${
-            activeView === "maintenance" ? "active" : ""
-          }`}
-          onClick={() => onNavigate("maintenance")}
-        >
-          Maintenance
-        </button>
-
-        <button
-          type="button"
-          className={`nav-item ${
-            activeView === "pending-actions" ? "active" : ""
-          }`}
-          onClick={() => onNavigate("pending-actions")}
-        >
-          <span>Pending Actions</span>
-
-          {pendingActionCount > 0 && (
-            <span className="nav-count">
-              {pendingActionCount}
-            </span>
-          )}
-        </button>
-
-        <button
-          type="button"
-          className={`nav-item ${
-            activeView === "email-setup" ? "active" : ""
-          }`}
-          onClick={() => onNavigate("email-setup")}
-        >
-          Email Setup
-        </button>
+      <nav className="sidebar-nav" aria-label="Main">
+        {items.map((item) => (
+          <button
+            key={item.view}
+            type="button"
+            className={`sidebar-link ${activeView === item.view ? "active" : ""}`}
+            aria-current={activeView === item.view ? "page" : undefined}
+            onClick={() => onNavigate(item.view)}
+          >
+            {item.label}
+            {item.count !== undefined && item.count > 0 && (
+              <span className={item.badge ? "sidebar-badge" : "sidebar-count"}>
+                {item.count}
+              </span>
+            )}
+          </button>
+        ))}
       </nav>
 
       <div className="sidebar-footer">
-        <span>Organization</span>
-        <strong>{organization.name}</strong>
-
-        {daysLeft !== null && (
-          <p className="sidebar-trial">
-            {daysLeft === 0
-              ? "Free trial ended"
-              : `Free trial · ${daysLeft} ${daysLeft === 1 ? "day" : "days"} left`}
+        {organization.plan !== "INTERNAL" && (
+          <p>
+            {planStatus(organization)}
             <br />
-            {organization.aiRequestsUsedThisMonth} /{" "}
-            {organization.aiMonthlyLimit} AI requests this month
+            {organization.aiRequestsUsedThisMonth} / {organization.aiMonthlyLimit}{" "}
+            requests this month
           </p>
+        )}
+
+        {organization.billingEnabled && organization.subscriptionStatus && (
+          <button type="button" className="sidebar-billing" onClick={onManageBilling}>
+            Manage billing
+          </button>
         )}
 
         <div className="sidebar-account">

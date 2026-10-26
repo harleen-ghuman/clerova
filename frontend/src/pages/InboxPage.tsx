@@ -90,30 +90,26 @@ export function InboxPage({
   const visible = filter === "all" ? messages : needsAttention;
 
   return (
-    <section className="dashboard-section">
-      <div className="section-heading inbox-heading">
+    <section className="inbox">
+      <header className="page-header inbox-heading">
         <div>
-          <span className="eyebrow">Email Intake</span>
-          <h2>Inbox</h2>
+          <h1>Inbox</h1>
           <p>
-            Emails forwarded to Clerova. New requests are analyzed and get a
-            recommended action automatically.
+            Every email forwarded to Clerova. New requests get a suggested next
+            step automatically and appear in Requests.
           </p>
         </div>
 
-        <button
-          type="button"
-          className="secondary-action-button"
-          onClick={onOpenEmailSetup}
-        >
+        <button type="button" className="rq-button" onClick={onOpenEmailSetup}>
           Email setup
         </button>
-      </div>
+      </header>
 
-      <div className="maintenance-tabs">
+      <div className="rq-filters">
         <button
           type="button"
-          className={`maintenance-tab ${filter === "all" ? "active" : ""}`}
+          className={`rq-chip ${filter === "all" ? "active" : ""}`}
+          aria-pressed={filter === "all"}
           onClick={() => setFilter("all")}
         >
           All
@@ -122,7 +118,8 @@ export function InboxPage({
 
         <button
           type="button"
-          className={`maintenance-tab ${filter === "attention" ? "active" : ""}`}
+          className={`rq-chip ${filter === "attention" ? "active" : ""}`}
+          aria-pressed={filter === "attention"}
           onClick={() => setFilter("attention")}
         >
           Ignored or failed
@@ -136,7 +133,6 @@ export function InboxPage({
 
       {!loading && visible.length === 0 && (
         <div className="empty-view">
-          <div className="review-empty-icon">@</div>
 
           <h2>
             {filter === "all" ? "No emails yet" : "Nothing needs attention"}

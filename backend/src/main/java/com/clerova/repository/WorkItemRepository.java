@@ -4,6 +4,7 @@ import com.clerova.domain.WorkItem;
 import com.clerova.domain.WorkItemStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -16,6 +17,14 @@ public interface WorkItemRepository
             UUID organizationId,
             Collection<WorkItemStatus> statuses
     );
+
+    List<WorkItem> findTop100ByOrganizationIdAndStatusInAndUpdatedAtAfterOrderByUpdatedAtDesc(
+            UUID organizationId,
+            Collection<WorkItemStatus> statuses,
+            Instant updatedAfter
+    );
+
+    long countByOrganizationIdAndCreatedAtAfter(UUID organizationId, Instant after);
 
     Optional<WorkItem> findByIdAndOrganizationId(
             UUID id,

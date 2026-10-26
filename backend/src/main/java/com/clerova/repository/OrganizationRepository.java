@@ -16,6 +16,13 @@ public interface OrganizationRepository
 
     boolean existsByInboundEmailToken(String inboundEmailToken);
 
+    Optional<Organization> findByStripeCustomerId(String stripeCustomerId);
+
+    @Query("select o.aiUsageCount from Organization o where o.id = :id")
+    int findUsageCount(@Param("id") UUID id);
+
+    long countByFoundingCustomerTrue();
+
     /**
      * Atomically counts one AI request against the organization's monthly
      * limit, resetting the count when a new month starts.

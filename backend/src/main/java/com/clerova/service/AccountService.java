@@ -1,5 +1,6 @@
 package com.clerova.service;
 
+import com.clerova.billing.BillingService;
 import com.clerova.domain.AppUser;
 import com.clerova.domain.Organization;
 import com.clerova.domain.Plan;
@@ -23,6 +24,7 @@ public class AccountService {
     private final CurrentUserService currentUserService;
     private final OrganizationRepository organizationRepository;
     private final AppUserRepository appUserRepository;
+    private final BillingService billingService;
     private final int trialDays;
     private final int trialAiMonthlyLimit;
 
@@ -30,12 +32,14 @@ public class AccountService {
             CurrentUserService currentUserService,
             OrganizationRepository organizationRepository,
             AppUserRepository appUserRepository,
+            BillingService billingService,
             @Value("${app.trial.days}") int trialDays,
             @Value("${app.trial.ai-monthly-limit}") int trialAiMonthlyLimit
     ) {
         this.currentUserService = currentUserService;
         this.organizationRepository = organizationRepository;
         this.appUserRepository = appUserRepository;
+        this.billingService = billingService;
         this.trialDays = trialDays;
         this.trialAiMonthlyLimit = trialAiMonthlyLimit;
     }
@@ -93,7 +97,11 @@ public class AccountService {
                 user.getId(),
                 user.getEmail(),
                 user.getFullName(),
-                OrganizationResponse.from(user.getOrganization())
+                OrganizationResponse.from(
+                        user.getOrganization(),
+                        billingService.isEnabled(),
+                        billingService.requiresSubscription(user.getOrganization())
+                )
         );
     }
 

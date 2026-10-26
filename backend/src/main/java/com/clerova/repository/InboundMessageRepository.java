@@ -26,6 +26,8 @@ public interface InboundMessageRepository
 
     Optional<InboundMessage> findByIdAndOrganizationId(UUID id, UUID organizationId);
 
+    long countByOrganizationIdAndReceivedAtAfter(UUID organizationId, Instant after);
+
     List<InboundMessage> findByWorkItemIdOrderByReceivedAtAsc(UUID workItemId);
 
     /** Earlier messages this email may be replying to. */

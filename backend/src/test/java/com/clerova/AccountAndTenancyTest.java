@@ -152,11 +152,12 @@ class AccountAndTenancyTest {
 
         String aliceWorkItem = createWorkItem(alice);
 
+        // The proposal was generated automatically when the request was created
         String actionBody = mockMvc.perform(
-                        post("/api/work-items/{id}/proposed-actions", aliceWorkItem).with(alice))
-                .andExpect(status().isCreated())
+                        get("/api/work-items/{id}/proposed-actions", aliceWorkItem).with(alice))
+                .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        String aliceAction = objectMapper.readTree(actionBody).get("id").asText();
+        String aliceAction = objectMapper.readTree(actionBody).get(0).get("id").asText();
 
         JsonNode bobItems = objectMapper.readTree(mockMvc.perform(get("/api/work-items").with(bob))
                 .andReturn().getResponse().getContentAsString());
@@ -198,9 +199,15 @@ class AccountAndTenancyTest {
                 UUID.fromString(organizationIdOf(user))
         );
 
-        String workItemId = createWorkItem(user);
+        // The request and its automatic suggestion count once
+        createWorkItem(user);
 
-        mockMvc.perform(post("/api/work-items/{id}/proposed-actions", workItemId).with(user))
+        mockMvc.perform(post("/api/work-items")
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"message":"Another leak"}
+                                """))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.error").value("AI_QUOTA_EXCEEDED"));
 

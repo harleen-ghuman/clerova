@@ -16,10 +16,14 @@ import com.clerova.repository.MaintenanceRequestRepository;
 import com.clerova.repository.ProposedActionRepository;
 import com.clerova.repository.WorkItemRepository;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,6 +32,8 @@ import java.util.UUID;
 
 @Service
 public class WorkItemService {
+
+    private static final Logger log = LoggerFactory.getLogger(WorkItemService.class);
 
     private static final List<WorkItemStatus> CLOSED_STATUSES = List.of(
             WorkItemStatus.COMPLETED,
@@ -80,7 +86,7 @@ public class WorkItemService {
             UUID actorUserId
     ) {
 
-        aiUsageService.consumeAiRequest(organizationId);
+        aiUsageService.consumeRequest(organizationId);
 
         ExtractionResult extraction =
                 aiService.extract(message);
@@ -109,13 +115,35 @@ public class WorkItemService {
     }
 
     /**
+     * Creates a work item from a typed request and, like email requests,
+     * proposes an action right away. If the proposal cannot be generated
+     * (for example the AI quota is used up), the work item is still
+     * returned and the proposal can be generated later.
+     */
+    public WorkItem createWorkItemWithProposal(
+            UUID organizationId,
+            String message,
+            UUID actorUserId
+    ) {
+        WorkItem workItem = createWorkItem(organizationId, message, actorUserId);
+
+        try {
+            generateProposedAction(organizationId, workItem.getId(), actorUserId);
+        } catch (RuntimeException e) {
+            log.warn("Could not generate a proposal for work item {}", workItem.getId(), e);
+        }
+
+        return getWorkItem(organizationId, workItem.getId());
+    }
+
+    /**
      * Creates a work item from a received email and links the email to it.
      */
     public WorkItem createWorkItemFromEmail(InboundMessage email) {
 
         UUID organizationId = email.getOrganizationId();
 
-        aiUsageService.consumeAiRequest(organizationId);
+        aiUsageService.consumeRequest(organizationId);
 
         String content = email.getContentText() != null ? email.getContentText() : "";
 
@@ -179,6 +207,16 @@ public class WorkItemService {
                 );
     }
 
+    /** Requests closed in the last 30 days, most recently closed first. */
+    public List<WorkItem> getRecentlyClosedWorkItems(UUID organizationId) {
+        return workItemRepository
+                .findTop100ByOrganizationIdAndStatusInAndUpdatedAtAfterOrderByUpdatedAtDesc(
+                        organizationId,
+                        CLOSED_STATUSES,
+                        Instant.now().minus(Duration.ofDays(30))
+                );
+    }
+
     public WorkItem getWorkItem(UUID organizationId, UUID id) {
         return workItemRepository.findByIdAndOrganizationId(id, organizationId)
                 .orElseThrow(() ->
@@ -204,7 +242,7 @@ public class WorkItemService {
 
         ensureCanGenerateProposal(workItem);
 
-        aiUsageService.consumeAiRequest(organizationId);
+        aiUsageService.requireAccess(organizationId);
 
         ProposedActionResult result = aiService.proposeAction(
                 workItem,

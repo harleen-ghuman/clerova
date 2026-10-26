@@ -68,3 +68,8 @@ export function rejectProposedAction(
     { method: "POST" }
   );
 }
+
+/** Requests closed in the last 30 days. */
+export function getClosedWorkItems(): Promise<WorkItem[]> {
+  return apiRequest("/api/work-items?closed=true");
+}

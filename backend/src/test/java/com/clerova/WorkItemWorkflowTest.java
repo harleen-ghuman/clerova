@@ -107,6 +107,16 @@ class WorkItemWorkflowTest {
                 .get("id").asText();
     }
 
+    /** The proposal generated automatically when the request was created. */
+    private String pendingAction(String workItemId) throws Exception {
+        JsonNode actions = json(mockMvc.perform(
+                get("/api/work-items/{id}/proposed-actions", workItemId).with(user)));
+
+        assertThat(actions.get(0).get("status").asText()).isEqualTo("PENDING_APPROVAL");
+
+        return actions.get(0).get("id").asText();
+    }
+
     private String generateAction(String workItemId) throws Exception {
         return json(mockMvc.perform(post("/api/work-items/{id}/proposed-actions", workItemId).with(user))
                 .andExpect(status().isCreated()))
@@ -129,6 +139,54 @@ class WorkItemWorkflowTest {
     }
 
     @Test
+    void typedRequestGetsProposalAutomatically() throws Exception {
+        String workItemId = createWorkItem();
+
+        assertThat(workItemStatus(workItemId)).isEqualTo("WAITING_FOR_APPROVAL");
+        pendingAction(workItemId);
+    }
+
+    @Test
+    void typedRequestIsKeptWhenAutomaticProposalFails() throws Exception {
+        when(aiService.proposeAction(any(), any()))
+                .thenThrow(new com.clerova.exception.AiServiceException("down", null));
+
+        String workItemId = createWorkItem();
+
+        assertThat(workItemStatus(workItemId)).isEqualTo("NEW");
+    }
+
+    @Test
+    void closedRequestsAreListedSeparately() throws Exception {
+        proposeAction(ActionType.RESPOND_TO_CUSTOMER);
+        String workItemId = createWorkItem();
+        approve(pendingAction(workItemId), null).andExpect(status().isOk());
+
+        JsonNode open = json(mockMvc.perform(get("/api/work-items").with(user)));
+        JsonNode closed = json(mockMvc.perform(get("/api/work-items?closed=true").with(user)));
+
+        assertThat(open.findValuesAsText("id")).doesNotContain(workItemId);
+        assertThat(closed.findValuesAsText("id")).contains(workItemId);
+    }
+
+    @Test
+    void weekSummaryCountsThisOrganizationsRequests() throws Exception {
+        createWorkItem();
+        createWorkItem();
+
+        mockMvc.perform(get("/api/summary").with(user))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requestsOrganized").value(2))
+                .andExpect(jsonPath("$.repliesSent").value(0))
+                .andExpect(jsonPath("$.minutesSaved").value(10))
+                .andExpect(jsonPath("$.medianReplyMinutes").isEmpty());
+
+        // Another organization starts from zero
+        mockMvc.perform(get("/api/summary").with(onboardNewUser(mockMvc)))
+                .andExpect(jsonPath("$.requestsOrganized").value(0));
+    }
+
+    @Test
     void unknownWorkItemReturns404() throws Exception {
         mockMvc.perform(get("/api/work-items/{id}", UUID.randomUUID()).with(user))
                 .andExpect(status().isNotFound())
@@ -138,8 +196,8 @@ class WorkItemWorkflowTest {
     @Test
     void secondGenerationWhilePendingIsRejected() throws Exception {
         String workItemId = createWorkItem();
-        generateAction(workItemId);
 
+        // A proposal is already pending from creation
         mockMvc.perform(post("/api/work-items/{id}/proposed-actions", workItemId).with(user))
                 .andExpect(status().isConflict());
     }
@@ -148,7 +206,7 @@ class WorkItemWorkflowTest {
     void approvalStoresEditedResponse() throws Exception {
         proposeAction(ActionType.RESPOND_TO_CUSTOMER);
         String workItemId = createWorkItem();
-        String actionId = generateAction(workItemId);
+        String actionId = pendingAction(workItemId);
 
         approve(actionId, """
                 {"finalResponse":"  Edited reply  "}
@@ -164,7 +222,7 @@ class WorkItemWorkflowTest {
     @Test
     void sendingReplyForManualRequestIsRejectedWhenEmailIsNotSetUp() throws Exception {
         proposeAction(ActionType.RESPOND_TO_CUSTOMER);
-        String actionId = generateAction(createWorkItem());
+        String actionId = pendingAction(createWorkItem());
 
         approve(actionId, null).andExpect(status().isOk());
 
@@ -176,7 +234,7 @@ class WorkItemWorkflowTest {
     @Test
     void approvalWithoutBodyUsesDraft() throws Exception {
         proposeAction(ActionType.RESPOND_TO_CUSTOMER);
-        String actionId = generateAction(createWorkItem());
+        String actionId = pendingAction(createWorkItem());
 
         approve(actionId, null)
                 .andExpect(status().isOk())
@@ -187,7 +245,7 @@ class WorkItemWorkflowTest {
     void escalationCanBeClosedManually() throws Exception {
         proposeAction(ActionType.ESCALATE_TO_HUMAN);
         String workItemId = createWorkItem();
-        approve(generateAction(workItemId), null).andExpect(status().isOk());
+        approve(pendingAction(workItemId), null).andExpect(status().isOk());
 
         assertThat(workItemStatus(workItemId)).isEqualTo("ESCALATED");
 
@@ -204,7 +262,7 @@ class WorkItemWorkflowTest {
     @Test
     void rejectReturnsWorkItemToReviewAndAllowsRegeneration() throws Exception {
         String workItemId = createWorkItem();
-        String actionId = generateAction(workItemId);
+        String actionId = pendingAction(workItemId);
 
         mockMvc.perform(post("/api/work-items/proposed-actions/{id}/reject", actionId).with(user))
                 .andExpect(status().isOk());
@@ -217,7 +275,7 @@ class WorkItemWorkflowTest {
     @Test
     void maintenanceLifecycleEnforcesTransitions() throws Exception {
         String workItemId = createWorkItem();
-        approve(generateAction(workItemId), null).andExpect(status().isOk());
+        approve(pendingAction(workItemId), null).andExpect(status().isOk());
 
         String maintenanceId = json(mockMvc.perform(
                 get("/api/maintenance-requests/work-item/{id}", workItemId).with(user)))
@@ -247,7 +305,7 @@ class WorkItemWorkflowTest {
     @Test
     void latestProposedActionsReturnsOnePerOpenWorkItem() throws Exception {
         String workItemId = createWorkItem();
-        String firstActionId = generateAction(workItemId);
+        String firstActionId = pendingAction(workItemId);
 
         mockMvc.perform(post("/api/work-items/proposed-actions/{id}/reject", firstActionId).with(user))
                 .andExpect(status().isOk());

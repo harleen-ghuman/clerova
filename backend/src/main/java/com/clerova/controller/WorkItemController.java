@@ -61,16 +61,21 @@ public class WorkItemController {
             @Valid @RequestBody CreateWorkItemRequest request
     ) {
 
-        return workItemService.createWorkItem(
+        return workItemService.createWorkItemWithProposal(
                 organizationId(),
                 request.message(),
                 currentUserService.currentUserId()
         );
     }
 
+    /** Open requests, or with ?closed=true those closed in the last 30 days. */
     @GetMapping
-    public List<WorkItem> getAllWorkItems() {
-        return workItemService.getAllWorkItems(organizationId());
+    public List<WorkItem> getAllWorkItems(
+            @RequestParam(defaultValue = "false") boolean closed
+    ) {
+        return closed
+                ? workItemService.getRecentlyClosedWorkItems(organizationId())
+                : workItemService.getAllWorkItems(organizationId());
     }
 
     @GetMapping("/{id}")

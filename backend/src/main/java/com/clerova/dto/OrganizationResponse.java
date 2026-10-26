@@ -16,10 +16,22 @@ public record OrganizationResponse(
         Plan plan,
         Instant trialEndsAt,
         int aiMonthlyLimit,
-        int aiRequestsUsedThisMonth
+        int aiRequestsUsedThisMonth,
+        String subscriptionStatus,
+        String billingInterval,
+        Instant currentPeriodEnd,
+        boolean cancelAtPeriodEnd,
+        boolean foundingCustomer,
+        boolean billingEnabled,
+        /** True when a plan must be chosen before using Clerova. */
+        boolean subscriptionRequired
 ) {
 
-    public static OrganizationResponse from(Organization organization) {
+    public static OrganizationResponse from(
+            Organization organization,
+            boolean billingEnabled,
+            boolean subscriptionRequired
+    ) {
         String currentPeriod = YearMonth.now(ZoneOffset.UTC).toString();
 
         int used = currentPeriod.equals(organization.getAiUsagePeriod())
@@ -33,7 +45,14 @@ public record OrganizationResponse(
                 organization.getPlan(),
                 organization.getTrialEndsAt(),
                 organization.getAiMonthlyLimit(),
-                used
+                used,
+                organization.getSubscriptionStatus(),
+                organization.getBillingInterval(),
+                organization.getCurrentPeriodEnd(),
+                organization.isCancelAtPeriodEnd(),
+                organization.isFoundingCustomer(),
+                billingEnabled,
+                subscriptionRequired
         );
     }
 }

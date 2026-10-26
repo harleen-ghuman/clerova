@@ -45,6 +45,28 @@ public class Organization {
     @Column(length = 40, unique = true)
     private String inboundEmailToken;
 
+    @Column(length = 64, unique = true)
+    private String stripeCustomerId;
+
+    @Column(length = 64)
+    private String stripeSubscriptionId;
+
+    /** Stripe subscription status, e.g. trialing, active, past_due, canceled. */
+    @Column(length = 30)
+    private String subscriptionStatus;
+
+    /** month or year */
+    @Column(length = 10)
+    private String billingInterval;
+
+    private Instant currentPeriodEnd;
+
+    @Column(nullable = false)
+    private boolean cancelAtPeriodEnd;
+
+    @Column(nullable = false)
+    private boolean foundingCustomer;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -144,6 +166,62 @@ public class Organization {
 
     public void setInboundEmailToken(String inboundEmailToken) {
         this.inboundEmailToken = inboundEmailToken;
+    }
+
+    public String getStripeCustomerId() {
+        return stripeCustomerId;
+    }
+
+    public void setStripeCustomerId(String stripeCustomerId) {
+        this.stripeCustomerId = stripeCustomerId;
+    }
+
+    public String getStripeSubscriptionId() {
+        return stripeSubscriptionId;
+    }
+
+    public void setStripeSubscriptionId(String stripeSubscriptionId) {
+        this.stripeSubscriptionId = stripeSubscriptionId;
+    }
+
+    public String getSubscriptionStatus() {
+        return subscriptionStatus;
+    }
+
+    public void setSubscriptionStatus(String subscriptionStatus) {
+        this.subscriptionStatus = subscriptionStatus;
+    }
+
+    public String getBillingInterval() {
+        return billingInterval;
+    }
+
+    public void setBillingInterval(String billingInterval) {
+        this.billingInterval = billingInterval;
+    }
+
+    public Instant getCurrentPeriodEnd() {
+        return currentPeriodEnd;
+    }
+
+    public void setCurrentPeriodEnd(Instant currentPeriodEnd) {
+        this.currentPeriodEnd = currentPeriodEnd;
+    }
+
+    public boolean isCancelAtPeriodEnd() {
+        return cancelAtPeriodEnd;
+    }
+
+    public void setCancelAtPeriodEnd(boolean cancelAtPeriodEnd) {
+        this.cancelAtPeriodEnd = cancelAtPeriodEnd;
+    }
+
+    public boolean isFoundingCustomer() {
+        return foundingCustomer;
+    }
+
+    public void setFoundingCustomer(boolean foundingCustomer) {
+        this.foundingCustomer = foundingCustomer;
     }
 
     public Instant getCreatedAt() {
