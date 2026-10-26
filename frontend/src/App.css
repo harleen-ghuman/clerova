@@ -2388,3 +2388,15 @@ h3 {
 .auth-divider + .auth-form {
   margin-top: 16px;
 }
+
+.google-button-slot {
+  display: flex;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 24px;
+}
+
+.google-button-slot.loading {
+  border-radius: 8px;
+  background: var(--surface-soft);
+}

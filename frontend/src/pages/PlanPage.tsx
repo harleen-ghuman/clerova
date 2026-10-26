@@ -29,12 +29,6 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
   const [submitting, setSubmitting] = useState<PaidPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chosenPlan] = useState(getChosenPlan);
-  const [trialEnd] = useState(() =>
-    new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toLocaleDateString(
-      [],
-      { month: "long", day: "numeric" }
-    )
-  );
 
   // A first subscription comes with the free trial
   const firstTime = organization.subscriptionStatus === null;
@@ -83,7 +77,7 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
         <h1>{firstTime ? "Start your free trial" : "Choose a plan"}</h1>
         <p className="auth-description">
           {firstTime
-            ? `Try Clerova free for ${TRIAL_DAYS} days. You won't be charged until ${trialEnd}. Cancel anytime before then and you pay nothing.`
+            ? `Try Clerova free for ${TRIAL_DAYS} days. You won't be charged until your trial ends. Cancel anytime before then and you pay nothing.`
             : `Choose a plan to keep using Clerova for ${organization.name}.`}
         </p>
 
