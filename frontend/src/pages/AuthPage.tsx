@@ -218,7 +218,7 @@ export function AuthPage({
               <span>
                 New to Clerova?{" "}
                 <button type="button" onClick={() => switchMode("sign-up")}>
-                  Start a free trial
+                  Sign up
                 </button>
               </span>
 
