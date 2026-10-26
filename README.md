@@ -98,9 +98,9 @@ PENDING_APPROVAL -> APPROVED -> EXECUTED (reply sent)
                  -> REJECTED
 ```
 
-The AI is told not to invent information it doesn't have. A late-fee
-question, for example, gets a reply that promises to check the ledger rather
-than a made-up answer.
+Clerova has no access to rent ledgers, leases or other business records yet.
+The AI is told not to invent facts it doesn't have, such as balances or lease
+terms, so the reviewer adds them before sending.
 
 ---
 
@@ -438,6 +438,8 @@ calls.
 - Redesigned review screen: one Requests list with filters, plus a Jobs board
 - Gmail and Microsoft 365 connections (OAuth) instead of forwarding
 - Attachment storage and document extraction
+- Answers grounded in your own documents and records (leases, ledgers,
+  policies) through retrieval (RAG)
 - Vendor assignment and dispatch
 - Paid plans and billing
 - New verticals, starting with real estate brokerages

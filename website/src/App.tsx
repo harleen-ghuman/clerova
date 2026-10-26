@@ -25,7 +25,7 @@ const steps = [
 
 const requestTypes = [
   { name: "Maintenance", text: "Leaks, heating, appliances. Urgent issues are flagged and turn into jobs you can track." },
-  { name: "Billing", text: "Late fees and payment questions. Replies promise to check the ledger instead of guessing." },
+  { name: "Billing", text: "Late fees and payment questions, sorted and drafted for you to review before anything is sent." },
   { name: "Leasing", text: "Renewals, move-ins and showings, with drafts that leave property details for you to confirm." },
   { name: "Complaints and general", text: "Noise, parking and everything else, sorted so nothing sits unread." },
 ];
@@ -209,9 +209,9 @@ function App() {
               approve it. Edit any draft, or ask for a different suggestion.
             </p>
             <p>
-              Clerova doesn't make up answers it doesn't have. If a late fee
-              needs checking, the draft says you'll check, not that it's been
-              waived.
+              Clerova doesn't have access to your rent records or leases, so
+              it won't make up balances or terms. Add the facts to the draft
+              before you send it.
             </p>
           </div>
           <ul className="checks">
