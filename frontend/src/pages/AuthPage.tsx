@@ -187,6 +187,20 @@ export function AuthPage({
           >
             {submitting ? "Please wait..." : copy.submit}
           </button>
+
+          {mode === "sign-up" && (
+            <p className="auth-legal">
+              By creating an account, you agree to the{" "}
+              <a href="https://clerova-ai.com/terms" target="_blank" rel="noreferrer">
+                Terms of Service
+              </a>{" "}
+              and{" "}
+              <a href="https://clerova-ai.com/privacy" target="_blank" rel="noreferrer">
+                Privacy Policy
+              </a>
+              .
+            </p>
+          )}
         </form>
 
         <div className="auth-links">
