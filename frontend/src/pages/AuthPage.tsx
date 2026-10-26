@@ -104,7 +104,7 @@ export function AuthPage({
 
   const copy = {
     "sign-up": {
-      title: "Start your free trial",
+      title: "Create your account",
       description:
         "Turn your property requests inbox into organized work, with replies ready for you to approve. 14 days free, and you can cancel anytime before it ends.",
       submit: "Create account",
