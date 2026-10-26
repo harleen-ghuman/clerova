@@ -121,11 +121,12 @@ public class InboundEmailProcessor {
             log.warn("AI processing failed for inbound email {} (attempt {})",
                     messageId, message.getAttempts(), e);
 
+            String reason = "AI processing failed: " + rootCauseMessage(e);
+
             if (message.getAttempts() >= MAX_ATTEMPTS) {
-                finish(message, InboundMessageStatus.FAILED,
-                        "AI processing failed after " + MAX_ATTEMPTS + " attempts");
+                finish(message, InboundMessageStatus.FAILED, reason);
             } else {
-                retryLater(message);
+                retryLater(message, reason);
             }
 
         } catch (ApiException e) {
@@ -135,10 +136,12 @@ public class InboundEmailProcessor {
         } catch (RuntimeException e) {
             log.error("Unexpected error processing inbound email {}", messageId, e);
 
+            String reason = "Processing failed: " + rootCauseMessage(e);
+
             if (message.getAttempts() >= MAX_ATTEMPTS) {
-                finish(message, InboundMessageStatus.FAILED, "Processing failed");
+                finish(message, InboundMessageStatus.FAILED, reason);
             } else {
-                retryLater(message);
+                retryLater(message, reason);
             }
         }
     }
@@ -255,6 +258,26 @@ public class InboundEmailProcessor {
                 && workItem.getUpdatedAt().isAfter(Instant.now().minus(REOPEN_WINDOW));
     }
 
+    /**
+     * The most specific error message, e.g. OpenAI's "401: Incorrect API key
+     * provided", so the Inbox shows why processing failed.
+     */
+    static String rootCauseMessage(Throwable error) {
+        String message = error.getMessage();
+
+        for (Throwable cause = error.getCause(); cause != null; cause = cause.getCause()) {
+            if (cause.getMessage() != null && !cause.getMessage().isBlank()) {
+                message = cause.getMessage();
+            }
+        }
+
+        return message != null ? message : error.getClass().getSimpleName();
+    }
+
+    private static String truncate(String reason) {
+        return reason != null && reason.length() > 500 ? reason.substring(0, 497) + "..." : reason;
+    }
+
     static boolean isGmailForwardingConfirmation(InboundMessage message) {
         String from = message.getFromEmail() == null
                 ? ""
@@ -263,10 +286,11 @@ public class InboundEmailProcessor {
         return from.equals("forwarding-noreply@google.com");
     }
 
-    private void retryLater(InboundMessage message) {
+    private void retryLater(InboundMessage message, String reason) {
         Duration delay = message.getAttempts() <= 1 ? Duration.ofMinutes(1) : Duration.ofMinutes(5);
 
         message.setStatus(InboundMessageStatus.RECEIVED);
+        message.setStatusReason(truncate("Will retry. " + reason));
         message.setNextAttemptAt(Instant.now().plus(delay));
 
         inboundMessageRepository.save(message);
@@ -274,7 +298,7 @@ public class InboundEmailProcessor {
 
     private void finish(InboundMessage message, InboundMessageStatus status, String reason) {
         message.setStatus(status);
-        message.setStatusReason(reason);
+        message.setStatusReason(truncate(reason));
         message.setNextAttemptAt(null);
 
         inboundMessageRepository.save(message);

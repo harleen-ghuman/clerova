@@ -16,6 +16,8 @@ import com.clerova.repository.MaintenanceRequestRepository;
 import com.clerova.repository.ProposedActionRepository;
 import com.clerova.repository.WorkItemRepository;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -28,6 +30,8 @@ import java.util.UUID;
 
 @Service
 public class WorkItemService {
+
+    private static final Logger log = LoggerFactory.getLogger(WorkItemService.class);
 
     private static final List<WorkItemStatus> CLOSED_STATUSES = List.of(
             WorkItemStatus.COMPLETED,
@@ -106,6 +110,28 @@ public class WorkItemService {
 
             return saved;
         });
+    }
+
+    /**
+     * Creates a work item from a typed request and, like email requests,
+     * proposes an action right away. If the proposal cannot be generated
+     * (for example the AI quota is used up), the work item is still
+     * returned and the proposal can be generated later.
+     */
+    public WorkItem createWorkItemWithProposal(
+            UUID organizationId,
+            String message,
+            UUID actorUserId
+    ) {
+        WorkItem workItem = createWorkItem(organizationId, message, actorUserId);
+
+        try {
+            generateProposedAction(organizationId, workItem.getId(), actorUserId);
+        } catch (RuntimeException e) {
+            log.warn("Could not generate a proposal for work item {}", workItem.getId(), e);
+        }
+
+        return getWorkItem(organizationId, workItem.getId());
     }
 
     /**

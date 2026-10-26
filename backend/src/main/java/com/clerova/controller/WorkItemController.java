@@ -61,7 +61,7 @@ public class WorkItemController {
             @Valid @RequestBody CreateWorkItemRequest request
     ) {
 
-        return workItemService.createWorkItem(
+        return workItemService.createWorkItemWithProposal(
                 organizationId(),
                 request.message(),
                 currentUserService.currentUserId()

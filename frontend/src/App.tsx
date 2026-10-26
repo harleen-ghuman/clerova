@@ -476,11 +476,22 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
       ]);
 
       setNewRequestMessage("");
-      setCreateRequestSuccess("Request processed successfully.");
+
+      // The backend proposes an action right away; pick it up so the
+      // pending count and the work item details are current.
+      await loadLatestActions();
+
+      setCreateRequestSuccess(
+        createdWorkItem.status === "WAITING_FOR_APPROVAL"
+          ? "Request processed. A recommended action is ready for review in Pending Actions."
+          : "Request processed. Open it in Work Items to generate a recommended action."
+      );
 
       setSelectedWorkItem(createdWorkItem);
-      setProposedAction(null);
       setActionError(null);
+
+      const actions = await getProposedActions(createdWorkItem.id);
+      setProposedAction(actions.length > 0 ? [...actions].sort(byNewest)[0] : null);
     } catch (err) {
       console.error("Failed to create work item:", err);
       setCreateRequestError(

@@ -437,6 +437,24 @@ class EmailIntakeTest {
     }
 
     @Test
+    void failureReasonIsShownInTheInbox() throws Exception {
+        when(aiService.extract(anyString())).thenThrow(new AiServiceException(
+                "Failed to process AI request",
+                new RuntimeException("401: Incorrect API key provided")
+        ));
+
+        deliver(payload(forwardingAddress, "<why@x>", null, null, "tina@example.com", "Help"))
+                .andExpect(jsonPath("$.status").value("STORED"));
+
+        processor.processDue();
+
+        mockMvc.perform(get("/api/inbox").with(user))
+                .andExpect(jsonPath("$[0].status").value("RECEIVED"))
+                .andExpect(jsonPath("$[0].statusReason").value(
+                        "Will retry. AI processing failed: 401: Incorrect API key provided"));
+    }
+
+    @Test
     void quotaExhaustionMarksEmailFailed() throws Exception {
         String organizationId = json(mockMvc.perform(get("/api/me").with(user)))
                 .get("organization").get("id").asText();
