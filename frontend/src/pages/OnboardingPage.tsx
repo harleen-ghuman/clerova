@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import { completeOnboarding } from "../api/account";
 import { errorMessage } from "../api/client";
 import { getReferralSource } from "../auth/referral";
-import type { Industry, Me } from "../types/Account";
+import type { Me } from "../types/Account";
 
 interface OnboardingPageProps {
   email: string;
@@ -11,16 +11,7 @@ interface OnboardingPageProps {
   onSignOut: () => void;
 }
 
-const COMPANY_SIZES: Record<Industry, { label: string; options: string[] }> = {
-  PROPERTY_MANAGEMENT: {
-    label: "Doors / units managed",
-    options: ["1-50", "51-200", "201-500", "501-2000", "2000+"],
-  },
-  TRUCKING: {
-    label: "Trucks in your fleet",
-    options: ["1", "2-5", "6-20", "21-50", "50+"],
-  },
-};
+const UNITS_MANAGED = ["1-50", "51-200", "201-500", "501-2000", "2000+"];
 
 const REFERRAL_SOURCES = [
   "Instagram",
@@ -40,7 +31,6 @@ export function OnboardingPage({
 
   const [fullName, setFullName] = useState("");
   const [organizationName, setOrganizationName] = useState("");
-  const [industry, setIndustry] = useState<Industry | "">("");
   const [companySize, setCompanySize] = useState("");
   const [referralSource, setReferralSource] = useState(
     trackedSource ?? ""
@@ -51,11 +41,6 @@ export function OnboardingPage({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!industry) {
-      setError("Please choose your industry.");
-      return;
-    }
-
     try {
       setSubmitting(true);
       setError(null);
@@ -63,7 +48,7 @@ export function OnboardingPage({
       const me = await completeOnboarding({
         fullName,
         organizationName,
-        industry,
+        industry: "PROPERTY_MANAGEMENT",
         companySize,
         referralSource,
       });
@@ -86,8 +71,8 @@ export function OnboardingPage({
 
         <h1>Set up your workspace</h1>
         <p className="auth-description">
-          Signed in as {email}. Tell us a little about your business so
-          Clerova can handle your requests the right way.
+          Signed in as {email}. Tell us a little about your property
+          management business.
         </p>
 
         <form className="auth-form" onSubmit={handleSubmit}>
@@ -112,52 +97,21 @@ export function OnboardingPage({
             />
           </label>
 
-          <fieldset className="industry-options" disabled={submitting}>
-            <legend>Industry</legend>
-
-            {(
-              [
-                ["PROPERTY_MANAGEMENT", "Property management", "Tenant, owner and maintenance requests"],
-                ["TRUCKING", "Trucking", "Broker, shipper, driver and repair emails"],
-              ] as const
-            ).map(([value, title, subtitle]) => (
-              <label
-                key={value}
-                className={`industry-option ${industry === value ? "selected" : ""}`}
-              >
-                <input
-                  type="radio"
-                  name="industry"
-                  value={value}
-                  checked={industry === value}
-                  onChange={() => {
-                    setIndustry(value);
-                    setCompanySize("");
-                  }}
-                />
-                <strong>{title}</strong>
-                <span>{subtitle}</span>
-              </label>
-            ))}
-          </fieldset>
-
-          {industry && (
-            <label>
-              {COMPANY_SIZES[industry].label}
-              <select
-                value={companySize}
-                onChange={(event) => setCompanySize(event.target.value)}
-                disabled={submitting}
-              >
-                <option value="">Select...</option>
-                {COMPANY_SIZES[industry].options.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          <label>
+            Units managed
+            <select
+              value={companySize}
+              onChange={(event) => setCompanySize(event.target.value)}
+              disabled={submitting}
+            >
+              <option value="">Select...</option>
+              {UNITS_MANAGED.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
 
           {!trackedSource && (
             <label>
@@ -184,7 +138,7 @@ export function OnboardingPage({
             className="primary-button auth-submit"
             disabled={submitting}
           >
-            {submitting ? "Setting up..." : "Start my free trial"}
+            {submitting ? "Setting up..." : "Continue"}
           </button>
         </form>
 

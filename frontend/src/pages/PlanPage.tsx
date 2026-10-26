@@ -134,7 +134,11 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
 
         <p className="auth-hint">
           A request is one email or message Clerova organizes for you. Payments
-          are handled securely by Stripe.
+          are handled securely by Stripe. See our{" "}
+          <a href="https://clerova-ai.com/terms" target="_blank" rel="noreferrer">
+            Terms
+          </a>
+          .
         </p>
 
         {error && <p className="action-error">{error}</p>}

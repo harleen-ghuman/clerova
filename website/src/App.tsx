@@ -344,7 +344,11 @@ function App() {
           <span className="brand-mark">C</span>
           <span className="brand-name">Clerova</span>
         </a>
-        <a href="mailto:hello@clerova-ai.com">hello@clerova-ai.com</a>
+        <nav className="footer-links">
+          <a href="/terms">Terms</a>
+          <a href="/privacy">Privacy</a>
+          <a href="mailto:hello@clerova-ai.com">hello@clerova-ai.com</a>
+        </nav>
         <span>© 2026 Clerova</span>
       </footer>
     </div>

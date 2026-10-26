@@ -680,3 +680,9 @@ p {
     padding: 56px 0;
   }
 }
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
