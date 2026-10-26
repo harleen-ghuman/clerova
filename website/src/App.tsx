@@ -31,7 +31,7 @@ const requestTypes = [
 ];
 
 const plans = [
-  { name: "Starter", price: 99, founding: 89, requests: "600 requests a month", note: "For small teams and portfolios" },
+  { name: "Starter", price: 99, founding: 89, requests: "300 requests a month", note: "For small teams and portfolios" },
   { name: "Growth", price: 189, founding: 159, requests: "1,500 requests a month", note: "For busy inboxes and growing portfolios" },
 ];
 

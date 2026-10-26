@@ -40,7 +40,7 @@ class StripeClientTest {
 
         BillingProperties properties = new BillingProperties(
                 "sk_test_example", "", "http://127.0.0.1:" + server.getAddress().getPort(),
-                "https://app.example.com", 14, 600, 1500, 20);
+                "https://app.example.com", 14, 300, 1500, 20);
         client = new StripeClient(properties, new ObjectMapper());
     }
 

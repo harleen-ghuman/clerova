@@ -9,7 +9,7 @@ export const PLANS: {
   monthly: number;
   foundingMonthly: number;
 }[] = [
-  { plan: "STARTER", name: "Starter", requests: 600, monthly: 99, foundingMonthly: 89 },
+  { plan: "STARTER", name: "Starter", requests: 300, monthly: 99, foundingMonthly: 89 },
   { plan: "GROWTH", name: "Growth", requests: 1500, monthly: 189, foundingMonthly: 159 },
 ];
 
