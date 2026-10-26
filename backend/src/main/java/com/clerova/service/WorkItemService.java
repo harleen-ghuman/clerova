@@ -287,7 +287,7 @@ public class WorkItemService {
 
         if (CLOSED_STATUSES.contains(workItem.getStatus())) {
             throw new IllegalStateException(
-                    "This work item is already closed"
+                    "This request is already closed."
             );
         }
 
@@ -299,7 +299,7 @@ public class WorkItemService {
                             == ProposedActionStatus.PENDING_APPROVAL) {
 
                         throw new IllegalStateException(
-                                "This work item already has a pending proposed action"
+                                "This request already has a suggestion waiting for review."
                         );
                     }
 
@@ -309,7 +309,7 @@ public class WorkItemService {
                             && workItem.getStatus() != WorkItemStatus.NEW) {
 
                         throw new IllegalStateException(
-                                "This work item already has an approved proposed action"
+                                "A suggestion for this request was already approved."
                         );
                     }
                 });
@@ -522,7 +522,7 @@ public class WorkItemService {
 
         if (CLOSED_STATUSES.contains(workItem.getStatus())) {
             throw new IllegalStateException(
-                    "This work item is already closed"
+                    "This request is already closed."
             );
         }
 

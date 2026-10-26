@@ -8,6 +8,7 @@ import com.clerova.domain.UserRole;
 import com.clerova.dto.MeResponse;
 import com.clerova.dto.OnboardingRequest;
 import com.clerova.dto.OrganizationResponse;
+import com.clerova.dto.UpdateAccountRequest;
 import com.clerova.repository.AppUserRepository;
 import com.clerova.repository.OrganizationRepository;
 import com.clerova.security.CurrentUserService;
@@ -44,9 +45,14 @@ public class AccountService {
         this.trialAiMonthlyLimit = trialAiMonthlyLimit;
     }
 
-    @Transactional(readOnly = true)
+    /**
+     * The signed-in user. A changed sign-in email (confirmed in Supabase)
+     * is copied to the user and to Stripe here.
+     */
+    @Transactional
     public MeResponse getMe() {
         return currentUserService.findCurrentUser()
+                .map(this::syncEmail)
                 .map(this::toMeResponse)
                 .orElseGet(() -> new MeResponse(
                         currentUserService.currentUserId(),
@@ -65,7 +71,7 @@ public class AccountService {
 
         if (currentUserService.findCurrentUser().isPresent()) {
             throw new IllegalStateException(
-                    "Your organization is already set up"
+                    "Your workspace is already set up."
             );
         }
 
@@ -90,6 +96,36 @@ public class AccountService {
         user.setRole(UserRole.OWNER);
 
         return toMeResponse(appUserRepository.save(user));
+    }
+
+    @Transactional
+    public MeResponse updateAccount(UpdateAccountRequest request) {
+        AppUser user = syncEmail(currentUserService.requireUser());
+        Organization organization = user.getOrganization();
+        String organizationName = request.organizationName().trim();
+
+        // Left out means unchanged; an empty string clears it
+        if (request.fullName() != null) {
+            user.setFullName(blankToNull(request.fullName()));
+        }
+
+        if (!organizationName.equals(organization.getName())) {
+            organization.setName(organizationName);
+            billingService.updateCustomer(organization, "name", organizationName);
+        }
+
+        return toMeResponse(user);
+    }
+
+    private AppUser syncEmail(AppUser user) {
+        String email = currentUserService.currentEmail();
+
+        if (!email.isBlank() && !email.equalsIgnoreCase(user.getEmail())) {
+            user.setEmail(email);
+            billingService.updateCustomer(user.getOrganization(), "email", email);
+        }
+
+        return user;
     }
 
     private MeResponse toMeResponse(AppUser user) {

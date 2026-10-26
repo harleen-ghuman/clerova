@@ -18,8 +18,9 @@ import { TodayPage } from "./pages/TodayPage";
 import { JobsPage } from "./pages/JobsPage";
 import { InboxPage } from "./pages/InboxPage";
 import { EmailSetupPage } from "./pages/EmailSetupPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import type { EmailSettings } from "./types/Email";
-import type { Organization } from "./types/Account";
+import type { Me, Organization } from "./types/Account";
 import type { MaintenanceRequest } from "./types/MaintenanceRequest";
 import type { WorkItem } from "./types/WorkItem";
 import { requestBucket } from "./utils/requestStatus";
@@ -30,6 +31,9 @@ interface AppProps {
   /** As loaded at sign-in; usage and billing refresh in the background. */
   organization: Organization;
   userEmail: string;
+  fullName: string | null;
+  /** Saved on the Settings page. */
+  onAccountUpdated: (me: Me) => void;
   onSignOut: () => void;
 }
 
@@ -39,12 +43,15 @@ const MOBILE_NAV: { view: AppView; label: string }[] = [
   { view: "jobs", label: "Jobs" },
   { view: "inbox", label: "Inbox" },
   { view: "email-setup", label: "Email setup" },
+  { view: "settings", label: "Settings" },
 ];
 
 function App({
   welcome = false,
   organization: initialOrganization,
   userEmail,
+  fullName,
+  onAccountUpdated,
   onSignOut,
 }: AppProps) {
   const [organization, setOrganization] = useState(initialOrganization);
@@ -421,6 +428,24 @@ function App({
         {activeView === "email-setup" && (
           <div className="page-padded">
             <EmailSetupPage settings={emailSettings} error={emailSettingsError} />
+          </div>
+        )}
+
+        {activeView === "settings" && (
+          <div className="page-padded">
+            <SettingsPage
+              email={userEmail}
+              fullName={fullName}
+              organization={organization}
+              onSaved={(me) => {
+                if (me.organization) {
+                  setOrganization(me.organization);
+                }
+                onAccountUpdated(me);
+              }}
+              onManageBilling={manageBilling}
+              onSignOut={onSignOut}
+            />
           </div>
         )}
       </main>

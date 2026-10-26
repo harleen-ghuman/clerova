@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -203,6 +204,32 @@ class BillingTest {
 
         // Growth can't be upgraded again
         mockMvc.perform(post("/api/billing/upgrade").with(user)).andExpect(status().isConflict());
+    }
+
+    @Test
+    void renamingTheCompanyUpdatesTheStripeCustomerAndAStripeErrorDoesNotBlockIt() throws Exception {
+        RequestPostProcessor user = onboardNewUser(mockMvc);
+        String organizationId = organizationIdOf(user);
+
+        stubSubscription(organizationId, "trialing", "starter_monthly");
+        sendSignedWebhook("""
+                {"type":"customer.subscription.updated","data":{"object":{"id":"sub_1"}}}
+                """).andExpect(status().isOk());
+
+        when(stripe.post(eq("/v1/customers/cus_" + organizationId), anyMap()))
+                .thenThrow(new com.clerova.exception.ApiException(
+                        org.springframework.http.HttpStatus.BAD_GATEWAY, "BILLING_ERROR", "Stripe: down"));
+
+        mockMvc.perform(patch("/api/me")
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"organizationName":"Maple Property Group"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.organization.name").value("Maple Property Group"));
+
+        verify(stripe).post("/v1/customers/cus_" + organizationId, Map.of("name", "Maple Property Group"));
     }
 
     @Test

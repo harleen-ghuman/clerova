@@ -58,7 +58,7 @@ public class CurrentUserService {
         return findCurrentUser().orElseThrow(() -> new ApiException(
                 HttpStatus.FORBIDDEN,
                 "ONBOARDING_REQUIRED",
-                "Finish setting up your organization to continue."
+                "Finish setting up your workspace to continue."
         ));
     }
 

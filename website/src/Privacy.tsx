@@ -31,6 +31,12 @@ export function Privacy() {
           name, number of units managed, and how you heard about us.
         </li>
         <li>
+          <strong>If you sign in with Google:</strong> Google shares your name,
+          email address and profile picture with us. We use them only to
+          create your account and sign you in. We can't see your Gmail,
+          contacts, files or anything else in your Google account.
+        </li>
+        <li>
           <strong>Emails and requests you send to Clerova:</strong> sender
           names and email addresses, subjects, message text, attachment names,
           and the replies you approve and send.
@@ -72,6 +78,7 @@ export function Privacy() {
       <p>We share information only with providers that help us run Clerova:</p>
       <ul>
         <li><strong>Supabase:</strong> database and sign-in</li>
+        <li><strong>Google:</strong> sign-in with Google, if you choose it</li>
         <li><strong>Render:</strong> hosting for the app and website</li>
         <li><strong>Postmark:</strong> receiving forwarded emails and sending replies and account emails</li>
         <li><strong>OpenAI:</strong> AI processing of requests</li>
@@ -110,7 +117,7 @@ export function Privacy() {
 
       <h2>9. Your choices and rights</h2>
       <p>
-        You can see and update your account details, and you can ask us to
+        You can see and update your account details in Settings, and you can ask us to
         access, correct, export or delete your personal information by emailing
         hello@clerova-ai.com. Depending on where you live, such as California
         under the CCPA, you may have more rights. We won't treat you

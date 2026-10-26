@@ -46,6 +46,19 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
       .catch((err) => console.error("Failed to load the offer:", err));
   }, []);
 
+  useEffect(() => {
+    // Coming back from Stripe with the Back button restores this page as it
+    // was, buttons disabled; let them choose again.
+    function onPageShow(event: PageTransitionEvent) {
+      if (event.persisted) {
+        setSubmitting(null);
+      }
+    }
+
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
   async function choose(plan: PaidPlan) {
     try {
       setSubmitting(plan);
@@ -130,11 +143,7 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
                   onClick={() => choose(item.plan)}
                   disabled={submitting !== null}
                 >
-                  {submitting === item.plan
-                    ? "Opening checkout..."
-                    : firstTime
-                      ? "Start free trial"
-                      : `Choose ${item.name}`}
+                  {firstTime ? "Start free trial" : `Choose ${item.name}`}
                 </button>
               </article>
             );

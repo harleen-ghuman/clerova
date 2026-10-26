@@ -7,6 +7,8 @@ import type { Me } from "../types/Account";
 
 interface OnboardingPageProps {
   email: string;
+  /** From Google, when they signed up with it. */
+  suggestedName: string;
   onComplete: (me: Me) => void;
   onSignOut: () => void;
 }
@@ -24,6 +26,7 @@ const REFERRAL_SOURCES = [
 
 export function OnboardingPage({
   email,
+  suggestedName,
   onComplete,
   onSignOut,
 }: OnboardingPageProps) {
@@ -31,7 +34,7 @@ export function OnboardingPage({
   const storedSource = getReferralSource();
   const trackedSource = storedSource === "website" ? null : storedSource;
 
-  const [fullName, setFullName] = useState("");
+  const [fullName, setFullName] = useState(suggestedName);
   const [organizationName, setOrganizationName] = useState("");
   const [companySize, setCompanySize] = useState("");
   const [referralSource, setReferralSource] = useState(
@@ -57,7 +60,7 @@ export function OnboardingPage({
 
       onComplete(me);
     } catch (err) {
-      setError(errorMessage(err, "Unable to set up your organization."));
+      setError(errorMessage(err, "Couldn't set up your workspace. Please try again."));
     } finally {
       setSubmitting(false);
     }

@@ -114,6 +114,8 @@ h3 {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
   padding: 4px 8px 20px;
   border: 0;
   background: none;
@@ -1061,7 +1063,9 @@ h3 {
 }
 
 .inbox-sender strong {
+  min-width: 0;
   font-size: 14px;
+  overflow-wrap: anywhere;
 }
 
 .inbox-sender span,
@@ -1470,12 +1474,14 @@ h3 {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
+    gap: 12px;
     padding: 10px 16px;
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
 
   .sidebar-brand {
+    flex: 1 1 auto;
     padding: 0;
   }
 
@@ -1484,9 +1490,14 @@ h3 {
   }
 
   .sidebar-footer {
+    flex: 0 0 auto;
     margin: 0;
     padding: 0;
     border: 0;
+  }
+
+  .sidebar-billing {
+    white-space: nowrap;
   }
 
   .sidebar-footer p,
@@ -2276,4 +2287,104 @@ h3 {
   font-size: 11px;
   font-weight: 600;
   vertical-align: middle;
+}
+
+/* =========================================================
+   Settings
+   ========================================================= */
+
+.settings {
+  max-width: 640px;
+}
+
+.settings-section {
+  padding: 20px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.settings-section h2 {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.settings-section > p {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.settings-form {
+  margin-top: 16px;
+  gap: 14px;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-section > .settings-actions {
+  margin-top: 14px;
+}
+
+.settings-actions .request-success {
+  margin: 0;
+}
+
+/* =========================================================
+   Sign in with Google
+   ========================================================= */
+
+.google-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 24px;
+  padding: 11px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.google-button:hover {
+  background: var(--surface-soft);
+}
+
+.google-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.auth-divider + .auth-form {
+  margin-top: 16px;
 }
