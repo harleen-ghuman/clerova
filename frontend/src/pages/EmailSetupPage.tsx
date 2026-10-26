@@ -100,8 +100,8 @@ export function EmailSetupPage({ settings, error }: EmailSetupPageProps) {
           </ol>
           <p className="setup-tip">
             Only want some emails? Instead of forwarding everything, create a
-            filter (for example, mail sent to maintenance@ or from your load
-            board) and choose "Forward it to" your Clerova address.
+            filter (for example, mail sent to maintenance@ or from your
+            tenant portal) and choose "Forward it to" your Clerova address.
           </p>
         </article>
 

@@ -97,7 +97,7 @@ export function WorkItemActivity({
           <h3>Activity</h3>
 
           <ol className="activity-timeline">
-            {events.map((event) => (
+            {[...events].reverse().map((event) => (
               <li key={event.id}>
                 <span className="activity-detail">{event.detail}</span>
                 <span className="activity-meta">

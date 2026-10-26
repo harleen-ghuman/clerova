@@ -1,6 +1,8 @@
 import "./App.css";
 
-const REQUEST_DEMO_URL = "https://tally.so/r/jajWzE";
+// Sign-up lives in the app; utm_source lets onboarding record where
+// the visitor came from.
+const SIGN_UP_URL = "https://app.clerova-ai.com/?utm_source=website";
 
 function App() {
   return (
@@ -19,11 +21,9 @@ function App() {
 
         <a
           className="button button-small button-outline"
-          href={REQUEST_DEMO_URL}
-          target="_blank"
-          rel="noreferrer"
+          href={SIGN_UP_URL}
         >
-          Request a Live Demo
+          Start free trial
         </a>
       </header>
 
@@ -48,11 +48,9 @@ function App() {
             <div className="hero-actions">
               <a
                 className="button button-primary"
-                href={REQUEST_DEMO_URL}
-                target="_blank"
-                rel="noreferrer"
+                href={SIGN_UP_URL}
               >
-                Request a Live Demo
+                Start free trial
                 <span aria-hidden="true">→</span>
               </a>
             </div>
@@ -375,22 +373,20 @@ function App() {
 
         <section className="cta-section">
           <div>
-            <span className="section-kicker light">SEE CLEROVA IN ACTION</span>
+            <span className="section-kicker light">TRY CLEROVA FREE</span>
             <h2>Turn the next resident request into organized work.</h2>
             <p>
-              Explore the working demo or tell us how your team currently
-              handles incoming property requests.
+              Start a 14-day free trial. No credit card required. Forward
+              your requests inbox and see it organized in minutes.
             </p>
           </div>
 
           <div className="cta-actions">
             <a
               className="button button-light"
-              href={REQUEST_DEMO_URL}
-              target="_blank"
-              rel="noreferrer"
+              href={SIGN_UP_URL}
             >
-              Request a Live Demo
+              Start free trial
               <span>→</span>
             </a>
           </div>
