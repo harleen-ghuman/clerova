@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { getWeekSummary, type WeekSummary } from "../api/summary";
+import { GetStarted } from "../components/GetStarted";
 import type { MaintenanceRequest } from "../types/MaintenanceRequest";
 import type { WorkItem } from "../types/WorkItem";
 import {
@@ -15,8 +16,24 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // Customers who haven't answered in this many days are worth a nudge
 const WAITING_DAYS = 3;
 
+const HIDE_KEY = "clerova.getStartedHidden";
+
+function readHidden(): boolean {
+  try {
+    return window.localStorage.getItem(HIDE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 interface TodayPageProps {
   organizationName: string;
+  /** Just finished checkout; greet them. */
+  welcome: boolean;
+  forwardingAddress: string | null;
+  /** Any request ever, open or closed. */
+  hasAnyRequest: boolean;
+  onOpenEmailSetup: () => void;
   /** Open requests; closed ones are ignored here. */
   requests: WorkItem[];
   jobs: MaintenanceRequest[];
@@ -102,6 +119,10 @@ function formatMinutes(minutes: number): string {
 
 export function TodayPage({
   organizationName,
+  welcome,
+  forwardingAddress,
+  hasAnyRequest,
+  onOpenEmailSetup,
   requests,
   jobs,
   refreshKey,
@@ -110,6 +131,7 @@ export function TodayPage({
   onOpenJobs,
 }: TodayPageProps) {
   const [summary, setSummary] = useState<WeekSummary | null>(null);
+  const [checklistHidden, setChecklistHidden] = useState(readHidden);
   // Fixed per refresh so "waiting 3+ days" doesn't change between renders
   const [now, setNow] = useState(() => Date.now());
 
@@ -154,6 +176,35 @@ export function TodayPage({
         <p>{organizationName}</p>
       </header>
 
+      {(() => {
+        const hasReply = (summary?.repliesSent ?? 0) > 0;
+        const finished = hasAnyRequest && hasReply;
+
+        return (
+          !checklistHidden &&
+          !finished && (
+            <GetStarted
+              welcome={welcome}
+              forwardingAddress={forwardingAddress}
+              hasRequest={hasAnyRequest}
+              hasReply={hasReply}
+              onOpenEmailSetup={onOpenEmailSetup}
+              onOpenRequests={() => onOpenRequests("review")}
+              onHide={() => {
+                setChecklistHidden(true);
+                try {
+                  window.localStorage.setItem(HIDE_KEY, "1");
+                } catch {
+                  // Hidden for this visit only
+                }
+              }}
+            />
+          )
+        );
+      })()}
+
+      {hasAnyRequest && (
+      <>
       <section aria-labelledby="needs-you">
         <h2 id="needs-you" className="today-heading">Needs you now</h2>
 
@@ -254,6 +305,8 @@ export function TodayPage({
           <p className="today-footnote">Loading...</p>
         )}
       </section>
+      </>
+      )}
     </div>
   );
 }

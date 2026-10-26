@@ -1615,7 +1615,7 @@ h3 {
 }
 
 .auth-brand .brand-mark {
-  background: var(--brand);
+  background: var(--text);
   color: #ffffff;
 }
 
@@ -2136,4 +2136,128 @@ h3 {
 .auth-legal a,
 .auth-hint a {
   color: var(--brand);
+}
+
+/* =========================================================
+   Get started checklist
+   ========================================================= */
+
+.get-started {
+  margin-bottom: 28px;
+  padding: 20px 22px;
+  border: 1px solid var(--brand-line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.get-started-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.get-started-head h2 {
+  font-size: 17px;
+}
+
+.get-started-head p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.get-started-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.get-started-steps li {
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+
+.get-started-steps li > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.get-started-steps strong {
+  font-size: 14px;
+}
+
+.get-started-steps p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.get-started-steps .rq-button {
+  text-decoration: none;
+}
+
+.get-started-num {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.get-started-steps li.done {
+  border-color: var(--success-line);
+  background: var(--success-soft);
+}
+
+.get-started-steps li.done .get-started-num {
+  background: var(--success);
+  color: #ffffff;
+}
+
+.get-started-address {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.get-started-address code {
+  max-width: 100%;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: var(--brand-soft);
+  color: var(--brand-hover);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1200px) {
+  .get-started-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .get-started-steps {
+    grid-template-columns: 1fr;
+  }
 }
