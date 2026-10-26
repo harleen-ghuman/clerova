@@ -5,6 +5,7 @@ import com.clerova.domain.Organization;
 import com.clerova.exception.ApiException;
 import com.clerova.exception.NotFoundException;
 import com.clerova.repository.OrganizationRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,14 +24,17 @@ public class AiUsageService {
 
     private final OrganizationRepository organizationRepository;
     private final BillingService billingService;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     public AiUsageService(
             OrganizationRepository organizationRepository,
-            BillingService billingService
+            BillingService billingService,
+            ApplicationEventPublisher events
     ) {
         this.organizationRepository = organizationRepository;
         this.billingService = billingService;
+        this.events = events;
         this.clock = Clock.systemUTC();
     }
 
@@ -51,6 +55,21 @@ public class AiUsageService {
                     "You have used all requests included in your plan this month."
             );
         }
+
+        // Each count is reached by exactly one request, so this fires once per month
+        int used = organizationRepository.findUsageCount(organizationId);
+        int limit = organizationRepository.findById(organizationId)
+                .map(Organization::getAiMonthlyLimit)
+                .orElse(0);
+
+        if (used == limit || used == warningThreshold(limit)) {
+            events.publishEvent(new UsageThresholdReached(organizationId, used, limit));
+        }
+    }
+
+    /** Usage at which to warn that the monthly limit is close. */
+    public static int warningThreshold(int limit) {
+        return (int) Math.ceil(limit * 0.8);
     }
 
     /**

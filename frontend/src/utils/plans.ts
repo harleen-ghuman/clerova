@@ -1,7 +1,7 @@
 import type { BillingInterval, PaidPlan } from "../api/billing";
 
 // Must match the prices set up in Stripe (see README, Billing setup).
-// Yearly is 11 months: one month free.
+// Yearly is 10 months: two months free.
 export const PLANS: {
   plan: PaidPlan;
   name: string;
@@ -9,8 +9,8 @@ export const PLANS: {
   monthly: number;
   foundingMonthly: number;
 }[] = [
-  { plan: "STARTER", name: "Starter", requests: 300, monthly: 99, foundingMonthly: 89 },
-  { plan: "GROWTH", name: "Growth", requests: 1500, monthly: 189, foundingMonthly: 159 },
+  { plan: "STARTER", name: "Starter", requests: 500, monthly: 99, foundingMonthly: 79 },
+  { plan: "GROWTH", name: "Growth", requests: 1500, monthly: 189, foundingMonthly: 149 },
 ];
 
 export function planPrice(
@@ -18,7 +18,7 @@ export function planPrice(
   interval: BillingInterval
 ): { amount: number; per: string } {
   return interval === "year"
-    ? { amount: monthly * 11, per: "year" }
+    ? { amount: monthly * 10, per: "year" }
     : { amount: monthly, per: "month" };
 }
 

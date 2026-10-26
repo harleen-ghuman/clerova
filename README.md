@@ -332,6 +332,7 @@ Never commit API keys or passwords. `.env.local` is git-ignored.
 | `INBOUND_WEBHOOK_PASSWORD` | Basic-auth password for the Postmark webhook |
 | `POSTMARK_SERVER_TOKEN` | Enables sending replies |
 | `PORT` | Server port (default 8080) |
+| `SUPPORT_EMAIL` | Reply-to for account emails (default hello@clerova-ai.com) |
 | `STRIPE_SECRET_KEY` | Turns billing on (a plan is then required to use AI) |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret of the Stripe webhook endpoint |
 | `APP_URL` | Where Stripe sends users back, e.g. `https://app.clerova-ai.com` |
@@ -342,7 +343,7 @@ Optional:
 | --- | --- |
 | `TRIAL_DAYS` | 14 |
 | `TRIAL_AI_MONTHLY_LIMIT` | 100 (only when billing is off) |
-| `STARTER_MONTHLY_REQUESTS`, `GROWTH_MONTHLY_REQUESTS` | 300, 1500 |
+| `STARTER_MONTHLY_REQUESTS`, `GROWTH_MONTHLY_REQUESTS` | 500, 1500 |
 | `FOUNDING_SPOTS` | 20 |
 | `AI_RATE_LIMIT_PER_CLIENT_PER_MINUTE` | 10 |
 | `AI_RATE_LIMIT_GLOBAL_PER_DAY` | 500 |
@@ -420,15 +421,15 @@ first, then repeat in live mode.
    | Lookup key | Price |
    | --- | --- |
    | `starter_monthly` | $99 / month |
-   | `starter_yearly` | $1,089 / year |
+   | `starter_yearly` | $990 / year |
    | `growth_monthly` | $189 / month |
-   | `growth_yearly` | $2,079 / year |
-   | `founding_starter_monthly` | $89 / month |
-   | `founding_starter_yearly` | $979 / year |
-   | `founding_growth_monthly` | $159 / month |
-   | `founding_growth_yearly` | $1,749 / year |
+   | `growth_yearly` | $1,890 / year |
+   | `founding_starter_monthly` | $79 / month |
+   | `founding_starter_yearly` | $790 / year |
+   | `founding_growth_monthly` | $149 / month |
+   | `founding_growth_yearly` | $1,490 / year |
 
-   Yearly prices are 11 months (one month free). The first `FOUNDING_SPOTS`
+   Yearly prices are 10 months (two months free). The first `FOUNDING_SPOTS`
    organizations get the founding prices and keep them. The amounts shown in
    the app are in `frontend/src/utils/plans.ts`, so keep them in sync.
 2. **Customer portal** (Settings → Billing → Customer portal): allow updating
@@ -453,6 +454,11 @@ How it works:
   stays readable and new requests are blocked.
 - Each new email or typed request counts once against the plan's monthly
   requests. Suggestions and replies on an existing request don't count.
+- At 80% and at 100% of the monthly requests, owners get an email and the
+  app shows a banner. On Starter both suggest upgrading to Growth, which
+  opens Stripe's plan change screen. At the limit, new emails are saved but
+  not organized until the next month; they can be retried from the Inbox
+  after upgrading.
 - Stripe is the source of truth. Webhooks and the return from Checkout read
   the current subscription from Stripe and copy its status, plan and dates
   to the organization.

@@ -10,6 +10,7 @@ import { getMaintenanceRequests } from "./api/MaintenanceRequests";
 import { getEmailSettings } from "./api/email";
 import { errorMessage } from "./api/client";
 import { openBillingPortal } from "./api/billing";
+import { getMe } from "./api/account";
 import { Sidebar, type AppView } from "./components/Sidebar";
 import { RequestsPage, type RequestFilter } from "./pages/RequestsPage";
 import { TodayPage } from "./pages/TodayPage";
@@ -23,6 +24,7 @@ import type { WorkItem } from "./types/WorkItem";
 import { requestBucket } from "./utils/requestStatus";
 
 interface AppProps {
+  /** As loaded at sign-in; usage and billing refresh in the background. */
   organization: Organization;
   userEmail: string;
   onSignOut: () => void;
@@ -36,7 +38,8 @@ const MOBILE_NAV: { view: AppView; label: string }[] = [
   { view: "email-setup", label: "Email setup" },
 ];
 
-function App({ organization, userEmail, onSignOut }: AppProps) {
+function App({ organization: initialOrganization, userEmail, onSignOut }: AppProps) {
+  const [organization, setOrganization] = useState(initialOrganization);
   const [activeView, setActiveView] = useState<AppView>("today");
   const [requestFilter, setRequestFilter] = useState<RequestFilter>("review");
 
@@ -98,6 +101,16 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
       );
   }
 
+  function loadOrganization() {
+    return getMe()
+      .then((me) => {
+        if (me.organization) {
+          setOrganization(me.organization);
+        }
+      })
+      .catch((err) => console.error("Failed to refresh the account:", err));
+  }
+
   useEffect(() => {
     // State is only set in promise callbacks, never synchronously here.
     void loadRequests();
@@ -115,6 +128,7 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
 
       void loadRequests();
       void loadJobs();
+      void loadOrganization();
       setRefreshTick((tick) => tick + 1);
     }, 30_000);
 
@@ -172,8 +186,8 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
 
   const [billingError, setBillingError] = useState<string | null>(null);
 
-  function manageBilling() {
-    openBillingPortal()
+  function manageBilling(upgrade = false) {
+    openBillingPortal(upgrade)
       .then(({ url }) => window.location.assign(url))
       .catch((err) =>
         setBillingError(errorMessage(err, "Unable to open billing. Please try again."))
@@ -197,7 +211,33 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
   function handleChanged() {
     void loadRequests();
     void loadJobs();
+    void loadOrganization();
   }
+
+  // Warn from 80% of the monthly requests, and suggest upgrading
+  const used = organization.aiRequestsUsedThisMonth;
+  const limit = organization.aiMonthlyLimit;
+  const usageLevel =
+    organization.plan === "INTERNAL" || limit <= 0
+      ? null
+      : used >= limit
+        ? "limit"
+        : used >= Math.ceil(limit * 0.8)
+          ? "warning"
+          : null;
+  const canUpgrade =
+    organization.plan === "STARTER" &&
+    organization.billingEnabled &&
+    organization.subscriptionStatus !== null;
+  const resetDate = new Date(
+    Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 1)
+  ).toLocaleDateString([], { month: "long", day: "numeric", timeZone: "UTC" });
+  const usageNotice =
+    usageLevel === "limit"
+      ? `You've used all ${limit} requests this month. New emails are saved but won't be organized until ${resetDate}.`
+      : usageLevel === "warning"
+        ? `You've used ${used} of ${limit} requests this month.`
+        : null;
 
   return (
     <div className="app-shell">
@@ -209,7 +249,7 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
         userEmail={userEmail}
         onNavigate={navigate}
         onSignOut={onSignOut}
-        onManageBilling={manageBilling}
+        onManageBilling={() => manageBilling()}
       />
 
       <nav className="mobile-nav" aria-label="Mobile navigation">
@@ -233,13 +273,36 @@ function App({ organization, userEmail, onSignOut }: AppProps) {
           <div className="billing-banner" role="status">
             <span>{billingError ?? billingNotice}</span>
             {organization.subscriptionStatus === "past_due" && (
-              <button type="button" className="rq-button rq-button-small" onClick={manageBilling}>
+              <button type="button" className="rq-button rq-button-small" onClick={() => manageBilling()}>
                 Update card
               </button>
             )}
             {organization.cancelAtPeriodEnd && (
-              <button type="button" className="rq-button rq-button-small" onClick={manageBilling}>
+              <button type="button" className="rq-button rq-button-small" onClick={() => manageBilling()}>
                 Keep my plan
+              </button>
+            )}
+          </div>
+        )}
+
+        {usageNotice && (
+          <div
+            className={`billing-banner ${usageLevel === "limit" ? "billing-banner-limit" : ""}`}
+            role="status"
+          >
+            <span>
+              {usageNotice}{" "}
+              {canUpgrade
+                ? "Growth includes 1,500 requests a month."
+                : usageLevel === "limit" && "Email hello@clerova-ai.com if you need more."}
+            </span>
+            {canUpgrade && (
+              <button
+                type="button"
+                className="rq-button rq-button-small rq-button-primary"
+                onClick={() => manageBilling(true)}
+              >
+                Upgrade to Growth
               </button>
             )}
           </div>

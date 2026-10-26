@@ -89,7 +89,7 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
             aria-pressed={interval === "year"}
             onClick={() => setBillingInterval("year")}
           >
-            Yearly <span>1 month free</span>
+            Yearly <span>2 months free</span>
           </button>
         </div>
 

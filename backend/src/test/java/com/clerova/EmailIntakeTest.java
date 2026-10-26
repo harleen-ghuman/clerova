@@ -27,6 +27,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.List;
 import java.util.UUID;
 
 import static com.clerova.WorkItemWorkflowTest.onboardNewUser;
@@ -452,6 +453,35 @@ class EmailIntakeTest {
                 .andExpect(jsonPath("$[0].status").value("RECEIVED"))
                 .andExpect(jsonPath("$[0].statusReason").value(
                         "Will retry. AI processing failed: 401: Incorrect API key provided"));
+    }
+
+    @Test
+    void ownerIsWarnedAtEightyPercentAndAtTheLimitOnce() throws Exception {
+        String organizationId = json(mockMvc.perform(get("/api/me").with(user)))
+                .get("organization").get("id").asText();
+
+        jdbcTemplate.update(
+                "update organizations set ai_monthly_limit = 5 where id = ?",
+                UUID.fromString(organizationId)
+        );
+
+        for (int i = 0; i < 6; i++) {
+            mockMvc.perform(post("/api/work-items")
+                    .with(user)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"message\":\"Leak " + i + "\"}"));
+        }
+
+        ArgumentCaptor<OutgoingEmail> sent = ArgumentCaptor.forClass(OutgoingEmail.class);
+        verify(emailSender, org.mockito.Mockito.atLeastOnce()).send(sent.capture());
+
+        List<String> subjects = sent.getAllValues().stream().map(OutgoingEmail::subject).toList();
+
+        assertThat(subjects).containsOnlyOnce(
+                "You've used 80% of your Clerova requests this month",
+                "You've reached your Clerova requests for this month"
+        );
+        assertThat(sent.getAllValues().get(0).textBody()).contains("used 4 of the 5 requests");
     }
 
     @Test

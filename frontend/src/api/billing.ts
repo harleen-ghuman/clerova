@@ -28,7 +28,12 @@ export function completeCheckout(sessionId: string): Promise<unknown> {
   );
 }
 
-/** Returns the Stripe billing portal page. */
-export function openBillingPortal(): Promise<{ url: string }> {
-  return apiRequest("/api/billing/portal", { method: "POST" });
+/**
+ * Returns the Stripe billing portal page; with upgrade, its plan change
+ * screen.
+ */
+export function openBillingPortal(upgrade = false): Promise<{ url: string }> {
+  return apiRequest(`/api/billing/portal${upgrade ? "?flow=upgrade" : ""}`, {
+    method: "POST",
+  });
 }

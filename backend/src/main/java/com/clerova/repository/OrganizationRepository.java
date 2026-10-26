@@ -18,6 +18,9 @@ public interface OrganizationRepository
 
     Optional<Organization> findByStripeCustomerId(String stripeCustomerId);
 
+    @Query("select o.aiUsageCount from Organization o where o.id = :id")
+    int findUsageCount(@Param("id") UUID id);
+
     long countByFoundingCustomerTrue();
 
     /**

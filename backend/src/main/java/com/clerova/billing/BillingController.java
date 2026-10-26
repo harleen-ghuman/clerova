@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -53,9 +54,13 @@ public class BillingController {
         return Map.of("ok", true);
     }
 
+    /** ?flow=upgrade opens the plan change screen directly. */
     @PostMapping("/api/billing/portal")
-    public Map<String, String> portal() {
-        return Map.of("url", billingService.openPortal(currentUserService.requireOrganizationId()));
+    public Map<String, String> portal(@RequestParam(required = false) String flow) {
+        return Map.of("url", billingService.openPortal(
+                currentUserService.requireOrganizationId(),
+                "upgrade".equals(flow)
+        ));
     }
 
     /** Stripe webhook; authenticated by its signature, not a user token. */

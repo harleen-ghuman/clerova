@@ -31,8 +31,8 @@ const requestTypes = [
 ];
 
 const plans = [
-  { name: "Starter", price: 99, founding: 89, requests: "300 requests a month", note: "For small teams and portfolios" },
-  { name: "Growth", price: 189, founding: 159, requests: "1,500 requests a month", note: "For busy inboxes and growing portfolios" },
+  { name: "Starter", price: 99, founding: 79, requests: "500 requests a month", note: "For small teams and portfolios" },
+  { name: "Growth", price: 189, founding: 149, requests: "1,500 requests a month", note: "For busy inboxes and growing portfolios" },
 ];
 
 const faqs = [
@@ -282,7 +282,7 @@ function App() {
             <span className="kicker">Pricing</span>
             <h2>Simple plans. 14 days free.</h2>
             <p>
-              Every plan includes all features. Pay yearly and get one month
+              Every plan includes all features. Pay yearly and get two months
               free.
             </p>
           </div>

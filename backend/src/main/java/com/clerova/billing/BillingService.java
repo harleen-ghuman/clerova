@@ -172,8 +172,11 @@ public class BillingService {
         }
     }
 
-    /** @return the Stripe billing portal page for the organization */
-    public String openPortal(UUID organizationId) {
+    /**
+     * @param upgrade open the plan change screen directly
+     * @return the Stripe billing portal page for the organization
+     */
+    public String openPortal(UUID organizationId, boolean upgrade) {
         requireEnabled();
 
         Organization organization = findOrganization(organizationId);
@@ -182,10 +185,16 @@ public class BillingService {
             throw new ApiException(HttpStatus.CONFLICT, "NO_SUBSCRIPTION", "Choose a plan first.");
         }
 
-        return stripe.post("/v1/billing_portal/sessions", Map.of(
-                "customer", organization.getStripeCustomerId(),
-                "return_url", properties.getAppUrl() + "/"
-        )).path("url").asString();
+        Map<String, String> form = new LinkedHashMap<>();
+        form.put("customer", organization.getStripeCustomerId());
+        form.put("return_url", properties.getAppUrl() + "/");
+
+        if (upgrade && organization.getStripeSubscriptionId() != null) {
+            form.put("flow_data[type]", "subscription_update");
+            form.put("flow_data[subscription_update][subscription]", organization.getStripeSubscriptionId());
+        }
+
+        return stripe.post("/v1/billing_portal/sessions", form).path("url").asString();
     }
 
     public void handleWebhook(String payload, String signatureHeader) {
