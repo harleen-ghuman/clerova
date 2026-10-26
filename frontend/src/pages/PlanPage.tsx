@@ -130,11 +130,7 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
                   onClick={() => choose(item.plan)}
                   disabled={submitting !== null}
                 >
-                  {submitting === item.plan
-                    ? "Opening checkout..."
-                    : firstTime
-                      ? "Start free trial"
-                      : `Choose ${item.name}`}
+                  {firstTime ? "Start free trial" : `Choose ${item.name}`}
                 </button>
               </article>
             );
