@@ -91,10 +91,7 @@ public class AccountService {
 
         user.setId(currentUserService.currentUserId());
         user.setEmail(currentUserService.currentEmail());
-        // Left out means unchanged; an empty string clears it
-        if (request.fullName() != null) {
-            user.setFullName(blankToNull(request.fullName()));
-        }
+        user.setFullName(blankToNull(request.fullName()));
         user.setOrganization(savedOrganization);
         user.setRole(UserRole.OWNER);
 
@@ -107,7 +104,10 @@ public class AccountService {
         Organization organization = user.getOrganization();
         String organizationName = request.organizationName().trim();
 
-        user.setFullName(blankToNull(request.fullName()));
+        // Left out means unchanged; an empty string clears it
+        if (request.fullName() != null) {
+            user.setFullName(blankToNull(request.fullName()));
+        }
 
         if (!organizationName.equals(organization.getName())) {
             organization.setName(organizationName);
