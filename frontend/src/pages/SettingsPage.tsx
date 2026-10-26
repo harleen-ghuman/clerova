@@ -97,7 +97,7 @@ function DetailsSection({
       onSaved(await updateAccount({ fullName: name, organizationName: company }));
       setSaved(true);
     } catch (err) {
-      setError(errorMessage(err, "Unable to save your details."));
+      setError(errorMessage(err, "Couldn't save your details. Please try again."));
     } finally {
       setSaving(false);
     }

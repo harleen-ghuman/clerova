@@ -96,7 +96,7 @@ export function RequestsPage({
       setFilter("all");
       onSelect(created);
     } catch (err) {
-      setCreateError(errorMessage(err, "Unable to create the request."));
+      setCreateError(errorMessage(err, "Couldn't add the request. Please try again."));
     } finally {
       setCreating(false);
     }

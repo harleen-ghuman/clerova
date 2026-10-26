@@ -39,6 +39,7 @@ export function InboxPage({
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "attention">("all");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [initialRefreshKey] = useState(refreshKey);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,8 +52,9 @@ export function InboxPage({
         }
       })
       .catch((err) => {
-        if (!cancelled) {
-          setError(errorMessage(err, "Unable to load the inbox."));
+        // A failed background refresh keeps what's already shown
+        if (!cancelled && refreshKey === initialRefreshKey) {
+          setError(errorMessage(err, "Couldn't load the inbox. Refresh to try again."));
         }
       })
       .finally(() => {
@@ -64,7 +66,7 @@ export function InboxPage({
     return () => {
       cancelled = true;
     };
-  }, [refreshKey]);
+  }, [refreshKey, initialRefreshKey]);
 
   async function handleReprocess(message: InboundMessage) {
     try {
@@ -77,7 +79,7 @@ export function InboxPage({
         current.map((item) => (item.id === updated.id ? updated : item))
       );
     } catch (err) {
-      setError(errorMessage(err, "Unable to process this email."));
+      setError(errorMessage(err, "Couldn't process this email. Please try again."));
     } finally {
       setBusyId(null);
     }
@@ -131,7 +133,7 @@ export function InboxPage({
 
       {error && <p className="action-error">{error}</p>}
 
-      {!loading && visible.length === 0 && (
+      {!loading && !error && visible.length === 0 && (
         <div className="empty-view">
 
           <h2>

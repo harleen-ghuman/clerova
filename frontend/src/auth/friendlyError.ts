@@ -3,7 +3,7 @@ export function friendlyError(message: string): string {
   const lower = message.toLowerCase();
 
   if (lower.includes("invalid login credentials")) {
-    return "That email and password don't match. Try again, or reset your password.";
+    return "That email and password don't match. Try again or reset your password. If you signed up with Google, use Continue with Google.";
   }
 
   if (lower.includes("email not confirmed")) {

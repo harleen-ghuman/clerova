@@ -61,7 +61,7 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
       const { url } = await startCheckout(plan, interval);
       window.location.assign(url);
     } catch (err) {
-      setError(errorMessage(err, "Unable to open checkout. Please try again."));
+      setError(errorMessage(err, "Couldn't open checkout. Please try again."));
       setSubmitting(null);
     }
   }

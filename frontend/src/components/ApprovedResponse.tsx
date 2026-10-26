@@ -30,6 +30,7 @@ export function ApprovedResponse({
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
       setCopied(false);
+      setError("Couldn't copy. Select the text and copy it instead.");
     }
   }
 
@@ -41,7 +42,7 @@ export function ApprovedResponse({
       const updated = await sendReply(action.id);
       onSent?.(updated);
     } catch (err) {
-      setError(errorMessage(err, "Unable to send the reply."));
+      setError(errorMessage(err, "Couldn't send the reply. Please try again."));
     } finally {
       setSending(false);
     }
@@ -50,7 +51,7 @@ export function ApprovedResponse({
   return (
     <div className="details-section">
       <div className="approved-response-heading">
-        <h3>{sent ? "Sent reply" : "Approved response"}</h3>
+        <h3>{sent ? "Sent reply" : "Approved reply"}</h3>
 
         <div className="approved-response-actions">
           <button

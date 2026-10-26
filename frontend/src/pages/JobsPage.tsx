@@ -66,7 +66,7 @@ export function JobsPage({
         onRequestClosed();
       }
     } catch (err) {
-      setJobError(errorMessage(err, "Unable to update this job."));
+      setJobError(errorMessage(err, "Couldn't update this job. Please try again."));
     } finally {
       setBusyId(null);
     }
@@ -91,137 +91,160 @@ export function JobsPage({
       {error && <p className="action-error rq-empty">{error}</p>}
       {jobError && <p className="action-error jobs-error">{jobError}</p>}
 
-      <div className="jobs-board">
-        {COLUMNS.map((column) => {
-          const cards = jobs
-            .filter((job) => column.statuses.includes(job.status))
-            .sort(
-              (a, b) =>
-                new Date(b.updatedAt).getTime() -
-                new Date(a.updatedAt).getTime()
-            )
-            .slice(0, column.dot === "done" ? DONE_LIMIT : undefined);
+      {!loading && !error && jobs.length === 0 && (
+        <p className="rq-empty">
+          No jobs yet. When you approve a repair on a request, it shows up
+          here so you can track it to done.
+        </p>
+      )}
 
-          return (
-            <section className="jobs-column" key={column.title}>
-              <h2>
-                <span className={`rq-dot rq-dot-${column.dot}`} aria-hidden="true" />
-                {column.title}
-                <span>{cards.length}</span>
-              </h2>
+      {!loading && jobs.length > 0 && (
+        <div className="jobs-board">
+          {COLUMNS.map((column) => {
+            const cards = jobs
+              .filter((job) => column.statuses.includes(job.status))
+              .sort(
+                (a, b) =>
+                  new Date(b.updatedAt).getTime() -
+                  new Date(a.updatedAt).getTime()
+              )
+              .slice(0, column.dot === "done" ? DONE_LIMIT : undefined);
 
-              {cards.length === 0 && <p className="jobs-none">No jobs here.</p>}
+            return (
+              <section className="jobs-column" key={column.title}>
+                <h2>
+                  <span className={`rq-dot rq-dot-${column.dot}`} aria-hidden="true" />
+                  {column.title}
+                  <span>{cards.length}</span>
+                </h2>
 
-              {cards.map((job) => {
-                const request = requestsById.get(job.workItemId);
-                const busy = busyId === job.id;
-                const finished =
-                  job.status === "COMPLETED" || job.status === "CANCELLED";
-                const note = notes[job.id] ?? job.notes ?? "";
+                {cards.length === 0 && <p className="jobs-none">No jobs here.</p>}
 
-                return (
-                  <article
-                    key={job.id}
-                    className={`jobs-card ${
-                      highlightWorkItemId === job.workItemId ? "highlight" : ""
-                    }`}
-                  >
-                    <div className="jobs-card-top">
-                      <strong>{job.description}</strong>
-                      {job.priority === "HIGH" && !finished && (
-                        <span className="rq-urgent">Urgent</span>
-                      )}
-                    </div>
+                {cards.map((job) => {
+                  const request = requestsById.get(job.workItemId);
+                  const busy = busyId === job.id;
+                  const finished =
+                    job.status === "COMPLETED" || job.status === "CANCELLED";
+                  const note = notes[job.id] ?? job.notes ?? "";
 
-                    {job.address && <p className="jobs-address">{job.address}</p>}
-
-                    <p className="jobs-meta">
-                      {job.status === "CANCELLED"
-                        ? `Cancelled ${shortTime(job.updatedAt)}`
-                        : finished
-                          ? `Done ${shortTime(job.updatedAt)}`
-                          : `Created ${shortTime(job.createdAt)}`}
-                    </p>
-
-                    <button
-                      type="button"
-                      className="jobs-link"
-                      onClick={() => onOpenRequest(job.workItemId)}
+                  return (
+                    <article
+                      key={job.id}
+                      ref={
+                        highlightWorkItemId === job.workItemId
+                          ? (element) => element?.scrollIntoView({ block: "center" })
+                          : undefined
+                      }
+                      className={`jobs-card ${
+                        highlightWorkItemId === job.workItemId ? "highlight" : ""
+                      }`}
                     >
-                      {request
-                        ? `From request: ${requestSender(request)}`
-                        : "View request"}
-                    </button>
-
-                    <details className="jobs-notes">
-                      <summary>{job.notes ? "Notes" : "Add notes"}</summary>
-                      {finished ? (
-                        <p>{job.notes || "No notes."}</p>
-                      ) : (
-                        <>
-                          <textarea
-                            rows={3}
-                            value={note}
-                            disabled={busy}
-                            placeholder="Vendor, access, progress..."
-                            onChange={(event) =>
-                              setNotes((current) => ({
-                                ...current,
-                                [job.id]: event.target.value,
-                              }))
-                            }
-                          />
-                          <button
-                            type="button"
-                            className="rq-button rq-button-small"
-                            disabled={busy || note === (job.notes ?? "")}
-                            onClick={() => update(job, { notes: note })}
-                          >
-                            Save notes
-                          </button>
-                        </>
-                      )}
-                    </details>
-
-                    {!finished && (
-                      <div className="jobs-actions">
-                        {job.status === "OPEN" && (
-                          <button
-                            type="button"
-                            className="rq-button rq-button-small"
-                            disabled={busy}
-                            onClick={() => update(job, { status: "IN_PROGRESS" })}
-                          >
-                            Start
-                          </button>
+                      <div className="jobs-card-top">
+                        <strong>{job.description}</strong>
+                        {job.priority === "HIGH" && !finished && (
+                          <span className="rq-urgent">Urgent</span>
                         )}
-                        {job.status === "IN_PROGRESS" && (
-                          <button
-                            type="button"
-                            className="rq-button rq-button-small rq-button-primary"
-                            disabled={busy}
-                            onClick={() => update(job, { status: "COMPLETED" })}
-                          >
-                            Mark done
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="rq-button rq-button-small rq-button-quiet"
-                          disabled={busy}
-                          onClick={() => update(job, { status: "CANCELLED" })}
-                        >
-                          Cancel job
-                        </button>
                       </div>
-                    )}
-                  </article>
-                );
-              })}
-            </section>
-          );
-        })}
-      </div>
+
+                      {job.address && <p className="jobs-address">{job.address}</p>}
+
+                      <p className="jobs-meta">
+                        {job.status === "CANCELLED"
+                          ? `Cancelled ${shortTime(job.updatedAt)}`
+                          : finished
+                            ? `Done ${shortTime(job.updatedAt)}`
+                            : `Created ${shortTime(job.createdAt)}`}
+                      </p>
+
+                      <button
+                        type="button"
+                        className="jobs-link"
+                        onClick={() => onOpenRequest(job.workItemId)}
+                      >
+                        {request
+                          ? `From request: ${requestSender(request)}`
+                          : "View request"}
+                      </button>
+
+                      <details className="jobs-notes">
+                        <summary>{job.notes ? "Notes" : "Add notes"}</summary>
+                        {finished ? (
+                          <p>{job.notes || "No notes."}</p>
+                        ) : (
+                          <>
+                            <textarea
+                              rows={3}
+                              maxLength={5000}
+                              value={note}
+                              disabled={busy}
+                              placeholder="Vendor, access, progress..."
+                              onChange={(event) =>
+                                setNotes((current) => ({
+                                  ...current,
+                                  [job.id]: event.target.value,
+                                }))
+                              }
+                            />
+                            <button
+                              type="button"
+                              className="rq-button rq-button-small"
+                              disabled={busy || note === (job.notes ?? "")}
+                              onClick={() => update(job, { notes: note })}
+                            >
+                              Save notes
+                            </button>
+                          </>
+                        )}
+                      </details>
+
+                      {!finished && (
+                        <div className="jobs-actions">
+                          {job.status === "OPEN" && (
+                            <button
+                              type="button"
+                              className="rq-button rq-button-small"
+                              disabled={busy}
+                              onClick={() => update(job, { status: "IN_PROGRESS" })}
+                            >
+                              Start
+                            </button>
+                          )}
+                          {job.status === "IN_PROGRESS" && (
+                            <button
+                              type="button"
+                              className="rq-button rq-button-small rq-button-primary"
+                              disabled={busy}
+                              onClick={() => update(job, { status: "COMPLETED" })}
+                            >
+                              Mark done
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="rq-button rq-button-small rq-button-quiet"
+                            disabled={busy}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  "Cancel this job? Its request will be closed too."
+                                )
+                              ) {
+                                void update(job, { status: "CANCELLED" });
+                              }
+                            }}
+                          >
+                            Cancel job
+                          </button>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </section>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

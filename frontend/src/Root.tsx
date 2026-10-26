@@ -87,7 +87,7 @@ export function Root() {
       })
       .catch((err) => {
         if (!cancelled) {
-          setMeError(errorMessage(err, "Unable to load your account."));
+          setMeError(errorMessage(err, "Couldn't load your account. Please refresh the page."));
         }
       });
 
@@ -176,6 +176,13 @@ export function Root() {
             <>
               <h1>Something went wrong</h1>
               <p className="action-error">{meError}</p>
+              <button
+                type="button"
+                className="primary-button auth-submit"
+                onClick={() => window.location.reload()}
+              >
+                Try again
+              </button>
               <div className="auth-links">
                 <button type="button" onClick={handleSignOut}>
                   Sign out

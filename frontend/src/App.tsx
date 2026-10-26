@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   createWorkItem,
@@ -78,16 +78,32 @@ function App({
   // Bumped by the background refresh so pages reload their data
   const [refreshTick, setRefreshTick] = useState(0);
 
+  // Once data is on screen, a failed background refresh keeps it instead of
+  // replacing it with an error
+  const requestsLoaded = useRef(false);
+  const jobsLoaded = useRef(false);
+
+  // Read by the background refresh, which is set up once
+  const accountUpdated = useRef(onAccountUpdated);
+
+  useEffect(() => {
+    accountUpdated.current = onAccountUpdated;
+  }, [onAccountUpdated]);
+
   function loadRequests() {
     return Promise.all([getWorkItems(), getClosedWorkItems()])
       .then(([open, closed]) => {
+        requestsLoaded.current = true;
         setOpenRequests(open);
         setClosedRequests(closed);
         setRequestsError(null);
       })
       .catch((err) => {
         console.error("Failed to load requests:", err);
-        setRequestsError(errorMessage(err, "Unable to load requests."));
+
+        if (!requestsLoaded.current) {
+          setRequestsError(errorMessage(err, "Couldn't load your requests. Refresh to try again."));
+        }
       })
       .finally(() => setRequestsLoading(false));
   }
@@ -95,12 +111,16 @@ function App({
   function loadJobs() {
     return getMaintenanceRequests()
       .then((data) => {
+        jobsLoaded.current = true;
         setJobs(data);
         setJobsError(null);
       })
       .catch((err) => {
         console.error("Failed to load jobs:", err);
-        setJobsError(errorMessage(err, "Unable to load jobs."));
+
+        if (!jobsLoaded.current) {
+          setJobsError(errorMessage(err, "Couldn't load your jobs. Refresh to try again."));
+        }
       })
       .finally(() => setJobsLoading(false));
   }
@@ -112,7 +132,7 @@ function App({
         setEmailSettingsError(null);
       })
       .catch((err) =>
-        setEmailSettingsError(errorMessage(err, "Unable to load email settings."))
+        setEmailSettingsError(errorMessage(err, "Couldn't load your email settings. Refresh to try again."))
       );
   }
 
@@ -122,6 +142,9 @@ function App({
         if (me.organization) {
           setOrganization(me.organization);
         }
+
+        // Lets Root show the plan page if the plan ended meanwhile
+        accountUpdated.current(me);
       })
       .catch((err) => console.error("Failed to refresh the account:", err));
   }
@@ -189,6 +212,7 @@ function App({
         setSelectedFallback(await getWorkItem(workItemId));
       } catch (err) {
         console.error("Failed to open request:", err);
+        setSelectedId(null);
       }
     }
   }
@@ -202,10 +226,11 @@ function App({
   const [billingError, setBillingError] = useState<string | null>(null);
 
   function manageBilling() {
+    setBillingError(null);
     openBillingPortal()
       .then(({ url }) => window.location.assign(url))
       .catch((err) =>
-        setBillingError(errorMessage(err, "Unable to open billing. Please try again."))
+        setBillingError(errorMessage(err, "Couldn't open billing. Please try again."))
       );
   }
 
@@ -251,10 +276,11 @@ function App({
     }
 
     setUpgrading(true);
+    setBillingError(null);
     upgradeToGrowth()
       .then(() => loadOrganization())
       .catch((err) =>
-        setBillingError(errorMessage(err, "Unable to upgrade. Please try again."))
+        setBillingError(errorMessage(err, "Couldn't upgrade. Please try again."))
       )
       .finally(() => setUpgrading(false));
   }
@@ -317,12 +343,21 @@ function App({
         {(billingNotice || billingError) && (
           <div className="billing-banner" role="status">
             <span>{billingError ?? billingNotice}</span>
-            {organization.subscriptionStatus === "past_due" && (
+            {billingError && (
+              <button
+                type="button"
+                className="rq-button rq-button-small rq-button-quiet"
+                onClick={() => setBillingError(null)}
+              >
+                Dismiss
+              </button>
+            )}
+            {!billingError && organization.subscriptionStatus === "past_due" && (
               <button type="button" className="rq-button rq-button-small" onClick={manageBilling}>
                 Update card
               </button>
             )}
-            {organization.cancelAtPeriodEnd && (
+            {!billingError && organization.cancelAtPeriodEnd && (
               <button type="button" className="rq-button rq-button-small" onClick={manageBilling}>
                 Keep my plan
               </button>

@@ -45,7 +45,7 @@ export async function apiRequest<T>(
   }
 
   if (!response.ok) {
-    let message = `Request failed (${response.status})`;
+    let message = statusMessage(response.status);
 
     try {
       const error = await response.json();
@@ -54,15 +54,39 @@ export async function apiRequest<T>(
         message = error.message;
       }
     } catch {
-      // Response had no JSON body; keep the generic message.
+      // No JSON body (e.g. the server is restarting); keep the plain message.
     }
 
     throw new ApiRequestError(message, response.status);
   }
 
-  return response.json();
+  // Some successful responses have no body
+  const text = await response.text();
+  return (text ? JSON.parse(text) : undefined) as T;
+}
+
+/** Plain words for an error response that didn't explain itself. */
+function statusMessage(status: number): string {
+  if (status === 401) {
+    return "Your session has ended. Please sign in again.";
+  }
+
+  if (status >= 500) {
+    return "Clerova is having trouble right now. Please try again in a minute.";
+  }
+
+  return "That didn't work. Refresh and try again.";
 }
 
 export function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof ApiRequestError ? err.message : fallback;
+  if (err instanceof ApiRequestError) {
+    return err.message;
+  }
+
+  // fetch rejects with a TypeError when the network is down
+  if (err instanceof TypeError) {
+    return "Can't reach Clerova. Check your connection and try again.";
+  }
+
+  return fallback;
 }
