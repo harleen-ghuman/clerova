@@ -152,10 +152,12 @@ public class ReplyService {
                 // An email that arrived while this one was sending stays flagged
                 if (workItem.getUnreadReplyAt() != null && workItem.getUnreadReplyAt().isBefore(startedAt)) {
                     workItem.setUnreadReplyAt(null);
-                    return workItemRepository.save(workItem);
                 }
 
-                return workItem;
+                // Restarts "no answer in 3+ days" after a reminder
+                workItem.setUpdatedAt(Instant.now());
+
+                return workItemRepository.save(workItem);
             });
         } catch (OptimisticLockingFailureException e) {
             // Changed at the same moment; the alert stays and can be dismissed

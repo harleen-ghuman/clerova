@@ -351,9 +351,12 @@ public class AiService {
             %s
             """.formatted(
                 workItem.getSenderName() != null ? workItem.getSenderName() : "unknown",
-                workItem.getStatus() == WorkItemStatus.ESCALATED
-                        ? "passed to a person on the team, who is handling it"
-                        : "a repair job is open and in progress",
+                switch (workItem.getStatus()) {
+                    case ESCALATED -> "passed to a person on the team, who is handling it";
+                    case WAITING_FOR_INFORMATION ->
+                            "the company asked the resident for information and is waiting for their answer";
+                    default -> "a repair job is open and in progress";
+                },
                 workItem.getCategory(),
                 workItem.getAddress(),
                 workItem.getSummary(),
@@ -375,6 +378,9 @@ public class AiService {
                                 - If the resident wrote last, answer their latest message.
                                 - If the company wrote last, write a short update that
                                   does not repeat what was already sent.
+                                - If the company is waiting for the resident's answer,
+                                  write a short, friendly reminder that asks again only
+                                  what is still unanswered.
                                 Do not repeat what was already said.
 
                                 A property manager reads the draft, may edit it, and sends

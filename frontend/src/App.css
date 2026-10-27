@@ -415,6 +415,17 @@ h3 {
   gap: 12px;
 }
 
+.rq-remind {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .rq-new-reply {
   flex: 0 0 auto;
   padding: 1px 8px;
@@ -2086,7 +2097,7 @@ h3 {
   white-space: nowrap;
 }
 
-.today-row span:not(.rq-urgent):not(.rq-new-reply):not(.rq-dot),
+.today-row span:not(.rq-urgent):not(.rq-new-reply):not(.rq-remind):not(.rq-dot),
 .today-row time {
   flex: 0 0 auto;
   color: var(--text-muted);
@@ -2169,7 +2180,7 @@ h3 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .today-row span:not(.rq-urgent):not(.rq-new-reply):not(.rq-dot) {
+  .today-row span:not(.rq-urgent):not(.rq-new-reply):not(.rq-remind):not(.rq-dot) {
     display: none;
   }
 }

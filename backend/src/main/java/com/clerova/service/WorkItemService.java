@@ -423,13 +423,14 @@ public class WorkItemService {
     }
 
     /**
-     * People write to the sender directly only while a job or escalation is
-     * underway. Otherwise replies go through Clerova's suggestion, so a
-     * pending suggestion never goes stale.
+     * People write to the sender directly while a job or escalation is
+     * underway, or to remind a sender who hasn't answered. Otherwise replies
+     * go through Clerova's suggestion, so a pending suggestion never goes
+     * stale.
      */
     public static void requireCanWrite(WorkItem workItem) {
         switch (workItem.getStatus()) {
-            case IN_PROGRESS, ESCALATED -> {
+            case IN_PROGRESS, ESCALATED, WAITING_FOR_INFORMATION -> {
             }
             case COMPLETED, CANCELLED -> throw new ConflictException("This request is already closed.");
             default -> throw new ConflictException(

@@ -27,6 +27,8 @@ interface RequestsPageProps {
   filter: RequestFilter;
   onFilterChange: (filter: RequestFilter) => void;
   emailSendingEnabled: boolean;
+  /** Request opened to send a reminder, which starts with a draft. */
+  remindFor: string | null;
   onSelect: (workItem: WorkItem | null) => void;
   onCreate: (message: string) => Promise<WorkItem>;
   onChanged: () => void;
@@ -41,6 +43,7 @@ export function RequestsPage({
   filter,
   onFilterChange: setFilter,
   emailSendingEnabled,
+  remindFor,
   onSelect,
   onCreate,
   onChanged,
@@ -252,6 +255,7 @@ export function RequestsPage({
             key={selected.id}
             workItem={selected}
             emailSendingEnabled={emailSendingEnabled}
+            startReminder={remindFor === selected.id}
             onChanged={onChanged}
             onOpenJobs={onOpenJobs}
             onBack={() => onSelect(null)}

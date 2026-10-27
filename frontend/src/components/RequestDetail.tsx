@@ -35,6 +35,8 @@ import { ApprovedResponse } from "./ApprovedResponse";
 interface RequestDetailProps {
   workItem: WorkItem;
   emailSendingEnabled: boolean;
+  /** Opened to send a reminder: the reply box starts with a draft. */
+  startReminder?: boolean;
   /** Something changed on the server; reload the request lists. */
   onChanged: () => void;
   onOpenJobs: (workItemId: string) => void;
@@ -61,6 +63,7 @@ function latest(actions: ProposedAction[]): ProposedAction | null {
 export function RequestDetail({
   workItem,
   emailSendingEnabled,
+  startReminder = false,
   onChanged,
   onOpenJobs,
   onBack,
@@ -203,10 +206,17 @@ export function RequestDetail({
     (workItem.status === "NEW" && !pending);
   const newReply = hasNewReply(workItem);
   // While a job or escalation is underway there's no suggestion to approve,
-  // so people can write to the sender directly
-  const canWrite =
-    Boolean(replyTo) &&
-    (workItem.status === "IN_PROGRESS" || workItem.status === "ESCALATED");
+  // so people can write to the sender directly, or remind a sender who
+  // hasn't answered
+  const situation: ComposerSituation | null =
+    workItem.status === "IN_PROGRESS"
+      ? "job"
+      : workItem.status === "ESCALATED"
+        ? "escalated"
+        : workItem.status === "WAITING_FOR_INFORMATION"
+          ? "waiting"
+          : null;
+  const canWrite = Boolean(replyTo) && situation !== null;
   const meta = [
     workItem.address,
     capitalize(workItem.category),
@@ -276,14 +286,15 @@ export function RequestDetail({
         </section>
       )}
 
-      {canWrite && replyTo && (
+      {canWrite && replyTo && situation && (
         <ReplyComposer
           key={workItem.id}
           workItemId={workItem.id}
           sendTo={replyTo}
           recipient={workItem.senderName || replyTo}
-          startOpen={newReply}
-          hasJob={workItem.status === "IN_PROGRESS"}
+          startOpen={newReply || (startReminder && situation === "waiting")}
+          autoDraft={startReminder && situation === "waiting"}
+          situation={situation}
           disabled={busy !== null}
           onSent={() => {
             setReloadKey((key) => key + 1);
@@ -493,12 +504,16 @@ function SuggestionCard({
   );
 }
 
+type ComposerSituation = "job" | "escalated" | "waiting";
+
 interface ReplyComposerProps {
   workItemId: string;
   sendTo: string;
   recipient: string;
   startOpen: boolean;
-  hasJob: boolean;
+  /** Start with a draft from Clerova (a reminder opened from Today). */
+  autoDraft: boolean;
+  situation: ComposerSituation;
   disabled: boolean;
   onSent: () => void;
 }
@@ -509,15 +524,46 @@ function ReplyComposer({
   sendTo,
   recipient,
   startOpen,
-  hasJob,
+  autoDraft,
+  situation,
   disabled,
   onSent,
 }: ReplyComposerProps) {
   const [open, setOpen] = useState(startOpen);
   const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(autoDraft ? "Drafting..." : null);
   const [error, setError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
+  const reminder = situation === "waiting";
+
+  useEffect(() => {
+    if (!autoDraft) {
+      return;
+    }
+
+    let cancelled = false;
+
+    draftReply(workItemId)
+      .then((result) => {
+        if (!cancelled) {
+          setMessage((current) => (current.trim() === "" ? result.reply : current));
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(errorMessage(err, "Couldn't draft a reminder. Write your own or try again."));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setBusy(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [autoDraft, workItemId]);
 
   if (!open) {
     return (
@@ -529,10 +575,14 @@ function ReplyComposer({
           onClick={() => {
             setOpen(true);
             setSentTo(null);
+
+            if (reminder && message.trim() === "") {
+              void draft();
+            }
           }}
           disabled={disabled}
         >
-          Write to {recipient}
+          {reminder ? `Send a reminder to ${recipient}` : `Write to ${recipient}`}
         </button>
       </div>
     );
@@ -545,7 +595,7 @@ function ReplyComposer({
       const result = await draftReply(workItemId);
       setMessage(result.reply);
     } catch (err) {
-      setError(errorMessage(err, "Couldn't draft a reply. Write your own or try again."));
+      setError(errorMessage(err, "Couldn't draft a message. Write your own or try again."));
     } finally {
       setBusy(null);
     }
@@ -570,15 +620,19 @@ function ReplyComposer({
   const locked = disabled || busy !== null;
 
   return (
-    <section className="rq-card" aria-label={`Reply to ${recipient}`}>
+    <section className="rq-card" aria-label={`${reminder ? "Reminder" : "Reply"} to ${recipient}`}>
       <label className="rq-reply">
-        Reply to {recipient}
+        {reminder ? "Reminder" : "Reply"} to {recipient}
         <textarea
           value={message}
           rows={6}
           maxLength={10000}
           disabled={locked}
-          placeholder="Write a reply, or let Clerova draft one."
+          placeholder={
+            busy === "Drafting..."
+              ? "Clerova is drafting..."
+              : `Write a ${reminder ? "reminder" : "reply"}, or let Clerova draft one.`
+          }
           onChange={(event) => setMessage(event.target.value)}
         />
       </label>
@@ -619,7 +673,12 @@ function ReplyComposer({
           Cancel
         </button>
         <span className="rq-hint">
-          Goes to {sendTo}. The {hasJob ? "job" : "request"} doesn't change.
+          Goes to {sendTo}.{" "}
+          {situation === "job"
+            ? "The job doesn't change."
+            : situation === "escalated"
+              ? "The request doesn't change."
+              : `It stays waiting on ${recipient}.`}
         </span>
       </div>
     </section>

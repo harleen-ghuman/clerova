@@ -607,6 +607,49 @@ class EmailIntakeTest {
     }
 
     @Test
+    void customerWhoHasNotAnsweredCanBeReminded() throws Exception {
+        String workItemId = deliverNew("<nudge1@x>", "My sink is leaking.");
+
+        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/approve",
+                        latestAction(workItemId).get("id").asText()).with(user))
+                .andExpect(status().isOk());
+
+        // Asked a question four days ago
+        jdbcTemplate.update(
+                "update work_items set updated_at = ? where id = ?",
+                java.sql.Timestamp.from(java.time.Instant.now().minus(java.time.Duration.ofDays(4))),
+                UUID.fromString(workItemId)
+        );
+
+        when(aiService.draftReply(any(), anyString())).thenReturn("Hi Tina, just checking in: which unit are you in?");
+
+        mockMvc.perform(post("/api/work-items/{id}/draft-reply", workItemId).with(user))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reply").value("Hi Tina, just checking in: which unit are you in?"));
+
+        JsonNode reminded = json(mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"message":"Hi Tina, just checking in: which unit are you in?"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("WAITING_FOR_INFORMATION")));
+
+        // The wait starts again from the reminder
+        assertThat(java.time.Instant.parse(reminded.get("updatedAt").asText()))
+                .isAfter(java.time.Instant.now().minusSeconds(60));
+
+        // Their answer goes back to review as usual
+        deliver(payload(forwardingAddress, "<nudge2@x>", "<nudge1@x>", null, "tina@example.com", "Unit 4B."))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.status").value("WAITING_FOR_APPROVAL"));
+    }
+
+    @Test
     void approvedResponseIsSentAsThreadedReplyOnce() throws Exception {
         proposeAction(ActionType.RESPOND_TO_CUSTOMER);
         String workItemId = deliverNew("<send1@x>", "When is rent due?");

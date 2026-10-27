@@ -41,6 +41,9 @@ interface TodayPageProps {
   refreshKey: number;
   onOpenRequests: (filter: RequestBucket) => void;
   onOpenRequest: (workItemId: string) => void;
+  /** Whether Clerova can email senders, so reminders can be sent. */
+  canRemind: boolean;
+  onRemind: (workItemId: string) => void;
   onOpenJobs: () => void;
 }
 
@@ -129,6 +132,8 @@ export function TodayPage({
   refreshKey,
   onOpenRequests,
   onOpenRequest,
+  canRemind,
+  onRemind,
   onOpenJobs,
 }: TodayPageProps) {
   const [summary, setSummary] = useState<WeekSummary | null>(null);
@@ -289,19 +294,24 @@ export function TodayPage({
         {waitingLong.length > 0 && (
           <div className="today-list">
             <h3>No answer in {WAITING_DAYS}+ days</h3>
-            {waitingLong.slice(0, 5).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className="today-row"
-                onClick={() => onOpenRequest(item.id)}
-              >
-                <span className="rq-dot rq-dot-waiting" aria-hidden="true" />
-                <strong>{requestTitle(item)}</strong>
-                <span>{requestSender(item)}</span>
-                <time>asked {shortTime(item.updatedAt)}</time>
-              </button>
-            ))}
+            {waitingLong.slice(0, 5).map((item) => {
+              const remind = canRemind && item.source === "EMAIL" && Boolean(item.senderEmail);
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="today-row"
+                  onClick={() => (remind ? onRemind(item.id) : onOpenRequest(item.id))}
+                >
+                  <span className="rq-dot rq-dot-waiting" aria-hidden="true" />
+                  <strong>{requestTitle(item)}</strong>
+                  <span>{requestSender(item)}</span>
+                  <time>asked {shortTime(item.updatedAt)}</time>
+                  {remind && <span className="rq-remind">Remind</span>}
+                </button>
+              );
+            })}
           </div>
         )}
       </section>

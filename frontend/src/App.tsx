@@ -64,6 +64,8 @@ function App({
   const [organization, setOrganization] = useState(initialOrganization);
   const [activeView, setActiveView] = useState<AppView>("today");
   const [requestFilter, setRequestFilter] = useState<RequestFilter>("review");
+  // Opened from Today to send a reminder: the request starts with a draft
+  const [remindFor, setRemindFor] = useState<string | null>(null);
 
   const [openRequests, setOpenRequests] = useState<WorkItem[]>([]);
   const [closedRequests, setClosedRequests] = useState<WorkItem[]>([]);
@@ -200,6 +202,7 @@ function App({
   function show(view: AppView, workItemId: string | null = null) {
     setActiveView(view);
     setSelectedId(workItemId);
+    setRemindFor(null);
 
     const current = window.history.state as NavState | null;
 
@@ -223,6 +226,7 @@ function App({
         setActiveView(state.view);
         setSelectedId(state.selectedId);
         setHighlightJobFor(null);
+        setRemindFor(null);
       }
     }
 
@@ -467,6 +471,12 @@ function App({
               setRequestFilter("all");
               void openRequest(workItemId);
             }}
+            canRemind={emailSettings?.sendingEnabled ?? false}
+            onRemind={(workItemId) => {
+              setRequestFilter("all");
+              void openRequest(workItemId);
+              setRemindFor(workItemId);
+            }}
             onOpenJobs={() => navigate("jobs")}
           />
         )}
@@ -480,6 +490,7 @@ function App({
             filter={requestFilter}
             onFilterChange={setRequestFilter}
             emailSendingEnabled={emailSettings?.sendingEnabled ?? false}
+            remindFor={remindFor}
             onSelect={selectRequest}
             onCreate={handleCreate}
             onChanged={handleChanged}

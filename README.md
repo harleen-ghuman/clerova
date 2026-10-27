@@ -85,6 +85,9 @@ Email forwarded              Request typed in the app
   in progress, the request gets a "New reply" tag (Today, Requests, Jobs).
   Answer it from the request, with a draft from Clerova if you like, or mark
   it handled. The job doesn't change.
+- Reminders: customers who haven't answered in 3+ days show on Today with
+  "Remind". It opens the request with a reminder drafted by Clerova; sending
+  it keeps the request waiting and restarts the 3 days.
 - Jobs board for maintenance: open, in progress, done, with notes
 - Conversation view and activity history for each request (newest first)
 - Inbox view of every received email with its status, and a retry for
@@ -267,7 +270,7 @@ POST /api/work-items/proposed-actions/{id}/approve
 POST /api/work-items/proposed-actions/{id}/reject
 POST /api/work-items/proposed-actions/{id}/send-reply
 
-POST /api/work-items/{id}/draft-reply             (draft an answer to the latest email)
+POST /api/work-items/{id}/draft-reply             (draft the next email: an answer, update or reminder)
 POST /api/work-items/{id}/reply                   (send a written message: {"message": "..."})
 POST /api/work-items/{id}/reply-handled           (clear the new-reply flag)
 
