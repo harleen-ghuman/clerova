@@ -279,6 +279,16 @@ export function AuthPage({
 
   return (
     <div className="auth-shell" role="main">
+      {(mode === "sign-up" || mode === "sign-in") && (
+        <a className="auth-demo" href="/demo">
+          <span>
+            <strong>Just looking around?</strong> Try Clerova with sample data.
+            No sign-up.
+          </span>
+          <span className="auth-demo-button">Try the demo</span>
+        </a>
+      )}
+
       <div className="auth-card">
         <div className="auth-brand">
           <div className="brand-mark">C</div>

@@ -1739,8 +1739,8 @@ h3 {
   padding: 48px 16px;
 
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
 
   background: var(--background);
 }
@@ -1949,6 +1949,55 @@ h3 {
 
   .industry-options {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Demo link above the sign-in card */
+.auth-demo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  max-width: 420px;
+  box-sizing: border-box;
+  margin-top: 6vh;
+  padding: 12px 14px 12px 16px;
+  border: 1px solid var(--brand-line);
+  border-radius: 12px;
+  background: var(--brand-soft);
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.45;
+  text-decoration: none;
+}
+
+.auth-demo strong {
+  color: var(--text);
+}
+
+.auth-demo-button {
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: var(--brand);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.auth-demo:hover .auth-demo-button {
+  background: var(--brand-hover);
+}
+
+.auth-demo + .auth-card {
+  margin-top: 12px;
+}
+
+@media (max-width: 640px) {
+  .auth-demo {
+    margin-top: 0;
   }
 }
 
