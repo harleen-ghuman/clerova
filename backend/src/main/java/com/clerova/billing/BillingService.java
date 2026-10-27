@@ -34,6 +34,8 @@ public class BillingService {
     private static final Logger log = LoggerFactory.getLogger(BillingService.class);
 
     /** Statuses that allow using Clerova. past_due keeps access while Stripe retries. */
+    public static final String SUBSCRIPTION_REQUIRED = "SUBSCRIPTION_REQUIRED";
+
     static final Set<String> ACCESS_STATUSES = Set.of("trialing", "active", "past_due");
 
     private final BillingProperties properties;
@@ -90,7 +92,7 @@ public class BillingService {
             message = "Your payment didn't go through. Update your card to keep using Clerova.";
         }
 
-        throw new ApiException(HttpStatus.PAYMENT_REQUIRED, "SUBSCRIPTION_REQUIRED", message);
+        throw new ApiException(HttpStatus.PAYMENT_REQUIRED, SUBSCRIPTION_REQUIRED, message);
     }
 
     public int foundingSpotsLeft() {

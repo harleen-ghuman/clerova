@@ -57,6 +57,9 @@ class BillingTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private com.clerova.email.InboundEmailProcessor processor;
+
     @MockitoBean
     private AiService aiService;
 
@@ -380,6 +383,52 @@ class BillingTest {
         mockMvc.perform(get("/api/me").with(user))
                 .andExpect(jsonPath("$.organization.plan").value("GROWTH"))
                 .andExpect(jsonPath("$.organization.cancelAtPeriodEnd").value(false));
+    }
+
+    @Test
+    void emailsAfterThePlanEndsWaitAndGoWhenANewPlanStarts() throws Exception {
+        RequestPostProcessor user = onboardNewUser(mockMvc);
+        String organizationId = organizationIdOf(user);
+        String event = """
+                {"type":"customer.subscription.updated","data":{"object":{"id":"sub_1"}}}
+                """;
+
+        stubSubscription(organizationId, "canceled", "starter_monthly");
+        sendSignedWebhook(event).andExpect(status().isOk());
+
+        String address = objectMapper.readTree(mockMvc.perform(get("/api/email-settings").with(user))
+                .andReturn().getResponse().getContentAsString()).get("forwardingAddress").asText();
+
+        String email = objectMapper.createObjectNode()
+                .put("MessageID", "pm-plan-1")
+                .put("From", "tina@example.com")
+                .put("OriginalRecipient", address)
+                .put("Subject", "Heater broken")
+                .put("TextBody", "The heater stopped working.")
+                .toString();
+
+        mockMvc.perform(post("/api/inbound/postmark")
+                        .header("Authorization", "Basic " + java.util.Base64.getEncoder()
+                                .encodeToString("postmark:webhook-secret".getBytes()))
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content(email))
+                .andExpect(jsonPath("$.status").value("STORED"));
+
+        processor.processDue();
+
+        mockMvc.perform(get("/api/inbox").with(user))
+                .andExpect(jsonPath("$[0].status").value("RECEIVED"))
+                .andExpect(jsonPath("$[0].statusReason").value(
+                        "Your plan has ended. This email will be organized as soon as you choose a plan."));
+
+        // A new plan releases it
+        stubSubscription(organizationId, "active", "starter_monthly");
+        sendSignedWebhook(event).andExpect(status().isOk());
+        processor.processDue();
+
+        mockMvc.perform(get("/api/inbox").with(user))
+                .andExpect(jsonPath("$[0].status").value("PROCESSED"))
+                .andExpect(jsonPath("$[0].workItemId").isNotEmpty());
     }
 
     @Test

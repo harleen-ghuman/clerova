@@ -37,6 +37,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class WorkItemWorkflowTest {
 
     @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
+    @Autowired
     private MockMvc mockMvc;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -352,6 +355,33 @@ class WorkItemWorkflowTest {
         assertThat(events.findValuesAsText("detail").stream()
                 .filter(detail -> detail.startsWith("Job notes")).toList())
                 .containsExactly("Job notes updated", "Job notes updated", "Job notes updated", "Job notes cleared");
+    }
+
+    @Test
+    void jobsBoardKeepsOpenJobsAndRecentlyFinishedOnes() throws Exception {
+        String oldId = createWorkItem();
+        approve(pendingAction(oldId), null).andExpect(status().isOk());
+        String oldJob = json(mockMvc.perform(
+                get("/api/maintenance-requests/work-item/{id}", oldId).with(user))).get(0).get("id").asText();
+        patchMaintenance(oldJob, "IN_PROGRESS").andExpect(status().isOk());
+        patchMaintenance(oldJob, "COMPLETED").andExpect(status().isOk());
+
+        String openId = createWorkItem();
+        approve(pendingAction(openId), null).andExpect(status().isOk());
+        String openJob = json(mockMvc.perform(
+                get("/api/maintenance-requests/work-item/{id}", openId).with(user))).get(0).get("id").asText();
+
+        // The finished job was done long ago; the open one is old but open
+        jdbcTemplate.update("update maintenance_requests set updated_at = ? where id in (?, ?)",
+                java.sql.Timestamp.from(java.time.Instant.now().minus(java.time.Duration.ofDays(120))),
+                UUID.fromString(oldJob), UUID.fromString(openJob));
+
+        JsonNode board = json(mockMvc.perform(get("/api/maintenance-requests").with(user)));
+        assertThat(board.findValuesAsText("id")).contains(openJob).doesNotContain(oldJob);
+
+        // Still reachable from its request
+        mockMvc.perform(get("/api/maintenance-requests/work-item/{id}", oldId).with(user))
+                .andExpect(jsonPath("$[0].id").value(oldJob));
     }
 
     @Test

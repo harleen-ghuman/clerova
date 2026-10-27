@@ -1,6 +1,7 @@
 package com.clerova.controller;
 
 import com.clerova.domain.MaintenanceRequest;
+import com.clerova.domain.MaintenanceRequestStatus;
 import com.clerova.dto.MaintenanceRequestResponse;
 import com.clerova.dto.UpdateMaintenanceRequest;
 import com.clerova.repository.MaintenanceRequestRepository;
@@ -10,6 +11,8 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -37,9 +40,12 @@ public class MaintenanceRequestController {
 
     @GetMapping
     public List<MaintenanceRequestResponse> getAllMaintenanceRequests() {
+        // Finished jobs older than 90 days stay on their requests, not the board
         return maintenanceRequestRepository
-                .findByOrganizationIdOrderByCreatedAtDesc(
-                        currentUserService.requireOrganizationId()
+                .findBoard(
+                        currentUserService.requireOrganizationId(),
+                        List.of(MaintenanceRequestStatus.OPEN, MaintenanceRequestStatus.IN_PROGRESS),
+                        Instant.now().minus(Duration.ofDays(90))
                 )
                 .stream()
                 .map(MaintenanceRequestResponse::from)

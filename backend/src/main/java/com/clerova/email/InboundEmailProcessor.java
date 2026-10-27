@@ -1,5 +1,6 @@
 package com.clerova.email;
 
+import com.clerova.billing.BillingService;
 import com.clerova.domain.InboundMessage;
 import com.clerova.domain.InboundMessageStatus;
 import com.clerova.domain.WorkItem;
@@ -45,6 +46,9 @@ public class InboundEmailProcessor {
     public static final String RETRY_REASON = "Couldn't read this email yet. Clerova will try again in a few minutes.";
     static final String QUOTA_WAIT_REASON =
             "Your plan's requests for this month are used up. This email will be organized on %s, or as soon as you upgrade.";
+
+    static final String PLAN_WAIT_REASON =
+            "Your plan has ended. This email will be organized as soon as you choose a plan.";
 
     public static final String FAILED_REASON = "Couldn't read this email. Click Retry to try again.";
 
@@ -138,6 +142,8 @@ public class InboundEmailProcessor {
         } catch (ApiException e) {
             if (AiUsageService.QUOTA_EXCEEDED.equals(e.getCode())) {
                 waitForQuota(message);
+            } else if (BillingService.SUBSCRIPTION_REQUIRED.equals(e.getCode())) {
+                waitForPlan(message);
             } else {
                 // Plan or trial ended: needs a person to act
                 finish(message, InboundMessageStatus.FAILED, e.getMessage());
@@ -310,6 +316,19 @@ public class InboundEmailProcessor {
                 DateTimeFormatter.ofPattern("MMMM d", Locale.US).withZone(ZoneOffset.UTC).format(reset)
         ));
         message.setNextAttemptAt(reset);
+
+        inboundMessageRepository.save(message);
+    }
+
+    /**
+     * The plan ended. The email waits for a new plan (BillingService
+     * releases waiting emails then) and is checked again weekly.
+     */
+    private void waitForPlan(InboundMessage message) {
+        message.setStatus(InboundMessageStatus.RECEIVED);
+        message.setAttempts(0);
+        message.setStatusReason(PLAN_WAIT_REASON);
+        message.setNextAttemptAt(Instant.now().plus(Duration.ofDays(7)));
 
         inboundMessageRepository.save(message);
     }

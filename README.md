@@ -497,7 +497,8 @@ How it works:
   upgrades the subscription in place (same billing period, founding price kept,
   the difference added to the next invoice). At the limit, new emails wait in
   the Inbox ("Queued") until the 1st of next month (UTC). An upgrade or a
-  new plan releases them right away.
+  new plan releases them right away. Emails that arrive after a plan ends wait the same way
+  until a new plan starts.
 - Stripe is the source of truth. Webhooks and the return from Checkout read
   the current subscription from Stripe and copy its status, plan and dates
   to the organization.
@@ -574,7 +575,7 @@ Clerova's suggestion, ready to edit and approve.
 
 ![Requests](docs/screenshots/requests.png)
 
-**Jobs:** approved repairs, moved from open to in progress to done.
+**Jobs:** approved repairs, moved from open to in progress to done. The board shows open jobs and those finished in the last 90 days.
 
 ![Jobs board](docs/screenshots/jobs.png)
 
