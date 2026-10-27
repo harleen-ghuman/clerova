@@ -188,7 +188,8 @@ export function TodayPage({
         // All-time totals, so established workspaces never see it again
         const hasRequest = hasAnyRequest || (summary?.allTimeRequests ?? 0) > 0;
         const hasReply = (summary?.allTimeApprovals ?? 0) > 0;
-        const finished = hasRequest && hasReply;
+        // Without stats, an account with requests is treated as set up
+        const finished = hasRequest && (hasReply || summaryFailed);
 
         return (
           // Without the summary, the request lists decide

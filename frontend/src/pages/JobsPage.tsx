@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { errorMessage } from "../api/client";
 import { updateMaintenanceRequest } from "../api/MaintenanceRequests";
@@ -50,6 +50,15 @@ export function JobsPage({
   const [notes, setNotes] = useState<Record<string, string>>({});
 
   const requestsById = new Map(requests.map((item) => [item.id, item]));
+
+  // Bring the linked job into view once, when the board first shows it
+  useEffect(() => {
+    if (!loading && highlightWorkItemId) {
+      document
+        .querySelector(`[data-work-item="${highlightWorkItemId}"]`)
+        ?.scrollIntoView({ block: "center" });
+    }
+  }, [loading, highlightWorkItemId]);
 
   async function update(
     job: MaintenanceRequest,
@@ -130,11 +139,7 @@ export function JobsPage({
                   return (
                     <article
                       key={job.id}
-                      ref={
-                        highlightWorkItemId === job.workItemId
-                          ? (element) => element?.scrollIntoView({ block: "center" })
-                          : undefined
-                      }
+                      data-work-item={job.workItemId}
                       className={`jobs-card ${
                         highlightWorkItemId === job.workItemId ? "highlight" : ""
                       }`}

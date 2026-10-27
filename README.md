@@ -203,6 +203,7 @@ Postmark inbound webhook -> stored (duplicates skipped)
         v
 Background processor (every 5 seconds)
   - automated or bulk email ........ Ignored (can be processed anyway)
+  - Clerova's own mail or a bounce . Ignored (can be processed anyway)
   - Gmail forwarding confirmation .. Ignored, code shown on Email Setup
   - reply to a request ............. Added to that request's conversation
                                      and returned to review
@@ -215,10 +216,10 @@ Background processor (every 5 seconds)
   headers. In-Reply-To and References headers are matched too.
 - Requests closed in the last 14 days reopen when the customer replies.
   Older ones start a new request.
-- Each new email uses two AI requests from the monthly quota (extraction and
-  suggestion). AI failures are retried after 1 minute and then 5 minutes.
-  The Inbox shows the reason for any failure, and failed emails can be
-  retried from there.
+- Each new email counts once against the monthly requests, once the AI has
+  read it, so failed attempts don't count. AI failures are retried after 1
+  minute and then 5 minutes. The Inbox shows a plain reason for any failure
+  (the error itself is logged), and failed emails can be retried from there.
 - Attachment names, types and sizes are recorded. File contents are not
   stored yet.
 
@@ -472,7 +473,8 @@ How it works:
   or `past_due` (Stripe retries failed payments). Otherwise existing data
   stays readable and new requests are blocked.
 - Each new email or typed request counts once against the plan's monthly
-  requests. Suggestions and replies on an existing request don't count.
+  requests, after the AI has read it. Suggestions and replies on an existing
+  request don't count.
 - At 80% and at 100% of the monthly requests, owners get an email and the
   app shows a banner. On Starter both suggest upgrading to Growth, which
   upgrades the subscription in place (same billing period, founding price kept,

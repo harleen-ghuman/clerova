@@ -185,6 +185,7 @@ export function RequestDetail({
         ];
 
   const bucket = requestBucket(workItem);
+  const closed = workItem.status === "COMPLETED" || workItem.status === "CANCELLED";
   const pending = action?.status === "PENDING_APPROVAL" ? action : null;
   const reviewed = action && !pending ? action : null;
   // Waiting on a suggestion decision or an active job, closing isn't allowed
@@ -268,11 +269,20 @@ export function RequestDetail({
 
       {reviewed && (
         <section className={`rq-result rq-result-${reviewed.status.toLowerCase()}`}>
-          <strong>{decisionCopy(reviewed, Boolean(replyTo)).title}</strong>
-          <span>{decisionCopy(reviewed, Boolean(replyTo)).description}</span>
+          {closed && reviewed.status === "REJECTED" ? (
+            <>
+              <strong>Closed without replying</strong>
+              <span>Nothing was sent. If the sender writes again, it comes back for review.</span>
+            </>
+          ) : (
+            <>
+              <strong>{decisionCopy(reviewed, Boolean(replyTo)).title}</strong>
+              <span>{decisionCopy(reviewed, Boolean(replyTo)).description}</span>
+            </>
+          )}
 
           <div className="rq-result-actions">
-            {reviewed.status === "REJECTED" && (
+            {reviewed.status === "REJECTED" && !closed && (
               <button
                 type="button"
                 className="rq-button rq-button-primary"
