@@ -174,11 +174,11 @@ function ReplyCopySection({
 
   return (
     <section className="setup-section" aria-labelledby="reply-copy-title">
-      <h2 id="reply-copy-title">Keep a copy of your replies</h2>
+      <h2 id="reply-copy-title">Keep a copy in your inbox</h2>
       <p>
-        Replies go out from your Clerova address, so they don't show up in
-        your own inbox. Add your email and Clerova sends you a hidden copy of
-        each reply. Residents don't see it.
+        Your replies go out from your Clerova address, and residents answer to
+        it, so neither shows up in your own inbox. Add your email and Clerova
+        sends you a copy of both. Residents don't see your copy.
       </p>
 
       {current && !editing ? (
@@ -242,7 +242,8 @@ function ReplyCopySection({
       {error && <p className="action-error">{error}</p>}
 
       <p className="setup-tip">
-        If your inbox forwards everything to Clerova, the copies come back too.
+        Answer in Clerova so the whole conversation stays on the request. If
+        your inbox forwards everything to Clerova, the copies come back too.
         Clerova sets them aside in the Inbox, so they never become requests.
       </p>
     </section>

@@ -746,6 +746,33 @@ class EmailIntakeTest {
         mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
                 .andExpect(jsonPath("$.unreadReplyAt").isEmpty());
 
+        // The tenant replies to Clerova's email: the company gets a copy
+        String replyAddress = forwardingAddress.replace("@", "+wi-" + workItemId.replace("-", "") + "@");
+        deliver(payload(replyAddress, "<copy3@x>", "<copy1@x>", null,
+                "tina@example.com", "Friday works, thanks."))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        sent = ArgumentCaptor.forClass(OutgoingEmail.class);
+        verify(emailSender, org.mockito.Mockito.times(3)).send(sent.capture());
+        OutgoingEmail copy = sent.getAllValues().get(2);
+        assertThat(copy.to()).isEqualTo("office@maple.example");
+        assertThat(copy.replyTo()).isEqualTo("tina@example.com");
+        assertThat(copy.from()).isEqualTo("\"Tenant Tina via Clerova\" <" + forwardingAddress + ">");
+        assertThat(copy.subject()).isEqualTo("Sink leaking");
+        assertThat(copy.inReplyTo()).isEqualTo("<copy3@x>");
+        assertThat(copy.textBody())
+                .contains("Tenant Tina <tina@example.com> replied to an email you sent through Clerova.")
+                .contains("Friday works, thanks.")
+                .contains("Attachments (open the request in Clerova to see them): photo.jpg");
+
+        // Mail forwarded from their own inbox is already there: no copy
+        deliver(payload(forwardingAddress, "<copy4@x>", "<copy3@x>", null,
+                "tina@example.com", "One more thing."))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+        verify(emailSender, org.mockito.Mockito.times(3)).send(any());
+
         // Blank turns it off; other workspaces are unaffected
         setReplyCopy("""
                 {"email":""}

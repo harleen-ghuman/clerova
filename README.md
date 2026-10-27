@@ -265,7 +265,7 @@ GET  /api/summary                                 (last 7 days, for Today)
 GET  /api/inbox
 POST /api/inbox/{id}/reprocess
 GET  /api/email-settings
-PUT  /api/email-settings/reply-copy               (where a hidden copy of each sent reply goes; blank turns it off)
+PUT  /api/email-settings/reply-copy               (gets a copy of sent replies and of residents' replies to them; blank turns it off)
 POST /api/inbound/postmark                        (Postmark webhook, basic auth)
 
 GET  /api/work-items                              (?closed=true: closed in the last 30 days)

@@ -43,7 +43,7 @@ public class InboundEmailProcessor {
 
     public static final String GMAIL_CONFIRMATION_REASON = "Gmail forwarding confirmation";
     public static final String AUTOMATED_REASON = "Automated or bulk email";
-    public static final String OWN_COPY_REASON = "Your copy of a reply sent from Clerova";
+    public static final String OWN_COPY_REASON = "Your copy of an email sent through Clerova";
     public static final String EMPTY_REASON = "Empty email, with no subject, text or attachments";
     public static final String RETRY_REASON = "Couldn't read this email yet. Clerova will try again in a few minutes.";
     static final String QUOTA_WAIT_REASON =
@@ -81,6 +81,7 @@ public class InboundEmailProcessor {
     private final AiRateLimitInterceptor aiRateLimiter;
     private final TransactionTemplate transactionTemplate;
     private final EmailProperties emailProperties;
+    private final ReplyCopyService replyCopyService;
 
     public InboundEmailProcessor(
             @Value("${app.email.processing.enabled}") boolean enabled,
@@ -90,7 +91,8 @@ public class InboundEmailProcessor {
             AiUsageService aiUsageService,
             AiRateLimitInterceptor aiRateLimiter,
             TransactionTemplate transactionTemplate,
-            EmailProperties emailProperties
+            EmailProperties emailProperties,
+            ReplyCopyService replyCopyService
     ) {
         this.enabled = enabled;
         this.inboundMessageRepository = inboundMessageRepository;
@@ -100,6 +102,7 @@ public class InboundEmailProcessor {
         this.aiRateLimiter = aiRateLimiter;
         this.transactionTemplate = transactionTemplate;
         this.emailProperties = emailProperties;
+        this.replyCopyService = replyCopyService;
     }
 
     @Scheduled(fixedDelayString = "${app.email.processing.interval-ms}")
@@ -205,6 +208,9 @@ public class InboundEmailProcessor {
         message.setWorkItemId(workItem.getId());
         finish(message, InboundMessageStatus.PROCESSED, null);
 
+        // E.g. a reply to a request closed long ago, which starts a new one
+        replyCopyService.copyIncoming(message, workItem);
+
         generateProposal(workItem);
     }
 
@@ -228,6 +234,11 @@ public class InboundEmailProcessor {
         // each time; the request is still updated and flagged.
         long recent = inboundMessageRepository.countByWorkItemIdAndReceivedAtAfter(
                 workItem.getId(), Instant.now().minus(FOLLOW_UP_BURST_WINDOW));
+
+        // A burst isn't relayed to the company's inbox either
+        if (recent <= FOLLOW_UP_BURST_LIMIT) {
+            replyCopyService.copyIncoming(message, workItem);
+        }
 
         if (recent > FOLLOW_UP_BURST_LIMIT || !aiRateLimiter.tryAcquireBackground()) {
             log.warn("Skipping automatic AI for follow-up on work item {} ({} emails in the last hour)",
