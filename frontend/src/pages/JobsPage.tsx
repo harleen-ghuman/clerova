@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { errorMessage } from "../api/client";
 import { updateMaintenanceRequest } from "../api/MaintenanceRequests";
@@ -46,8 +46,38 @@ export function JobsPage({
   onOpenRequest,
 }: JobsPageProps) {
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [jobError, setJobError] = useState<string | null>(null);
+  // Notes save on their own, so a save never blocks the job's buttons
+  const [savingNotesId, setSavingNotesId] = useState<string | null>(null);
+  const [savedNotesId, setSavedNotesId] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  // Notes typed but not saved yet, by job
   const [notes, setNotes] = useState<Record<string, string>>({});
+  // The same, readable right after typing (before a re-render), and saves
+  // in flight, so a button clicked after typing waits for the save
+  const latestNotes = useRef<Record<string, string>>({});
+  const notesSave = useRef<Record<string, Promise<MaintenanceRequest | null>>>({});
+
+  useEffect(() => {
+    latestNotes.current = notes;
+  }, [notes]);
+
+  const unsaved = (job: MaintenanceRequest) =>
+    notes[job.id] !== undefined && notes[job.id].trim() !== (job.notes ?? "").trim();
+  const hasUnsaved = jobs.some(unsaved);
+
+  // Closing the tab with unsaved notes asks first
+  useEffect(() => {
+    if (!hasUnsaved) {
+      return;
+    }
+
+    function onBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+    }
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [hasUnsaved]);
 
   const requestsById = new Map(requests.map((item) => [item.id, item]));
 
@@ -60,25 +90,103 @@ export function JobsPage({
     }
   }, [loading, highlightWorkItemId]);
 
-  async function update(
-    job: MaintenanceRequest,
-    change: { status?: MaintenanceRequestStatus; notes?: string }
-  ) {
-    try {
-      setBusyId(job.id);
-      setJobError(null);
+  function setError(jobId: string, message: string | null) {
+    setErrors((current) => {
+      const next = { ...current };
 
-      const updated = await updateMaintenanceRequest(job.id, change);
+      if (message) {
+        next[jobId] = message;
+      } else {
+        delete next[jobId];
+      }
+
+      return next;
+    });
+  }
+
+  /** Drops the typed notes once saved, unless more was typed meanwhile. */
+  function clearDraft(jobId: string, sent: string) {
+    setNotes((current) => {
+      if (current[jobId] !== sent) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[jobId];
+      return next;
+    });
+  }
+
+  async function changeStatus(job: MaintenanceRequest, status: MaintenanceRequestStatus) {
+    setBusyId(job.id);
+    setError(job.id, null);
+
+    // Clicking a button right after typing also saves the notes (blur);
+    // let that finish first so the two don't race
+    const pending = notesSave.current[job.id];
+    const saved = pending ? await pending : null;
+    const current = saved ?? job;
+
+    // Unsaved notes go with the change, so they're never lost
+    const draft = latestNotes.current[job.id];
+    const send =
+      draft !== undefined && draft.trim() !== (current.notes ?? "").trim() ? draft : undefined;
+
+    try {
+      const updated = await updateMaintenanceRequest(
+        job.id,
+        send === undefined ? { status } : { status, notes: send }
+      );
       onJobUpdated(updated);
+
+      if (draft !== undefined) {
+        clearDraft(job.id, draft);
+      }
 
       if (updated.status === "COMPLETED" || updated.status === "CANCELLED") {
         onRequestClosed();
       }
     } catch (err) {
-      setJobError(errorMessage(err, "Couldn't update this job. Please try again."));
+      setError(job.id, errorMessage(err, "Couldn't update this job. Please try again."));
     } finally {
       setBusyId(null);
     }
+  }
+
+  function saveNotes(job: MaintenanceRequest): Promise<MaintenanceRequest | null> {
+    const draft = latestNotes.current[job.id];
+    const pending = notesSave.current[job.id];
+
+    if (pending) {
+      return pending;
+    }
+
+    if (draft === undefined || draft.trim() === (job.notes ?? "").trim()) {
+      return Promise.resolve(null);
+    }
+
+    setSavingNotesId(job.id);
+    setSavedNotesId(null);
+    setError(job.id, null);
+
+    const save = updateMaintenanceRequest(job.id, { notes: draft })
+      .then((updated) => {
+        onJobUpdated(updated);
+        clearDraft(job.id, draft);
+        setSavedNotesId(job.id);
+        return updated;
+      })
+      .catch((err) => {
+        setError(job.id, errorMessage(err, "Couldn't save the notes. Please try again."));
+        return null;
+      })
+      .finally(() => {
+        delete notesSave.current[job.id];
+        setSavingNotesId(null);
+      });
+
+    notesSave.current[job.id] = save;
+    return save;
   }
 
   const openCount = jobs.filter(
@@ -98,7 +206,6 @@ export function JobsPage({
 
       {loading && <p className="rq-empty">Loading jobs...</p>}
       {error && <p className="action-error rq-empty">{error}</p>}
-      {jobError && <p className="action-error jobs-error">{jobError}</p>}
 
       {!loading && !error && jobs.length === 0 && (
         <p className="rq-empty">
@@ -110,13 +217,13 @@ export function JobsPage({
       {!loading && jobs.length > 0 && (
         <div className="jobs-board">
           {COLUMNS.map((column) => {
+            // Open jobs keep their place (saving notes doesn't move them);
+            // done jobs show the latest finished first
+            const sortKey = (job: MaintenanceRequest) =>
+              column.dot === "done" ? job.updatedAt : job.createdAt;
             const cards = jobs
               .filter((job) => column.statuses.includes(job.status))
-              .sort(
-                (a, b) =>
-                  new Date(b.updatedAt).getTime() -
-                  new Date(a.updatedAt).getTime()
-              )
+              .sort((a, b) => sortKey(b).localeCompare(sortKey(a)))
               .slice(0, column.dot === "done" ? DONE_LIMIT : undefined);
 
             return (
@@ -136,6 +243,8 @@ export function JobsPage({
                     job.status === "COMPLETED" || job.status === "CANCELLED";
                   const note = notes[job.id] ?? job.notes ?? "";
                   const newReply = Boolean(request && hasNewReply(request));
+                  const dirty = unsaved(job);
+                  const savingNotes = savingNotesId === job.id;
 
                   return (
                     <article
@@ -176,7 +285,19 @@ export function JobsPage({
                       </button>
 
                       <details className="jobs-notes">
-                        <summary>{job.notes ? "Notes" : "Add notes"}</summary>
+                        <summary>
+                          {job.notes ? (
+                            <>
+                              Notes
+                              {/* A glance at the notes without opening them */}
+                              <span className="jobs-notes-preview">{job.notes}</span>
+                            </>
+                          ) : finished ? (
+                            "Notes"
+                          ) : (
+                            "Add notes"
+                          )}
+                        </summary>
                         {finished ? (
                           <p>{job.notes || "No notes."}</p>
                         ) : (
@@ -186,22 +307,38 @@ export function JobsPage({
                               maxLength={5000}
                               value={note}
                               disabled={busy}
-                              placeholder="Vendor, access, progress..."
-                              onChange={(event) =>
-                                setNotes((current) => ({
-                                  ...current,
-                                  [job.id]: event.target.value,
-                                }))
-                              }
+                              aria-label="Job notes"
+                              placeholder="Vendor, access details, progress..."
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                latestNotes.current = { ...latestNotes.current, [job.id]: value };
+                                setSavedNotesId((current) => (current === job.id ? null : current));
+                                setNotes((current) => ({ ...current, [job.id]: value }));
+                              }}
+                              onBlur={() => void saveNotes(job)}
                             />
-                            <button
-                              type="button"
-                              className="rq-button rq-button-small"
-                              disabled={busy || note === (job.notes ?? "")}
-                              onClick={() => update(job, { notes: note })}
-                            >
-                              Save notes
-                            </button>
+                            <div className="jobs-notes-actions">
+                              <button
+                                type="button"
+                                className="rq-button rq-button-small"
+                                disabled={busy || savingNotes || !dirty}
+                                onClick={() => void saveNotes(job)}
+                              >
+                                {savingNotes ? "Saving..." : "Save notes"}
+                              </button>
+                              <span className="jobs-notes-status" role="status">
+                                {savingNotes
+                                  ? ""
+                                  : dirty
+                                    ? "Not saved yet"
+                                    : savedNotesId === job.id
+                                      ? "Saved"
+                                      : ""}
+                              </span>
+                            </div>
+                            <p className="jobs-notes-hint">
+                              Only your team sees notes. They save when you click away.
+                            </p>
                           </>
                         )}
                       </details>
@@ -213,7 +350,7 @@ export function JobsPage({
                               type="button"
                               className="rq-button rq-button-small"
                               disabled={busy}
-                              onClick={() => update(job, { status: "IN_PROGRESS" })}
+                              onClick={() => void changeStatus(job, "IN_PROGRESS")}
                             >
                               Start
                             </button>
@@ -230,7 +367,7 @@ export function JobsPage({
                                     `${requestSender(request!)} wrote again and hasn't had an answer. Mark the job done anyway?`
                                   )
                                 ) {
-                                  void update(job, { status: "COMPLETED" });
+                                  void changeStatus(job, "COMPLETED");
                                 }
                               }}
                             >
@@ -249,13 +386,19 @@ export function JobsPage({
                                     : "Cancel this job? Its request will be closed too."
                                 )
                               ) {
-                                void update(job, { status: "CANCELLED" });
+                                void changeStatus(job, "CANCELLED");
                               }
                             }}
                           >
                             Cancel job
                           </button>
                         </div>
+                      )}
+
+                      {errors[job.id] && (
+                        <p className="action-error jobs-card-error" role="alert">
+                          {errors[job.id]}
+                        </p>
                       )}
                     </article>
                   );

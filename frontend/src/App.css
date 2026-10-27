@@ -1056,6 +1056,43 @@ h3 {
   font-size: 13px;
 }
 
+.jobs-notes-preview {
+  display: inline-block;
+  max-width: calc(100% - 64px);
+  margin-left: 6px;
+  vertical-align: bottom;
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jobs-notes[open] .jobs-notes-preview {
+  display: none;
+}
+
+.jobs-notes-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.jobs-notes-status {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.jobs-notes .jobs-notes-hint {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.jobs-card-error {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
 .jobs-notes p {
   margin: 6px 0 0;
   color: var(--text-secondary);

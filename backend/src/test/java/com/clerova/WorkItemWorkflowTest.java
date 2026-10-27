@@ -305,6 +305,56 @@ class WorkItemWorkflowTest {
     }
 
     @Test
+    void jobNotesSaveWithAStatusChangeAndAfterTheJobIsDone() throws Exception {
+        String workItemId = createWorkItem();
+        approve(pendingAction(workItemId), null).andExpect(status().isOk());
+
+        String maintenanceId = json(mockMvc.perform(
+                get("/api/maintenance-requests/work-item/{id}", workItemId).with(user)))
+                .get(0).get("id").asText();
+
+        patchMaintenance(maintenanceId, "IN_PROGRESS").andExpect(status().isOk());
+
+        // Notes are trimmed and recorded in the request's activity
+        patchNotes(maintenanceId, "  CoolAir HVAC, Thu 10 to 12  ")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.notes").value("CoolAir HVAC, Thu 10 to 12"))
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"));
+
+        // Saving the same notes again records nothing new
+        patchNotes(maintenanceId, "CoolAir HVAC, Thu 10 to 12").andExpect(status().isOk());
+
+        // Unsaved notes sent along with "Mark done" are kept
+        mockMvc.perform(patch("/api/maintenance-requests/{id}", maintenanceId)
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"status":"COMPLETED","notes":"Fixed the compressor"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.notes").value("Fixed the compressor"));
+
+        // A notes save that arrives after the job is done still works
+        patchNotes(maintenanceId, "Fixed the compressor. Invoice paid.")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.notes").value("Fixed the compressor. Invoice paid."));
+
+        // Blank notes are cleared
+        patchNotes(maintenanceId, "   ")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.notes").isEmpty());
+
+        // Too long
+        patchNotes(maintenanceId, "x".repeat(5001)).andExpect(status().isBadRequest());
+
+        JsonNode events = json(mockMvc.perform(get("/api/work-items/{id}/events", workItemId).with(user)));
+        assertThat(events.findValuesAsText("detail").stream()
+                .filter(detail -> detail.startsWith("Job notes")).toList())
+                .containsExactly("Job notes updated", "Job notes updated", "Job notes updated", "Job notes cleared");
+    }
+
+    @Test
     void latestProposedActionsReturnsOnePerOpenWorkItem() throws Exception {
         String workItemId = createWorkItem();
         String firstActionId = pendingAction(workItemId);
@@ -339,6 +389,14 @@ class WorkItemWorkflowTest {
                         .content("{\"message\":\"" + message + "\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"));
+    }
+
+    private ResultActions patchNotes(String id, String notes) throws Exception {
+        return mockMvc.perform(patch("/api/maintenance-requests/{id}", id)
+                .with(user)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(new com.fasterxml.jackson.databind.ObjectMapper()
+                        .createObjectNode().put("notes", notes).toString()));
     }
 
     private ResultActions patchMaintenance(String id, String status) throws Exception {
