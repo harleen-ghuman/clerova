@@ -196,6 +196,8 @@ public class ReplyService {
 
         outboundMessageRepository.save(outbound);
 
+        workItemRepository.resetSuggestions(workItemId);
+
         workItemEventService.record(
                 organizationId,
                 workItemId,

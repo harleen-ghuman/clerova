@@ -100,7 +100,7 @@ class EmailIntakeTest {
         result.actionType = actionType;
         result.reasoning = "Reasoning";
         result.draftedResponse = "Thanks, which unit are you in?";
-        when(aiService.proposeAction(any(), any())).thenReturn(result);
+        org.mockito.Mockito.doReturn(result).when(aiService).proposeAction(any(), any());
     }
 
     private JsonNode json(ResultActions actions) throws Exception {
@@ -604,6 +604,86 @@ class EmailIntakeTest {
                 .andExpect(status().isForbidden());
 
         verify(emailSender, org.mockito.Mockito.times(2)).send(any());
+    }
+
+    private int suggestionsLeft(String workItemId) throws Exception {
+        return json(mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user)))
+                .get("suggestionsLeft").asInt();
+    }
+
+    private ResultActions suggestAgain(String workItemId) throws Exception {
+        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/reject",
+                        latestAction(workItemId).get("id").asText()).with(user))
+                .andExpect(status().isOk());
+
+        return mockMvc.perform(post("/api/work-items/{id}/proposed-actions", workItemId).with(user));
+    }
+
+    @Test
+    void newSuggestionsAreCappedPerEmail() throws Exception {
+        String workItemId = deliverNew("<cap1@x>", "My sink is leaking.");
+
+        // Clerova's own first suggestion doesn't count
+        assertThat(suggestionsLeft(workItemId)).isEqualTo(5);
+
+        // A failed call gives its turn back
+        org.mockito.Mockito.doThrow(new RuntimeException("AI down")).when(aiService).proposeAction(any(), any());
+        assertThat(suggestAgain(workItemId).andReturn().getResponse().getStatus()).isNotEqualTo(201);
+        assertThat(suggestionsLeft(workItemId)).isEqualTo(5);
+        proposeAction(ActionType.REQUEST_MORE_INFORMATION);
+
+        // The failed call left the request without a suggestion
+        mockMvc.perform(post("/api/work-items/{id}/proposed-actions", workItemId).with(user))
+                .andExpect(status().isCreated());
+
+        for (int i = 0; i < 4; i++) {
+            suggestAgain(workItemId).andExpect(status().isCreated());
+        }
+
+        assertThat(suggestionsLeft(workItemId)).isZero();
+
+        suggestAgain(workItemId)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("all 5 new suggestions")));
+
+        // The tenant writes again: a fresh set
+        deliver(payload(forwardingAddress, "<cap2@x>", "<cap1@x>", null,
+                "tina@example.com", "It's unit 4B."))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        assertThat(suggestionsLeft(workItemId)).isEqualTo(5);
+        suggestAgain(workItemId).andExpect(status().isCreated());
+        assertThat(suggestionsLeft(workItemId)).isEqualTo(4);
+    }
+
+    @Test
+    void draftsShareTheCapAndSendingStartsAFreshSet() throws Exception {
+        String workItemId = inProgressRequest("<capjob1@x>");
+        when(aiService.draftReply(any(), anyString())).thenReturn("Hi Tina, the team is on it.");
+
+        for (int left = 4; left >= 0; left--) {
+            mockMvc.perform(post("/api/work-items/{id}/draft-reply", workItemId).with(user))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.suggestionsLeft").value(left));
+        }
+
+        mockMvc.perform(post("/api/work-items/{id}/draft-reply", workItemId).with(user))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"message":"The plumber comes Friday."}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.suggestionsLeft").value(5));
+
+        // Another workspace can't use them up
+        mockMvc.perform(post("/api/work-items/{id}/draft-reply", workItemId).with(onboardNewUser(mockMvc)))
+                .andExpect(status().isNotFound());
+        assertThat(suggestionsLeft(workItemId)).isEqualTo(5);
     }
 
     private String inProgressRequest(String firstMessageId) throws Exception {

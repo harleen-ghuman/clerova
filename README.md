@@ -314,6 +314,12 @@ expired trial returns `403 TRIAL_EXPIRED`, but existing data stays readable
 and existing requests can still be finished (approve, send, write to the
 sender, close).
 
+New suggestions (`POST /api/work-items/{id}/proposed-actions`) and drafts
+(`draft-reply`) don't count against the quota, but they share a cap of 5 per
+email: each new email from the sender, and each reply or approval, starts a
+fresh 5 (`suggestionsLeft` on the work item). Over the cap returns `409`. A
+failed AI call doesn't use one up.
+
 ---
 
 ## Running Locally

@@ -33,7 +33,7 @@ export function getWorkItemEvents(
 }
 
 /** A draft answer to the sender's latest email, not saved. */
-export function draftReply(workItemId: string): Promise<{ reply: string }> {
+export function draftReply(workItemId: string): Promise<{ reply: string; suggestionsLeft: number }> {
   return apiRequest(`/api/work-items/${workItemId}/draft-reply`, {
     method: "POST",
   });

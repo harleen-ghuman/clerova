@@ -8,7 +8,7 @@ import type {
 } from "../types/Email";
 import type { MaintenanceRequest } from "../types/MaintenanceRequest";
 import type { ProposedAction } from "../types/ProposedAction";
-import type { WorkItem } from "../types/WorkItem";
+import { MAX_SUGGESTIONS, type WorkItem } from "../types/WorkItem";
 import type { WeekSummary } from "../api/summary";
 import { REFRESH_EVENT } from "./mode";
 
@@ -327,6 +327,7 @@ function receiveEmail(state: DemoState, seed: Omit<Seed, "key" | "minutesAgo">, 
     updatedAt: at,
     unreadReplyAt: null,
     unreadReplyUrgent: false,
+    suggestionsLeft: MAX_SUGGESTIONS,
   };
 
   state.items.push(item);
@@ -533,6 +534,7 @@ function suggest(state: DemoState, item: WorkItem, minutesAgo?: number): Propose
 
 function approve(state: DemoState, action: ProposedAction, finalResponse: string | undefined, minutesAgo?: number) {
   const item = findItem(state, action.workItemId);
+  item.suggestionsLeft = MAX_SUGGESTIONS;
   const at = minutesAgo === undefined ? now() : ago(minutesAgo);
 
   action.status = "APPROVED";
@@ -589,6 +591,7 @@ function approveAndSend(state: DemoState, item: WorkItem, minutesAgo: number) {
 }
 
 function outbound(state: DemoState, item: WorkItem, text: string, at: string) {
+  item.suggestionsLeft = MAX_SUGGESTIONS;
   state.conversations[item.id].push({
     id: id("message"),
     direction: "OUTBOUND",
@@ -617,6 +620,7 @@ function setStatus(item: WorkItem, status: string) {
 
 /** The sender writes again on an existing request. */
 function followUp(state: DemoState, item: WorkItem, text: string, minutesAgo: number, urgentReason?: string) {
+  item.suggestionsLeft = MAX_SUGGESTIONS;
   const at = ago(minutesAgo);
 
   state.conversations[item.id].push({
@@ -673,6 +677,15 @@ function findAction(state: DemoState, actionId: string): ProposedAction {
   }
 
   return action;
+}
+
+/** Like the server: 5 new suggestions or drafts per email, either way. */
+function takeSuggestion(item: WorkItem) {
+  const left = item.suggestionsLeft ?? MAX_SUGGESTIONS;
+  if (left <= 0) {
+    conflict(`You've used all ${MAX_SUGGESTIONS} new suggestions for this email. Edit the reply yourself. You get ${MAX_SUGGESTIONS} more with the next email.`);
+  }
+  item.suggestionsLeft = left - 1;
 }
 
 function conflict(message: string): never {
@@ -862,6 +875,7 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
       updatedAt: at,
       unreadReplyAt: null,
       unreadReplyUrgent: false,
+      suggestionsLeft: MAX_SUGGESTIONS,
     };
     state.items.push(item);
     state.conversations[item.id] = [];
@@ -934,6 +948,7 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
     if (CLOSED.includes(item.status)) conflict("This request is already closed.");
     const latest = latestAction(state, item.id);
     if (latest?.status === "PENDING_APPROVAL") conflict("This request already has a suggestion waiting for review.");
+    takeSuggestion(item);
     return suggest(state, item);
   }
 
@@ -956,7 +971,8 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
     const item = findItem(state, match[1]);
     if (item.source !== "EMAIL" || !item.senderEmail) conflict("This request didn't come in by email, so there's no one to reply to.");
     requireCanWrite(item);
-    return { reply: draftFor(item) };
+    takeSuggestion(item);
+    return { reply: draftFor(item), suggestionsLeft: item.suggestionsLeft };
   }
 
   if ((match = route.match(/^POST \/api\/work-items\/([^/]+)\/reply$/))) {

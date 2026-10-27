@@ -1,3 +1,6 @@
+/** New suggestions or drafts a person can ask for per email. */
+export const MAX_SUGGESTIONS = 5;
+
 export interface WorkItem {
   id: string;
   organizationId: string;
@@ -17,4 +20,6 @@ export interface WorkItem {
   unreadReplyAt?: string | null;
   /** That new email looks urgent (safety or active damage). */
   unreadReplyUrgent?: boolean;
+  /** New suggestions or drafts left for the latest email (5 per email). */
+  suggestionsLeft?: number;
 }
