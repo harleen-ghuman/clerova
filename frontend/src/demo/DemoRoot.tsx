@@ -35,7 +35,7 @@ export function DemoRoot() {
         userEmail={me.email}
         fullName={me.fullName}
         onAccountUpdated={setMe}
-        onSignOut={() => window.location.assign(WEBSITE)}
+        onSignOut={() => window.location.assign("/")}
       />
       <DemoBar />
     </>
