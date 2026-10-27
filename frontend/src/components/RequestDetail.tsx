@@ -397,7 +397,15 @@ export function RequestDetail({
           <button
             type="button"
             className="rq-button"
-            onClick={() => close("CANCELLED")}
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Cancel this request? It moves to Done and nothing is sent. If the sender writes again, it comes back."
+                )
+              ) {
+                void close("CANCELLED");
+              }
+            }}
             disabled={busy !== null}
           >
             Cancel request
@@ -462,6 +470,7 @@ function SuggestionCard({
           <textarea
             value={response}
             rows={6}
+            maxLength={10000}
             disabled={busy !== null}
             onChange={(event) => setResponse(event.target.value)}
           />

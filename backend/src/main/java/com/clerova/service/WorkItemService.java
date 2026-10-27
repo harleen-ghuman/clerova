@@ -211,7 +211,10 @@ public class WorkItemService {
         workItem.setCategory(extraction.category);
         workItem.setPriority(extraction.priority);
         workItem.setSummary(extraction.summary);
-        workItem.setAddress(extraction.address);
+        // The column holds 255 characters; a long AI answer must not fail the save
+        workItem.setAddress(extraction.address != null && extraction.address.length() > 255
+                ? extraction.address.substring(0, 255)
+                : extraction.address);
     }
 
     public List<WorkItem> getAllWorkItems(UUID organizationId) {

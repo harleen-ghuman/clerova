@@ -26,20 +26,32 @@ public class InboundAddressService {
         this.organizationRepository = organizationRepository;
     }
 
+    /**
+     * The organization's forwarding token. New workspaces get one at
+     * onboarding; older ones get one here, set only once, so two requests at
+     * the same moment can't hand out different addresses.
+     */
     @Transactional
     public String getOrCreateToken(Organization organization) {
         if (organization.getInboundEmailToken() != null) {
             return organization.getInboundEmailToken();
         }
 
+        organizationRepository.setInboundEmailTokenIfMissing(organization.getId(), newToken(organization.getName()));
+
+        String token = organizationRepository.findInboundEmailToken(organization.getId());
+        organization.setInboundEmailToken(token);
+
+        return token;
+    }
+
+    /** A new, unused token based on the company name. */
+    public String newToken(String organizationName) {
         String token;
 
         do {
-            token = slug(organization.getName()) + "-" + randomSuffix();
+            token = slug(organizationName) + "-" + randomSuffix();
         } while (organizationRepository.existsByInboundEmailToken(token));
-
-        organization.setInboundEmailToken(token);
-        organizationRepository.save(organization);
 
         return token;
     }

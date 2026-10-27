@@ -51,7 +51,7 @@ export function Terms() {
           automatically each month or year until you cancel.
         </li>
         <li>
-          You can cancel anytime from Manage billing in the app. If you cancel,
+          You can cancel anytime in the app, in Settings under Plan and billing. If you cancel,
           you keep access until the end of your trial or the period you paid
           for. We don't refund partial periods unless the law requires it.
         </li>

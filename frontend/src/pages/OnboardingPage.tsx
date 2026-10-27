@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 
-import { completeOnboarding } from "../api/account";
-import { errorMessage } from "../api/client";
+import { completeOnboarding, getMe } from "../api/account";
+import { ApiRequestError, errorMessage } from "../api/client";
 import { getReferralSource } from "../auth/referral";
 import type { Me } from "../types/Account";
 
@@ -60,6 +60,20 @@ export function OnboardingPage({
 
       onComplete(me);
     } catch (err) {
+      // Set up meanwhile (another tab or a double click): just continue
+      if (err instanceof ApiRequestError && err.status === 409) {
+        try {
+          const current = await getMe();
+
+          if (current.organization) {
+            onComplete(current);
+            return;
+          }
+        } catch {
+          // Fall through to the message
+        }
+      }
+
       setError(errorMessage(err, "Couldn't set up your workspace. Please try again."));
     } finally {
       setSubmitting(false);
@@ -85,6 +99,7 @@ export function OnboardingPage({
             Your name
             <input
               autoComplete="name"
+              maxLength={255}
               value={fullName}
               onChange={(event) => setFullName(event.target.value)}
               disabled={submitting}
@@ -96,6 +111,7 @@ export function OnboardingPage({
             <input
               autoComplete="organization"
               required
+              maxLength={255}
               value={organizationName}
               onChange={(event) => setOrganizationName(event.target.value)}
               disabled={submitting}

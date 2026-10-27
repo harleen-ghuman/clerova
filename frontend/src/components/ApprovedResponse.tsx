@@ -69,13 +69,15 @@ export function ApprovedResponse({
               onClick={handleSend}
               disabled={sending}
             >
-              {sending ? "Sending..." : `Send to ${sendTo}`}
+              {sending ? "Sending..." : "Send reply"}
             </button>
           )}
         </div>
       </div>
 
       <p className="drafted-response">{response}</p>
+
+      {sendTo && !sent && <p className="rq-hint">Goes to {sendTo}.</p>}
 
       {sent && sendTo && (
         <p className="request-success">Sent to {sendTo}</p>

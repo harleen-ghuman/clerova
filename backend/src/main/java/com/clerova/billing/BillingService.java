@@ -123,7 +123,7 @@ public class BillingService {
             throw new ApiException(
                     HttpStatus.CONFLICT,
                     "ALREADY_SUBSCRIBED",
-                    "You already have a plan. Use Manage billing to change it."
+                    "You already have a plan. Change it in Settings, under Plan and billing."
             );
         }
 

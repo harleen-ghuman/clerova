@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { errorMessage } from "../api/client";
+import { ApiRequestError, errorMessage } from "../api/client";
 import {
   getBillingOffer,
   startCheckout,
@@ -64,6 +64,13 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
       const { url } = await startCheckout(plan, interval);
       window.location.assign(url);
     } catch (err) {
+      // The plan is already active (another tab, or Stripe just confirmed):
+      // reload into the app instead of asking them to
+      if (err instanceof ApiRequestError && err.status === 409) {
+        window.location.reload();
+        return;
+      }
+
       setError(errorMessage(err, "Couldn't open checkout. Please try again."));
       setSubmitting(null);
     }

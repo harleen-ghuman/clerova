@@ -55,7 +55,7 @@ function oauthError(): string | null {
   }
 
   if (isExpiredEmailLink()) {
-    return "This email link has expired or was already used. If you already confirmed your email, just sign in. Otherwise, sign in and we'll send a new link.";
+    return "This email link has expired or was already used. If you already confirmed your email, just sign in. To reset your password, use Forgot password? for a new link.";
   }
 
   return params.get("error") === "access_denied"
@@ -237,6 +237,10 @@ export function AuthPage({
             </button>
             <button type="button" onClick={() => switchMode("sign-up")}>
               Use a different email
+            </button>
+            {/* Confirmed on another device: this tab can't tell */}
+            <button type="button" onClick={() => switchMode("sign-in")}>
+              Already confirmed? Sign in
             </button>
           </div>
         </div>

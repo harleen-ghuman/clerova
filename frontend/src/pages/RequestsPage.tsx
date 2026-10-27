@@ -179,6 +179,7 @@ export function RequestsPage({
           <textarea
             id="new-request"
             rows={4}
+            maxLength={10000}
             value={draft}
             disabled={creating}
             placeholder="Example: Water is leaking under the kitchen sink at 12 Oak St, Unit 4B."
