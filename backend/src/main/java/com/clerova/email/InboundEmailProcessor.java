@@ -8,6 +8,7 @@ import com.clerova.exception.AiServiceException;
 import com.clerova.exception.ApiException;
 import com.clerova.repository.InboundMessageRepository;
 import com.clerova.repository.WorkItemRepository;
+import com.clerova.service.AiUsageService;
 import com.clerova.service.WorkItemService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,6 +20,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -40,6 +43,9 @@ public class InboundEmailProcessor {
     public static final String AUTOMATED_REASON = "Automated or bulk email";
     public static final String EMPTY_REASON = "Empty email, with no subject, text or attachments";
     public static final String RETRY_REASON = "Couldn't read this email yet. Clerova will try again in a few minutes.";
+    static final String QUOTA_WAIT_REASON =
+            "Your plan's requests for this month are used up. This email will be organized on %s, or as soon as you upgrade.";
+
     public static final String FAILED_REASON = "Couldn't read this email. Click Retry to try again.";
 
     static final int MAX_ATTEMPTS = 3;
@@ -61,6 +67,7 @@ public class InboundEmailProcessor {
     private final InboundMessageRepository inboundMessageRepository;
     private final WorkItemRepository workItemRepository;
     private final WorkItemService workItemService;
+    private final AiUsageService aiUsageService;
     private final TransactionTemplate transactionTemplate;
 
     public InboundEmailProcessor(
@@ -68,12 +75,14 @@ public class InboundEmailProcessor {
             InboundMessageRepository inboundMessageRepository,
             WorkItemRepository workItemRepository,
             WorkItemService workItemService,
+            AiUsageService aiUsageService,
             TransactionTemplate transactionTemplate
     ) {
         this.enabled = enabled;
         this.inboundMessageRepository = inboundMessageRepository;
         this.workItemRepository = workItemRepository;
         this.workItemService = workItemService;
+        this.aiUsageService = aiUsageService;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -127,8 +136,12 @@ public class InboundEmailProcessor {
             failOrRetry(message);
 
         } catch (ApiException e) {
-            // Trial ended or quota used up: needs a person to act
-            finish(message, InboundMessageStatus.FAILED, e.getMessage());
+            if (AiUsageService.QUOTA_EXCEEDED.equals(e.getCode())) {
+                waitForQuota(message);
+            } else {
+                // Plan or trial ended: needs a person to act
+                finish(message, InboundMessageStatus.FAILED, e.getMessage());
+            }
 
         } catch (RuntimeException e) {
             log.error("Unexpected error processing inbound email {}", messageId, e);
@@ -282,6 +295,23 @@ public class InboundEmailProcessor {
         } else {
             retryLater(message);
         }
+    }
+
+    /**
+     * The month's requests are used up. The email waits until they reset,
+     * or until an upgrade (BillingService releases waiting emails then).
+     */
+    private void waitForQuota(InboundMessage message) {
+        Instant reset = aiUsageService.nextReset();
+
+        message.setStatus(InboundMessageStatus.RECEIVED);
+        message.setAttempts(0);
+        message.setStatusReason(QUOTA_WAIT_REASON.formatted(
+                DateTimeFormatter.ofPattern("MMMM d", Locale.US).withZone(ZoneOffset.UTC).format(reset)
+        ));
+        message.setNextAttemptAt(reset);
+
+        inboundMessageRepository.save(message);
     }
 
     private void retryLater(InboundMessage message) {

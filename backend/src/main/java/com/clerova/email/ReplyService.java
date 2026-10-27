@@ -17,7 +17,6 @@ import com.clerova.repository.OrganizationRepository;
 import com.clerova.repository.OutboundMessageRepository;
 import com.clerova.repository.ProposedActionRepository;
 import com.clerova.repository.WorkItemRepository;
-import com.clerova.service.AiUsageService;
 import com.clerova.service.WorkItemEventService;
 import com.clerova.service.WorkItemService;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -47,7 +46,6 @@ public class ReplyService {
     private final OutboundMessageRepository outboundMessageRepository;
     private final WorkItemRepository workItemRepository;
     private final WorkItemEventService workItemEventService;
-    private final AiUsageService aiUsageService;
     private final TransactionTemplate transactionTemplate;
 
     public ReplyService(
@@ -60,7 +58,6 @@ public class ReplyService {
             OutboundMessageRepository outboundMessageRepository,
             WorkItemRepository workItemRepository,
             WorkItemEventService workItemEventService,
-            AiUsageService aiUsageService,
             TransactionTemplate transactionTemplate
     ) {
         this.emailProperties = emailProperties;
@@ -72,7 +69,6 @@ public class ReplyService {
         this.outboundMessageRepository = outboundMessageRepository;
         this.workItemRepository = workItemRepository;
         this.workItemEventService = workItemEventService;
-        this.aiUsageService = aiUsageService;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -122,8 +118,8 @@ public class ReplyService {
      */
     public WorkItem sendMessage(UUID organizationId, UUID workItemId, String message, UUID actorUserId) {
 
+        // No plan check: finishing existing requests stays allowed
         requireSendingEnabled();
-        aiUsageService.requireAccess(organizationId);
 
         Instant startedAt = Instant.now();
 

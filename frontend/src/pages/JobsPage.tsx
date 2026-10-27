@@ -223,7 +223,16 @@ export function JobsPage({
                               type="button"
                               className="rq-button rq-button-small rq-button-primary"
                               disabled={busy}
-                              onClick={() => update(job, { status: "COMPLETED" })}
+                              onClick={() => {
+                                if (
+                                  !newReply ||
+                                  window.confirm(
+                                    `${requestSender(request!)} wrote again and hasn't had an answer. Mark the job done anyway?`
+                                  )
+                                ) {
+                                  void update(job, { status: "COMPLETED" });
+                                }
+                              }}
                             >
                               Mark done
                             </button>
@@ -235,7 +244,9 @@ export function JobsPage({
                             onClick={() => {
                               if (
                                 window.confirm(
-                                  "Cancel this job? Its request will be closed too."
+                                  newReply
+                                    ? `Cancel this job? Its request will be closed too. ${requestSender(request!)} wrote again and hasn't had an answer.`
+                                    : "Cancel this job? Its request will be closed too."
                                 )
                               ) {
                                 void update(job, { status: "CANCELLED" });

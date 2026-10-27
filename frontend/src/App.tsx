@@ -362,7 +362,7 @@ function App({
   ).toLocaleDateString([], { month: "long", day: "numeric", timeZone: "UTC" });
   const usageNotice =
     usageLevel === "limit"
-      ? `You've used all ${limit} requests this month. New emails are saved but won't be organized until ${resetDate}.`
+      ? `You've used all ${limit.toLocaleString()} requests this month. New emails are saved and will be organized on ${resetDate}${canUpgrade ? ", or as soon as you upgrade" : ""}.`
       : usageLevel === "warning"
         ? `You've used ${used} of ${limit} requests this month.`
         : null;

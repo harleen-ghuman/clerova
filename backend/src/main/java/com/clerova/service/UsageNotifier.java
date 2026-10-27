@@ -95,9 +95,9 @@ public class UsageNotifier {
         String app = billingProperties.getAppUrl();
 
         String usage = event.limitReached()
-                ? "%s has used all %d requests included this month. New emails are saved but won't be organized until %s."
+                ? "%s has used all %d requests included this month. New emails are saved and will be organized on %s."
                         .formatted(organization.getName(), event.limit(), resetDate)
-                : "%s has used %d of the %d requests included this month. At %d, new emails won't be organized until %s."
+                : "%s has used %d of the %d requests included this month. At %d, new emails wait until %s."
                         .formatted(organization.getName(), event.used(), event.limit(), event.limit(), resetDate);
 
         String next = organization.getPlan() == Plan.STARTER
@@ -105,8 +105,8 @@ public class UsageNotifier {
                         .formatted(billingProperties.getGrowthMonthlyRequests(), app)
                 : "Need more? Reply to this email and we'll help.";
 
-        String retry = event.limitReached()
-                ? "\n\nAfter upgrading, retry the waiting emails from the Inbox."
+        String retry = event.limitReached() && organization.getPlan() == Plan.STARTER
+                ? "\n\nAfter you upgrade, waiting emails are organized right away."
                 : "";
 
         return "Hi,\n\n" + usage + "\n\n" + next + retry + "\n\nThe Clerova team";

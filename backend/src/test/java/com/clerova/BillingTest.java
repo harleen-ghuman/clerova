@@ -51,6 +51,9 @@ class BillingTest {
     private static final String WEBHOOK_SECRET = "whsec_test";
 
     @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
+    @Autowired
     private MockMvc mockMvc;
 
     @MockitoBean
@@ -268,6 +271,28 @@ class BillingTest {
                 .andExpect(status().isPaymentRequired())
                 .andExpect(jsonPath("$.message").value(
                         "Your plan has ended. Choose a plan to keep using Clerova."));
+    }
+
+    @Test
+    void starterOverTheLimitIsToldToUpgradeToGrowth() throws Exception {
+        RequestPostProcessor user = onboardNewUser(mockMvc);
+        String organizationId = organizationIdOf(user);
+
+        stubSubscription(organizationId, "active", "starter_monthly");
+        sendSignedWebhook("""
+                {"type":"customer.subscription.updated","data":{"object":{"id":"sub_1"}}}
+                """).andExpect(status().isOk());
+
+        jdbcTemplate.update(
+                "update organizations set ai_usage_count = ai_monthly_limit, ai_usage_period = ? where id = ?",
+                java.time.YearMonth.now(java.time.ZoneOffset.UTC).toString(),
+                java.util.UUID.fromString(organizationId)
+        );
+
+        createRequest(user)
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith(
+                        "You've used all 500 requests in your plan this month. Upgrade to Growth for 1,500 a month")));
     }
 
     private void stubRawSubscription(String id, String json) {

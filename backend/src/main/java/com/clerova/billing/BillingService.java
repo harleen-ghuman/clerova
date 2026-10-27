@@ -4,6 +4,7 @@ import com.clerova.domain.Organization;
 import com.clerova.domain.Plan;
 import com.clerova.exception.ApiException;
 import com.clerova.exception.NotFoundException;
+import com.clerova.repository.InboundMessageRepository;
 import com.clerova.repository.OrganizationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +38,7 @@ public class BillingService {
     private final BillingProperties properties;
     private final StripeClient stripe;
     private final OrganizationRepository organizationRepository;
+    private final InboundMessageRepository inboundMessageRepository;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
@@ -44,11 +46,13 @@ public class BillingService {
             BillingProperties properties,
             StripeClient stripe,
             OrganizationRepository organizationRepository,
+            InboundMessageRepository inboundMessageRepository,
             ObjectMapper objectMapper
     ) {
         this.properties = properties;
         this.stripe = stripe;
         this.organizationRepository = organizationRepository;
+        this.inboundMessageRepository = inboundMessageRepository;
         this.objectMapper = objectMapper;
         this.clock = Clock.systemUTC();
     }
@@ -352,6 +356,11 @@ public class BillingService {
         }
 
         organizationRepository.save(organization);
+
+        // An upgrade or a new plan: emails waiting for requests go now
+        if (hasAccessStatus(status)) {
+            inboundMessageRepository.releaseWaiting(organization.getId(), clock.instant());
+        }
     }
 
     static String lookupKey(Plan plan, String interval, boolean founding) {

@@ -75,7 +75,14 @@ export function RequestsPage({
     );
   }
 
+  // Newest activity first: a new email moves an older request up
+  const activityAt = (item: WorkItem) =>
+    hasNewReply(item) && item.unreadReplyAt ? item.unreadReplyAt : item.createdAt;
   const visible = matching.filter((item) => inFilter(item, filter));
+
+  if (filter !== "all") {
+    visible.sort((a, b) => activityAt(b).localeCompare(activityAt(a)));
+  }
 
   function countFor(key: RequestFilter) {
     return matching.filter((item) => inFilter(item, key)).length;
@@ -227,7 +234,7 @@ export function RequestsPage({
                   {hasNewReply(item) && (
                     <span className="rq-new-reply">New reply</span>
                   )}
-                  <time>{shortTime(item.createdAt)}</time>
+                  <time>{shortTime(activityAt(item))}</time>
                 </span>
                 <span className="rq-row-title">{requestTitle(item)}</span>
                 <span className="rq-row-preview">{item.summary}</span>

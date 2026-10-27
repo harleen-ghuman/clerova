@@ -31,14 +31,31 @@ function cachedGoogleSignIn(): boolean {
   }
 }
 
-/** Set when Google sends the user back without signing them in. */
-function oauthError(): string | null {
-  const params = new URLSearchParams(
+function returnParams(): URLSearchParams {
+  return new URLSearchParams(
     window.location.search + "&" + window.location.hash.replace(/^#/, "")
   );
+}
+
+/** An email link (confirm, reset or change email) that expired or was used. */
+function isExpiredEmailLink(): boolean {
+  const params = returnParams();
+  return (
+    params.get("error_code") === "otp_expired" ||
+    (params.get("error_description") ?? "").toLowerCase().includes("link")
+  );
+}
+
+/** Set when Google or an email link sends the user back without signing them in. */
+function oauthError(): string | null {
+  const params = returnParams();
 
   if (!params.get("error")) {
     return null;
+  }
+
+  if (isExpiredEmailLink()) {
+    return "This email link has expired or was already used. If you already confirmed your email, just sign in. Otherwise, sign in and we'll send a new link.";
   }
 
   return params.get("error") === "access_denied"
@@ -51,7 +68,11 @@ export function AuthPage({
   onPasswordReset,
 }: AuthPageProps) {
   const [mode, setMode] = useState<AuthMode>(() =>
-    recoveringPassword ? "reset-password" : wantsSignIn() ? "sign-in" : "sign-up"
+    recoveringPassword
+      ? "reset-password"
+      : wantsSignIn() || isExpiredEmailLink()
+        ? "sign-in"
+        : "sign-up"
   );
   const [email, setEmail] = useState(prefilledEmail);
   const [password, setPassword] = useState("");

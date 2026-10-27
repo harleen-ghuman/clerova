@@ -59,6 +59,9 @@ class EmailIntakeTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private com.clerova.repository.InboundMessageRepository inboundMessageRepository;
+
     @MockitoBean
     private AiService aiService;
 
@@ -553,7 +556,7 @@ class EmailIntakeTest {
     }
 
     @Test
-    void writingToTheSenderNeedsAJobOrEscalationAndAnActivePlan() throws Exception {
+    void writingToTheSenderNeedsAJobOrEscalation() throws Exception {
         String workItemId = deliverNew("<write1@x>", "My sink is leaking.");
         String message = """
                 {"message":"Hello"}
@@ -585,7 +588,6 @@ class EmailIntakeTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ESCALATED"));
 
-        // An ended trial can't send
         String organizationId = json(mockMvc.perform(get("/api/me").with(user)))
                 .get("organization").get("id").asText();
         jdbcTemplate.update(
@@ -594,11 +596,14 @@ class EmailIntakeTest {
                 UUID.fromString(organizationId)
         );
 
+        // An ended trial can still finish the request, but not use AI
         mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
                         .with(user).contentType(MediaType.APPLICATION_JSON).content(message))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/work-items/{id}/draft-reply", workItemId).with(user))
                 .andExpect(status().isForbidden());
 
-        verify(emailSender, org.mockito.Mockito.times(1)).send(any());
+        verify(emailSender, org.mockito.Mockito.times(2)).send(any());
     }
 
     @Test
@@ -711,7 +716,7 @@ class EmailIntakeTest {
     }
 
     @Test
-    void quotaExhaustionMarksEmailFailed() throws Exception {
+    void emailWaitsWhenRequestsAreUsedUpAndGoesAfterAnUpgrade() throws Exception {
         String organizationId = json(mockMvc.perform(get("/api/me").with(user)))
                 .get("organization").get("id").asText();
 
@@ -725,10 +730,47 @@ class EmailIntakeTest {
 
         processor.processDue();
 
+        // Waits for next month instead of failing
+        JsonNode waiting = json(mockMvc.perform(get("/api/inbox").with(user))).get(0);
+        assertThat(waiting.get("status").asText()).isEqualTo("RECEIVED");
+        assertThat(waiting.get("statusReason").asText()).contains("will be organized on");
+
+        processor.processDue();
+        assertThat(json(mockMvc.perform(get("/api/inbox").with(user))).get(0).get("status").asText())
+                .isEqualTo("RECEIVED");
+
+        // An upgrade raises the limit and releases waiting emails
+        jdbcTemplate.update(
+                "update organizations set ai_monthly_limit = 100 where id = ?",
+                UUID.fromString(organizationId)
+        );
+        inboundMessageRepository.releaseWaiting(UUID.fromString(organizationId), java.time.Instant.now());
+        processor.processDue();
+
         mockMvc.perform(get("/api/inbox").with(user))
-                .andExpect(jsonPath("$[0].status").value("FAILED"))
-                .andExpect(jsonPath("$[0].statusReason").value(
-                        "You have used all requests included in your plan this month."));
+                .andExpect(jsonPath("$[0].status").value("PROCESSED"))
+                .andExpect(jsonPath("$[0].workItemId").isNotEmpty());
+    }
+
+    @Test
+    void typedRequestOverTheLimitSaysWhatToDo() throws Exception {
+        String organizationId = json(mockMvc.perform(get("/api/me").with(user)))
+                .get("organization").get("id").asText();
+
+        jdbcTemplate.update(
+                "update organizations set ai_monthly_limit = 0 where id = ?",
+                UUID.fromString(organizationId)
+        );
+
+        mockMvc.perform(post("/api/work-items")
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"message":"Sink is leaking"}
+                                """))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.error").value("AI_QUOTA_EXCEEDED"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Email ")));
     }
 
     @Test

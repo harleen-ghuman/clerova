@@ -32,6 +32,9 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
 
   // A first subscription comes with the free trial
   const firstTime = organization.subscriptionStatus === null;
+  const ended = ["canceled", "unpaid", "incomplete_expired", "paused"].includes(
+    organization.subscriptionStatus ?? ""
+  );
   const founding = organization.foundingCustomer || foundingSpotsLeft > 0;
 
   useEffect(() => {
@@ -78,7 +81,9 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
         <p className="auth-description">
           {firstTime
             ? `Try Clerova free for ${TRIAL_DAYS} days. You won't be charged until your trial ends. Cancel anytime before then and you pay nothing.`
-            : `Choose a plan to keep using Clerova for ${organization.name}.`}
+            : ended
+              ? `Your plan has ended. Choose a plan to keep using Clerova for ${organization.name}. Your requests and history are saved.`
+              : `Choose a plan to keep using Clerova for ${organization.name}.`}
         </p>
 
         {notice && <p className="plan-notice">{notice}</p>}

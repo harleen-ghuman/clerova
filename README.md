@@ -295,8 +295,10 @@ Content-Type: application/json
 
 Requests that call the AI are rate limited per client and per day (`429`),
 and count against the organization's monthly quota (`429
-AI_QUOTA_EXCEEDED`). An expired trial returns `403 TRIAL_EXPIRED`, but
-existing data stays readable.
+AI_QUOTA_EXCEEDED`, with a message that recommends Growth on Starter). An
+expired trial returns `403 TRIAL_EXPIRED`, but existing data stays readable
+and existing requests can still be finished (approve, send, write to the
+sender, close).
 
 ---
 
@@ -487,9 +489,9 @@ How it works:
 - At 80% and at 100% of the monthly requests, owners get an email and the
   app shows a banner. On Starter both suggest upgrading to Growth, which
   upgrades the subscription in place (same billing period, founding price kept,
-  the difference added to the next invoice). At the limit, new emails are saved but
-  not organized until the next month; they can be retried from the Inbox
-  after upgrading.
+  the difference added to the next invoice). At the limit, new emails wait in
+  the Inbox ("Queued") until the 1st of next month (UTC). An upgrade or a
+  new plan releases them right away.
 - Stripe is the source of truth. Webhooks and the return from Checkout read
   the current subscription from Stripe and copy its status, plan and dates
   to the organization.
