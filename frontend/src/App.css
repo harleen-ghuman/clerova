@@ -1238,6 +1238,7 @@ h3 {
   color: #16181d;
   font: inherit;
   font-size: 14px;
+  font-weight: 400;
   line-height: 1.45;
   resize: vertical;
 }
@@ -1247,7 +1248,7 @@ h3 {
   outline-offset: 1px;
 }
 
-.company-info-over {
+.company-info-form .company-info-over {
   color: #b42318;
 }
 
