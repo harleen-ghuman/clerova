@@ -10,17 +10,21 @@ import com.clerova.domain.ProposedActionStatus;
 import com.clerova.domain.WorkItem;
 import com.clerova.domain.WorkItemEventType;
 import com.clerova.domain.WorkItemSource;
+import com.clerova.domain.WorkItemStatus;
 import com.clerova.exception.ApiException;
 import com.clerova.exception.NotFoundException;
 import com.clerova.repository.InboundMessageRepository;
 import com.clerova.repository.OrganizationRepository;
 import com.clerova.repository.OutboundMessageRepository;
 import com.clerova.repository.ProposedActionRepository;
+import com.clerova.repository.WorkItemRepository;
 import com.clerova.service.WorkItemEventService;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -40,6 +44,7 @@ public class ReplyService {
     private final OrganizationRepository organizationRepository;
     private final InboundMessageRepository inboundMessageRepository;
     private final OutboundMessageRepository outboundMessageRepository;
+    private final WorkItemRepository workItemRepository;
     private final WorkItemEventService workItemEventService;
     private final TransactionTemplate transactionTemplate;
 
@@ -51,6 +56,7 @@ public class ReplyService {
             OrganizationRepository organizationRepository,
             InboundMessageRepository inboundMessageRepository,
             OutboundMessageRepository outboundMessageRepository,
+            WorkItemRepository workItemRepository,
             WorkItemEventService workItemEventService,
             TransactionTemplate transactionTemplate
     ) {
@@ -61,6 +67,7 @@ public class ReplyService {
         this.organizationRepository = organizationRepository;
         this.inboundMessageRepository = inboundMessageRepository;
         this.outboundMessageRepository = outboundMessageRepository;
+        this.workItemRepository = workItemRepository;
         this.workItemEventService = workItemEventService;
         this.transactionTemplate = transactionTemplate;
     }
@@ -74,13 +81,7 @@ public class ReplyService {
 
     public ProposedAction sendReply(UUID organizationId, UUID proposedActionId, UUID actorUserId) {
 
-        if (!emailProperties.isSendingEnabled()) {
-            throw new ApiException(
-                    HttpStatus.CONFLICT,
-                    "EMAIL_SENDING_DISABLED",
-                    "Sending email isn't set up yet. Copy the reply and send it from your own email."
-            );
-        }
+        requireSendingEnabled();
 
         // Marking the action EXECUTED first (optimistic locking) makes a
         // double click fail instead of sending the email twice.
@@ -103,29 +104,105 @@ public class ReplyService {
         }
 
         return transactionTemplate.execute(status -> {
-            OutboundMessage outbound = new OutboundMessage();
-
-            outbound.setOrganizationId(organizationId);
-            outbound.setWorkItemId(prepared.workItemId());
-            outbound.setProposedActionId(proposedActionId);
-            outbound.setToEmail(prepared.email().to());
-            outbound.setSubject(prepared.email().subject());
-            outbound.setBody(prepared.email().textBody());
-            outbound.setProviderMessageId(providerMessageId);
-            outbound.setSentByUserId(actorUserId);
-
-            outboundMessageRepository.save(outbound);
-
-            workItemEventService.record(
-                    organizationId,
-                    prepared.workItemId(),
-                    WorkItemEventType.REPLY_SENT,
-                    "Reply sent to " + prepared.email().to(),
-                    actorUserId
-            );
+            recordSent(organizationId, prepared.workItemId(), proposedActionId,
+                    prepared.email(), providerMessageId, actorUserId);
 
             return proposedActionRepository.findById(proposedActionId).orElseThrow();
         });
+    }
+
+    /**
+     * Sends a message written by a person (no suggestion behind it), e.g.
+     * answering the sender while the request's job is in progress. Clears
+     * the request's new-email alert.
+     */
+    public WorkItem sendMessage(UUID organizationId, UUID workItemId, String message, UUID actorUserId) {
+
+        requireSendingEnabled();
+
+        Instant startedAt = Instant.now();
+
+        OutgoingEmail email = transactionTemplate.execute(status -> {
+            WorkItem workItem = workItemRepository.findByIdAndOrganizationId(workItemId, organizationId)
+                    .orElseThrow(() -> new NotFoundException("Work item not found: " + workItemId));
+
+            if (workItem.getStatus() == WorkItemStatus.COMPLETED
+                    || workItem.getStatus() == WorkItemStatus.CANCELLED) {
+                throw new ConflictException("This request is already closed.");
+            }
+
+            return buildEmail(organizationId, workItem, message.trim());
+        });
+
+        String providerMessageId;
+
+        try {
+            providerMessageId = emailSender.send(email);
+        } catch (EmailSendException e) {
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "EMAIL_SEND_FAILED", e.getMessage());
+        }
+
+        // Recorded on its own so the sent email is never lost from the thread
+        transactionTemplate.executeWithoutResult(status ->
+                recordSent(organizationId, workItemId, null, email, providerMessageId, actorUserId)
+        );
+
+        try {
+            return transactionTemplate.execute(status -> {
+                WorkItem workItem = workItemRepository.findById(workItemId).orElseThrow();
+
+                // An email that arrived while this one was sending stays flagged
+                if (workItem.getUnreadReplyAt() != null && workItem.getUnreadReplyAt().isBefore(startedAt)) {
+                    workItem.setUnreadReplyAt(null);
+                    return workItemRepository.save(workItem);
+                }
+
+                return workItem;
+            });
+        } catch (OptimisticLockingFailureException e) {
+            // Changed at the same moment; the alert stays and can be dismissed
+            return workItemRepository.findById(workItemId).orElseThrow();
+        }
+    }
+
+    private void requireSendingEnabled() {
+        if (!emailProperties.isSendingEnabled()) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "EMAIL_SENDING_DISABLED",
+                    "Sending email isn't set up yet. Copy the reply and send it from your own email."
+            );
+        }
+    }
+
+    private void recordSent(
+            UUID organizationId,
+            UUID workItemId,
+            UUID proposedActionId,
+            OutgoingEmail email,
+            String providerMessageId,
+            UUID actorUserId
+    ) {
+        OutboundMessage outbound = new OutboundMessage();
+
+        outbound.setOrganizationId(organizationId);
+        outbound.setWorkItemId(workItemId);
+        outbound.setProposedActionId(proposedActionId);
+        outbound.setToEmail(email.to());
+        outbound.setSubject(email.subject());
+        outbound.setBody(email.textBody());
+        outbound.setProviderMessageId(providerMessageId);
+        outbound.setSentByUserId(actorUserId);
+
+        outboundMessageRepository.save(outbound);
+
+        workItemEventService.record(
+                organizationId,
+                workItemId,
+                WorkItemEventType.REPLY_SENT,
+                "Reply sent to " + email.to(),
+                actorUserId
+        );
     }
 
     private PreparedReply prepare(UUID organizationId, UUID proposedActionId) {
@@ -145,15 +222,24 @@ public class ReplyService {
             throw new ConflictException("There's no reply to send.");
         }
 
-        WorkItem workItem = action.getWorkItem();
+        String body = action.getFinalResponse() != null
+                ? action.getFinalResponse()
+                : action.getDraftedResponse();
+
+        OutgoingEmail email = buildEmail(organizationId, action.getWorkItem(), body);
+
+        action.setStatus(ProposedActionStatus.EXECUTED);
+        proposedActionRepository.saveAndFlush(action);
+
+        return new PreparedReply(action.getWorkItem().getId(), action, email);
+    }
+
+    /** The email to the sender, threaded with the request's earlier emails. */
+    private OutgoingEmail buildEmail(UUID organizationId, WorkItem workItem, String body) {
 
         if (workItem.getSource() != WorkItemSource.EMAIL || workItem.getSenderEmail() == null) {
             throw new ConflictException("This request didn't come in by email, so there's no one to reply to.");
         }
-
-        String body = action.getFinalResponse() != null
-                ? action.getFinalResponse()
-                : action.getDraftedResponse();
 
         if (body == null || body.isBlank()) {
             throw new ConflictException("The reply is empty. Add a message before sending.");
@@ -172,7 +258,7 @@ public class ReplyService {
         String inReplyTo = threadIds.isEmpty() ? null : threadIds.get(threadIds.size() - 1);
         String references = threadIds.isEmpty() ? null : threadIds.stream().collect(Collectors.joining(" "));
 
-        OutgoingEmail email = new OutgoingEmail(
+        return new OutgoingEmail(
                 "\"" + displayName(organization.getName()) + " via Clerova\" <"
                         + emailProperties.forwardingAddress(token) + ">",
                 emailProperties.replyAddress(token, workItem.getId()),
@@ -182,11 +268,6 @@ public class ReplyService {
                 inReplyTo,
                 references
         );
-
-        action.setStatus(ProposedActionStatus.EXECUTED);
-        proposedActionRepository.saveAndFlush(action);
-
-        return new PreparedReply(workItem.getId(), action, email);
     }
 
     static String replySubject(String subject) {

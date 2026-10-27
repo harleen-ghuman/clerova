@@ -5,6 +5,7 @@ import { GetStarted } from "../components/GetStarted";
 import type { MaintenanceRequest } from "../types/MaintenanceRequest";
 import type { WorkItem } from "../types/WorkItem";
 import {
+  hasNewReply,
   requestBucket,
   requestSender,
   requestTitle,
@@ -170,12 +171,18 @@ export function TodayPage({
       requestBucket(item) === "waiting" &&
       now - new Date(item.updatedAt).getTime() > WAITING_DAYS * DAY_MS
   );
+  const newReplies = open
+    .filter(hasNewReply)
+    .sort((a, b) => (b.unreadReplyAt ?? "").localeCompare(a.unreadReplyAt ?? ""));
   const openJobs = jobs.filter(
     (job) => job.status === "OPEN" || job.status === "IN_PROGRESS"
   );
 
   const allClear =
-    review.length === 0 && urgent.length === 0 && waitingLong.length === 0;
+    review.length === 0 &&
+    urgent.length === 0 &&
+    waitingLong.length === 0 &&
+    newReplies.length === 0;
 
   return (
     <div className="today page-padded">
@@ -238,6 +245,25 @@ export function TodayPage({
 
         {allClear && (
           <p className="today-clear">You're all caught up. New emails will show up here.</p>
+        )}
+
+        {newReplies.length > 0 && (
+          <div className="today-list">
+            <h3>New replies during a job</h3>
+            {newReplies.slice(0, 5).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="today-row"
+                onClick={() => onOpenRequest(item.id)}
+              >
+                <span className="rq-new-reply">New reply</span>
+                <strong>{requestTitle(item)}</strong>
+                <span>{requestSender(item)}</span>
+                <time>{shortTime(item.unreadReplyAt ?? item.updatedAt)}</time>
+              </button>
+            ))}
+          </div>
         )}
 
         {urgent.length > 0 && (

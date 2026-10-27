@@ -384,8 +384,10 @@ public class WorkItemService {
             );
 
             default -> {
-                // In progress (e.g. maintenance underway): keep the message
-                // on the item without changing its workflow.
+                // In progress (e.g. maintenance underway): the job keeps
+                // going, but the request is flagged so someone answers.
+                workItem.setUnreadReplyAt(Instant.now());
+                workItemRepository.save(workItem);
                 return false;
             }
         }
@@ -394,6 +396,55 @@ public class WorkItemService {
         workItemRepository.save(workItem);
 
         return true;
+    }
+
+    /**
+     * Drafts an answer to the sender's latest email on a request whose job
+     * is in progress. Nothing is saved; a person edits and sends it.
+     */
+    public String draftFollowUpReply(UUID organizationId, UUID workItemId) {
+
+        WorkItem workItem = getWorkItem(organizationId, workItemId);
+
+        if (workItem.getSource() != WorkItemSource.EMAIL || workItem.getSenderEmail() == null) {
+            throw new ConflictException("This request didn't come in by email, so there's no one to reply to.");
+        }
+
+        if (CLOSED_STATUSES.contains(workItem.getStatus())) {
+            throw new ConflictException("This request is already closed.");
+        }
+
+        aiUsageService.requireAccess(organizationId);
+
+        String conversation = conversationService.conversationForAi(workItem);
+
+        return aiService.draftReply(
+                workItem,
+                conversation != null ? conversation : workItem.getOriginalMessage()
+        );
+    }
+
+    /** The sender's new email needs no answer, so the alert goes away. */
+    @Transactional
+    public WorkItem markReplyHandled(UUID organizationId, UUID workItemId, UUID actorUserId) {
+
+        WorkItem workItem = getWorkItem(organizationId, workItemId);
+
+        if (workItem.getUnreadReplyAt() == null) {
+            return workItem;
+        }
+
+        workItem.setUnreadReplyAt(null);
+
+        workItemEventService.record(
+                organizationId,
+                workItemId,
+                WorkItemEventType.REPLY_HANDLED,
+                "Marked the new email as handled",
+                actorUserId
+        );
+
+        return workItemRepository.save(workItem);
     }
 
     @Transactional

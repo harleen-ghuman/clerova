@@ -7,7 +7,7 @@ import type {
   MaintenanceRequestStatus,
 } from "../types/MaintenanceRequest";
 import type { WorkItem } from "../types/WorkItem";
-import { requestSender, shortTime } from "../utils/requestStatus";
+import { hasNewReply, requestSender, shortTime } from "../utils/requestStatus";
 
 const COLUMNS: {
   title: string;
@@ -135,6 +135,7 @@ export function JobsPage({
                   const finished =
                     job.status === "COMPLETED" || job.status === "CANCELLED";
                   const note = notes[job.id] ?? job.notes ?? "";
+                  const newReply = Boolean(request && hasNewReply(request));
 
                   return (
                     <article
@@ -149,6 +150,7 @@ export function JobsPage({
                         {job.priority === "HIGH" && !finished && (
                           <span className="rq-urgent">Urgent</span>
                         )}
+                        {newReply && <span className="rq-new-reply">New reply</span>}
                       </div>
 
                       {job.address && <p className="jobs-address">{job.address}</p>}
@@ -167,7 +169,9 @@ export function JobsPage({
                         onClick={() => onOpenRequest(job.workItemId)}
                       >
                         {request
-                          ? `From request: ${requestSender(request)}`
+                          ? newReply
+                            ? `Read the new reply from ${requestSender(request)}`
+                            : `From request: ${requestSender(request)}`
                           : "View request"}
                       </button>
 

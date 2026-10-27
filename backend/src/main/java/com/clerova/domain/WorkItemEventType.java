@@ -9,5 +9,6 @@ public enum WorkItemEventType {
     REPLY_SENT,
     MAINTENANCE_UPDATED,
     CLOSED,
-    REOPENED
+    REOPENED,
+    REPLY_HANDLED
 }

@@ -23,7 +23,8 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addInterceptor(aiRateLimitInterceptor)
                 .addPathPatterns(
                         "/api/work-items",
-                        "/api/work-items/*/proposed-actions"
+                        "/api/work-items/*/proposed-actions",
+                        "/api/work-items/*/draft-reply"
                 );
     }
 }

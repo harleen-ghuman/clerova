@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 
 import { errorMessage } from "../api/client";
-import { getConversation, getWorkItemEvents, sendReply } from "../api/email";
+import {
+  draftReply,
+  getConversation,
+  getWorkItemEvents,
+  markReplyHandled,
+  sendMessage,
+  sendReply,
+} from "../api/email";
 import {
   approveProposedAction,
   closeWorkItem,
@@ -15,6 +22,7 @@ import type { WorkItem } from "../types/WorkItem";
 import { decisionCopy, hasResponseToSend } from "../utils/actionCopy";
 import {
   capitalize,
+  hasNewReply,
   longTime,
   requestBucket,
   requestSender,
@@ -193,6 +201,12 @@ export function RequestDetail({
     workItem.status === "ESCALATED" ||
     workItem.status === "WAITING_FOR_INFORMATION" ||
     (workItem.status === "NEW" && !pending);
+  const newReply = hasNewReply(workItem);
+  // While a job or escalation is underway there's no suggestion to approve,
+  // so people can write to the sender directly
+  const canWrite =
+    Boolean(replyTo) &&
+    (workItem.status === "IN_PROGRESS" || workItem.status === "ESCALATED");
   const meta = [
     workItem.address,
     capitalize(workItem.category),
@@ -237,6 +251,44 @@ export function RequestDetail({
           </article>
         ))}
       </div>
+
+      {newReply && (
+        <section className="rq-new-reply-banner" aria-label="New reply">
+          <div>
+            <strong>New reply from {requestSender(workItem)}</strong>
+            <span>
+              They wrote again while the job is in progress. The job hasn't
+              changed.
+            </span>
+          </div>
+          <button
+            type="button"
+            className="rq-button"
+            onClick={() =>
+              run("Updating...", () => markReplyHandled(workItem.id))
+            }
+            disabled={busy !== null}
+          >
+            {busy === "Updating..." ? busy : "Mark as handled"}
+          </button>
+        </section>
+      )}
+
+      {canWrite && replyTo && (
+        <ReplyComposer
+          key={workItem.id}
+          workItemId={workItem.id}
+          sendTo={replyTo}
+          recipient={workItem.senderName || replyTo}
+          startOpen={newReply}
+          hasJob={workItem.status === "IN_PROGRESS"}
+          disabled={busy !== null}
+          onSent={() => {
+            setReloadKey((key) => key + 1);
+            onChanged();
+          }}
+        />
+      )}
 
       {error && <p className="action-error">{error}</p>}
 
@@ -434,6 +486,139 @@ function SuggestionCard({
             approving.
           </span>
         )}
+      </div>
+    </section>
+  );
+}
+
+interface ReplyComposerProps {
+  workItemId: string;
+  sendTo: string;
+  recipient: string;
+  startOpen: boolean;
+  hasJob: boolean;
+  disabled: boolean;
+  onSent: () => void;
+}
+
+/** Write to the sender without changing the request or its job. */
+function ReplyComposer({
+  workItemId,
+  sendTo,
+  recipient,
+  startOpen,
+  hasJob,
+  disabled,
+  onSent,
+}: ReplyComposerProps) {
+  const [open, setOpen] = useState(startOpen);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+
+  if (!open) {
+    return (
+      <div className="rq-compose-open">
+        {sentTo && <span className="rq-hint">Sent to {sentTo}.</span>}
+        <button
+          type="button"
+          className="rq-button"
+          onClick={() => {
+            setOpen(true);
+            setSentTo(null);
+          }}
+          disabled={disabled}
+        >
+          Write to {recipient}
+        </button>
+      </div>
+    );
+  }
+
+  async function draft() {
+    try {
+      setBusy("Drafting...");
+      setError(null);
+      const result = await draftReply(workItemId);
+      setMessage(result.reply);
+    } catch (err) {
+      setError(errorMessage(err, "Couldn't draft a reply. Write your own or try again."));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function send() {
+    try {
+      setBusy("Sending...");
+      setError(null);
+      await sendMessage(workItemId, message.trim());
+      setMessage("");
+      setSentTo(sendTo);
+      setOpen(false);
+      onSent();
+    } catch (err) {
+      setError(errorMessage(err, "Couldn't send the reply. Please try again."));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const locked = disabled || busy !== null;
+
+  return (
+    <section className="rq-card" aria-label={`Reply to ${recipient}`}>
+      <label className="rq-reply">
+        Reply to {recipient}
+        <textarea
+          value={message}
+          rows={6}
+          maxLength={10000}
+          disabled={locked}
+          placeholder="Write a reply, or let Clerova draft one."
+          onChange={(event) => setMessage(event.target.value)}
+        />
+      </label>
+
+      {error && <p className="action-error">{error}</p>}
+
+      <div className="rq-card-actions">
+        <button
+          type="button"
+          className="rq-button rq-button-primary"
+          onClick={send}
+          disabled={locked || message.trim() === ""}
+        >
+          {busy === "Sending..." ? busy : "Send"}
+        </button>
+        <button
+          type="button"
+          className="rq-button"
+          onClick={draft}
+          disabled={locked}
+        >
+          {busy === "Drafting..."
+            ? busy
+            : message.trim() === ""
+              ? "Draft with Clerova"
+              : "Replace with a draft"}
+        </button>
+        <button
+          type="button"
+          className="rq-button rq-button-quiet"
+          onClick={() => {
+            setOpen(false);
+            setMessage("");
+            setError(null);
+          }}
+          disabled={busy !== null}
+        >
+          Cancel
+        </button>
+        <span className="rq-hint">
+          Goes to {sendTo}. The {hasJob ? "job" : "request"} doesn't change.
+        </span>
       </div>
     </section>
   );

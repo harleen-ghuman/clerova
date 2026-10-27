@@ -23,7 +23,7 @@ import type { EmailSettings } from "./types/Email";
 import type { Me, Organization } from "./types/Account";
 import type { MaintenanceRequest } from "./types/MaintenanceRequest";
 import type { WorkItem } from "./types/WorkItem";
-import { requestBucket } from "./utils/requestStatus";
+import { hasNewReply, requestBucket } from "./utils/requestStatus";
 
 interface AppProps {
   /** Just came back from checkout. */
@@ -185,8 +185,9 @@ function App({
     requests.find((item) => item.id === selectedId) ??
     (selectedFallback?.id === selectedId ? selectedFallback : null);
 
+  // Requests needing a person: new ones, and new emails during a job
   const reviewCount = openRequests.filter(
-    (item) => requestBucket(item) === "review"
+    (item) => requestBucket(item) === "review" || hasNewReply(item)
   ).length;
   const openJobCount = jobs.filter(
     (job) => job.status === "OPEN" || job.status === "IN_PROGRESS"

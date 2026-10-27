@@ -13,4 +13,6 @@ export interface WorkItem {
   subject: string | null;
   createdAt: string;
   updatedAt: string;
+  /** The sender wrote again while the job is in progress. */
+  unreadReplyAt?: string | null;
 }

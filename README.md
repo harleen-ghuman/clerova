@@ -81,6 +81,10 @@ Email forwarded              Request typed in the app
 - One Requests list with search and filters: needs review, waiting on
   customer, in progress, done
 - "Approve & send" emails the edited reply in one step
+- New replies during a job: when a customer writes again while their job is
+  in progress, the request gets a "New reply" tag (Today, Requests, Jobs).
+  Answer it from the request, with a draft from Clerova if you like, or mark
+  it handled. The job doesn't change.
 - Jobs board for maintenance: open, in progress, done, with notes
 - Conversation view and activity history for each request (newest first)
 - Inbox view of every received email with its status, and a retry for
@@ -206,7 +210,8 @@ Background processor (every 5 seconds)
   - Clerova's own mail or a bounce . Ignored (can be processed anyway)
   - Gmail forwarding confirmation .. Ignored, code shown on Email Setup
   - reply to a request ............. Added to that request's conversation
-                                     and returned to review
+                                     and returned to review (flagged as a
+                                     new reply if its job is in progress)
   - anything else .................. New work item + AI suggestion
 ```
 
@@ -261,6 +266,10 @@ GET  /api/work-items/proposed-actions/latest
 POST /api/work-items/proposed-actions/{id}/approve
 POST /api/work-items/proposed-actions/{id}/reject
 POST /api/work-items/proposed-actions/{id}/send-reply
+
+POST /api/work-items/{id}/draft-reply             (draft an answer to the latest email)
+POST /api/work-items/{id}/reply                   (send a written message: {"message": "..."})
+POST /api/work-items/{id}/reply-handled           (clear the new-reply flag)
 
 GET   /api/maintenance-requests
 PATCH /api/maintenance-requests/{id}

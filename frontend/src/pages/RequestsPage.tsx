@@ -5,6 +5,7 @@ import { RequestDetail } from "../components/RequestDetail";
 import type { WorkItem } from "../types/WorkItem";
 import {
   BUCKET_LABELS,
+  hasNewReply,
   requestBucket,
   requestSender,
   requestStatusLabel,
@@ -65,14 +66,19 @@ export function RequestsPage({
       )
     : requests;
 
-  const visible = matching.filter(
-    (item) => filter === "all" || requestBucket(item) === filter
-  );
+  // A new email during a job needs a person too, so it shows in review
+  function inFilter(item: WorkItem, key: RequestFilter) {
+    return (
+      key === "all" ||
+      requestBucket(item) === key ||
+      (key === "review" && hasNewReply(item))
+    );
+  }
+
+  const visible = matching.filter((item) => inFilter(item, filter));
 
   function countFor(key: RequestFilter) {
-    return key === "all"
-      ? matching.length
-      : matching.filter((item) => requestBucket(item) === key).length;
+    return matching.filter((item) => inFilter(item, key)).length;
   }
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
@@ -217,6 +223,9 @@ export function RequestsPage({
                   <strong>{requestSender(item)}</strong>
                   {item.priority === "HIGH" && bucket !== "done" && (
                     <span className="rq-urgent">Urgent</span>
+                  )}
+                  {hasNewReply(item) && (
+                    <span className="rq-new-reply">New reply</span>
                   )}
                   <time>{shortTime(item.createdAt)}</time>
                 </span>
