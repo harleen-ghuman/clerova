@@ -44,7 +44,9 @@ function planStatus(organization: Organization): string {
 
   switch (organization.subscriptionStatus) {
     case "trialing":
-      return `${name} · trial, ${days ?? 0} ${days === 1 ? "day" : "days"} left`;
+      return organization.cancelAtPeriodEnd
+        ? `${name} · cancelled, ${days ?? 0} ${days === 1 ? "day" : "days"} left`
+        : `${name} · trial, ${days ?? 0} ${days === 1 ? "day" : "days"} left`;
     case "past_due":
       return `${name} · payment failed`;
     default:
@@ -130,7 +132,7 @@ export function Sidebar({
 
         {organization.billingEnabled && organization.subscriptionStatus && (
           <button type="button" className="sidebar-billing" onClick={onManageBilling}>
-            Manage billing
+            Plan and billing
           </button>
         )}
 

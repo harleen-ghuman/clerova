@@ -9,7 +9,7 @@ import {
 import { getMaintenanceRequests } from "./api/MaintenanceRequests";
 import { getEmailSettings } from "./api/email";
 import { errorMessage } from "./api/client";
-import { openBillingPortal, upgradeToGrowth } from "./api/billing";
+import { keepPlan, openBillingPortal, upgradeToGrowth } from "./api/billing";
 import { PLANS, planPrice } from "./utils/plans";
 import { getMe } from "./api/account";
 import { Sidebar, type AppView } from "./components/Sidebar";
@@ -306,7 +306,9 @@ function App({
     organization.subscriptionStatus === "past_due"
       ? "Your last payment didn't go through. Update your card to keep Clerova running."
       : organization.cancelAtPeriodEnd && planEnds
-        ? `Your plan is cancelled. You can keep using Clerova until ${planEnds}.`
+        ? organization.subscriptionStatus === "trialing"
+          ? `Your plan is cancelled. Your trial ends on ${planEnds} and you won't be charged.`
+          : `Your plan is cancelled. You can keep using Clerova until ${planEnds}.`
         : null;
 
   function handleChanged() {
@@ -316,6 +318,19 @@ function App({
   }
 
   const [upgrading, setUpgrading] = useState(false);
+  const [keeping, setKeeping] = useState(false);
+
+  /** Undoes a scheduled cancellation, in one click. */
+  function keep() {
+    setKeeping(true);
+    setBillingError(null);
+    keepPlan()
+      .then(() => loadOrganization())
+      .catch((err) =>
+        setBillingError(errorMessage(err, "Couldn't keep your plan. Please try again."))
+      )
+      .finally(() => setKeeping(false));
+  }
 
   function upgrade() {
     const growth = PLANS.find((item) => item.plan === "GROWTH")!;
@@ -330,7 +345,7 @@ function App({
 
     if (
       !window.confirm(
-        `Upgrade to Growth for $${price.amount.toLocaleString()} / ${price.per}? You get ${growth.requests.toLocaleString()} requests a month starting now. ${when}`
+        `Upgrade to Growth for $${price.amount.toLocaleString()} / ${price.per}? You get ${growth.requests.toLocaleString()} requests a month starting now. ${when}${organization.cancelAtPeriodEnd ? " Your plan will also stop being cancelled." : ""}`
       )
     ) {
       return;
@@ -381,7 +396,7 @@ function App({
         userEmail={userEmail}
         onNavigate={navigate}
         onSignOut={onSignOut}
-        onManageBilling={manageBilling}
+        onManageBilling={() => navigate("settings")}
       />
 
       <nav className="mobile-nav" aria-label="Mobile navigation">
@@ -419,8 +434,13 @@ function App({
               </button>
             )}
             {!billingError && organization.cancelAtPeriodEnd && (
-              <button type="button" className="rq-button rq-button-small" onClick={manageBilling}>
-                Keep my plan
+              <button
+                type="button"
+                className="rq-button rq-button-small"
+                onClick={keep}
+                disabled={keeping}
+              >
+                {keeping ? "Keeping your plan..." : "Keep my plan"}
               </button>
             )}
           </div>
@@ -547,6 +567,9 @@ function App({
                 onAccountUpdated(me);
               }}
               onManageBilling={manageBilling}
+              onBillingChanged={loadOrganization}
+              onUpgrade={upgrade}
+              upgrading={upgrading}
               onSignOut={onSignOut}
             />
           </div>

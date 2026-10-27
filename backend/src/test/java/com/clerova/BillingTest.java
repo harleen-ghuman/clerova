@@ -31,6 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -202,6 +203,8 @@ class BillingTest {
         assertThat(form.getValue())
                 .containsEntry("items[0][id]", "si_1")
                 .containsEntry("items[0][price]", "price_growth");
+        // Nothing was scheduled to end, so nothing to undo
+        assertThat(form.getValue()).doesNotContainKeys("cancel_at_period_end", "cancel_at");
 
         mockMvc.perform(get("/api/me").with(user))
                 .andExpect(jsonPath("$.organization.plan").value("GROWTH"))
@@ -293,6 +296,99 @@ class BillingTest {
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith(
                         "You've used all 500 requests in your plan this month. Upgrade to Growth for 1,500 a month")));
+    }
+
+    @Test
+    void cancelAndKeepPlanWorkInOneStepAndCanBeRepeated() throws Exception {
+        RequestPostProcessor user = onboardNewUser(mockMvc);
+        String organizationId = organizationIdOf(user);
+        String event = """
+                {"type":"customer.subscription.updated","data":{"object":{"id":"sub_1"}}}
+                """;
+
+        stubSubscription(organizationId, "trialing", "starter_monthly");
+        sendSignedWebhook(event).andExpect(status().isOk());
+
+        // Cancel: one call, applied right away
+        when(stripe.post(eq("/v1/subscriptions/sub_1"), eq(Map.of("cancel_at_period_end", "true"))))
+                .thenReturn(stripeJson.readTree(subscriptionJson("sub_1", organizationId, "trialing", "1900000000")
+                        .replace("\"cancel_at_period_end\": false", "\"cancel_at_period_end\": true")));
+
+        mockMvc.perform(post("/api/billing/cancel").with(user)).andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/me").with(user))
+                .andExpect(jsonPath("$.organization.cancelAtPeriodEnd").value(true))
+                .andExpect(jsonPath("$.organization.subscriptionRequired").value(false));
+
+        // Cancelling again doesn't call Stripe again
+        stubRawSubscription("sub_1", subscriptionJson("sub_1", organizationId, "trialing", "1900000000")
+                .replace("\"cancel_at_period_end\": false", "\"cancel_at_period_end\": true"));
+        mockMvc.perform(post("/api/billing/cancel").with(user)).andExpect(status().isOk());
+        verify(stripe, times(1)).post(eq("/v1/subscriptions/sub_1"), eq(Map.of("cancel_at_period_end", "true")));
+
+        // Keep my plan undoes it
+        when(stripe.post(eq("/v1/subscriptions/sub_1"), eq(Map.of("cancel_at_period_end", "false"))))
+                .thenReturn(stripeJson.readTree(subscriptionJson("sub_1", organizationId, "trialing", "null")));
+
+        mockMvc.perform(post("/api/billing/keep").with(user)).andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/me").with(user))
+                .andExpect(jsonPath("$.organization.cancelAtPeriodEnd").value(false));
+
+        // A cancellation made in Stripe's page (cancel_at) is undone too
+        stubRawSubscription("sub_1", subscriptionJson("sub_1", organizationId, "active", "1900000000"));
+        when(stripe.post(eq("/v1/subscriptions/sub_1"), eq(Map.of("cancel_at", ""))))
+                .thenReturn(stripeJson.readTree(subscriptionJson("sub_1", organizationId, "active", "null")));
+        mockMvc.perform(post("/api/billing/keep").with(user)).andExpect(status().isOk());
+        verify(stripe).post(eq("/v1/subscriptions/sub_1"), eq(Map.of("cancel_at", "")));
+
+        // Once the plan has ended, both say so plainly and Clerova catches up
+        stubRawSubscription("sub_1", subscriptionJson("sub_1", organizationId, "canceled", "null"));
+        mockMvc.perform(post("/api/billing/keep").with(user))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Your plan has ended. Choose a plan to start again."));
+        mockMvc.perform(post("/api/billing/cancel").with(user))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("You don't have a plan to cancel."));
+
+        mockMvc.perform(get("/api/me").with(user))
+                .andExpect(jsonPath("$.organization.subscriptionRequired").value(true));
+    }
+
+    @Test
+    void upgradingACancelledStarterPlanKeepsIt() throws Exception {
+        RequestPostProcessor user = onboardNewUser(mockMvc);
+        String organizationId = organizationIdOf(user);
+
+        stubRawSubscription("sub_1", subscriptionJson("sub_1", organizationId, "active", "1900000000")
+                .replace("\"cancel_at_period_end\": false", "\"cancel_at_period_end\": true"));
+        sendSignedWebhook("""
+                {"type":"customer.subscription.updated","data":{"object":{"id":"sub_1"}}}
+                """).andExpect(status().isOk());
+
+        when(stripe.get("/v1/prices?active=true&lookup_keys%5B%5D=growth_monthly"))
+                .thenReturn(stripeJson.readTree("{\"data\":[{\"id\":\"price_growth\"}]}"));
+        when(stripe.post(eq("/v1/subscriptions/sub_1"), anyMap())).thenReturn(stripeJson.readTree(
+                subscriptionJson("sub_1", organizationId, "active", "null").replace("starter_monthly", "growth_monthly")));
+
+        mockMvc.perform(post("/api/billing/upgrade").with(user)).andExpect(status().isOk());
+
+        ArgumentCaptor<Map<String, String>> form = ArgumentCaptor.forClass(Map.class);
+        verify(stripe).post(eq("/v1/subscriptions/sub_1"), form.capture());
+        assertThat(form.getValue()).containsEntry("cancel_at_period_end", "false");
+
+        mockMvc.perform(get("/api/me").with(user))
+                .andExpect(jsonPath("$.organization.plan").value("GROWTH"))
+                .andExpect(jsonPath("$.organization.cancelAtPeriodEnd").value(false));
+    }
+
+    @Test
+    void cancelWithoutAPlanIsRefused() throws Exception {
+        RequestPostProcessor user = onboardNewUser(mockMvc);
+
+        mockMvc.perform(post("/api/billing/cancel").with(user))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("You don't have a plan to cancel."));
     }
 
     private void stubRawSubscription(String id, String json) {

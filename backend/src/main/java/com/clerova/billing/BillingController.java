@@ -58,6 +58,20 @@ public class BillingController {
         return Map.of("url", billingService.openPortal(currentUserService.requireOrganizationId()));
     }
 
+    /** Cancels at the end of the trial or billing period. */
+    @PostMapping("/api/billing/cancel")
+    public Map<String, Boolean> cancel() {
+        billingService.cancelAtPeriodEnd(currentUserService.requireOrganizationId());
+        return Map.of("ok", true);
+    }
+
+    /** Undoes a scheduled cancellation. */
+    @PostMapping("/api/billing/keep")
+    public Map<String, Boolean> keep() {
+        billingService.keepPlan(currentUserService.requireOrganizationId());
+        return Map.of("ok", true);
+    }
+
     @PostMapping("/api/billing/upgrade")
     public Map<String, Boolean> upgrade() {
         billingService.upgradeToGrowth(currentUserService.requireOrganizationId());

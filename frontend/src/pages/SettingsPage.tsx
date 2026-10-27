@@ -1,10 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 
 import { updateAccount } from "../api/account";
+import { cancelPlan, keepPlan } from "../api/billing";
 import { errorMessage } from "../api/client";
 import { friendlyError } from "../auth/friendlyError";
 import { supabase } from "../auth/supabase";
 import type { Me, Organization } from "../types/Account";
+import { PLANS, planName, planPrice } from "../utils/plans";
 
 interface SettingsPageProps {
   email: string;
@@ -12,6 +14,10 @@ interface SettingsPageProps {
   organization: Organization;
   onSaved: (me: Me) => void;
   onManageBilling: () => void;
+  /** The plan changed (cancelled or kept); reload the organization. */
+  onBillingChanged: () => Promise<unknown>;
+  onUpgrade: () => void;
+  upgrading: boolean;
   onSignOut: () => void;
 }
 
@@ -23,6 +29,9 @@ export function SettingsPage({
   organization,
   onSaved,
   onManageBilling,
+  onBillingChanged,
+  onUpgrade,
+  upgrading,
   onSignOut,
 }: SettingsPageProps) {
   const hasBilling = organization.billingEnabled && Boolean(organization.subscriptionStatus);
@@ -42,25 +51,19 @@ export function SettingsPage({
       <EmailSection email={email} />
       <PasswordSection />
 
+      {hasBilling && (
+        <BillingSection
+          organization={organization}
+          onManageBilling={onManageBilling}
+          onBillingChanged={onBillingChanged}
+          onUpgrade={onUpgrade}
+          upgrading={upgrading}
+        />
+      )}
+
       <section className="settings-section">
-        {hasBilling ? (
-          <>
-            <h2>Plan and billing</h2>
-            <p>
-              Change your card, see invoices or cancel. If you cancel,
-              Clerova keeps working until the end of your trial or billing
-              period.
-            </p>
-          </>
-        ) : (
-          <h2>Account</h2>
-        )}
+        <h2>Account</h2>
         <div className="settings-actions">
-          {hasBilling && (
-            <button type="button" className="secondary-action-button" onClick={onManageBilling}>
-              Manage billing
-            </button>
-          )}
           <button type="button" className="secondary-action-button" onClick={onSignOut}>
             Sign out
           </button>
@@ -306,6 +309,172 @@ function PasswordSection() {
           {saved && <span className="request-success">Password changed.</span>}
         </div>
       </form>
+    </section>
+  );
+}
+
+function longDate(value: string | null): string | null {
+  return value
+    ? new Date(value).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" })
+    : null;
+}
+
+/** The plan, what happens next, and cancel or keep it in one step. */
+function BillingSection({
+  organization,
+  onManageBilling,
+  onBillingChanged,
+  onUpgrade,
+  upgrading,
+}: {
+  organization: Organization;
+  onManageBilling: () => void;
+  onBillingChanged: () => Promise<unknown>;
+  onUpgrade: () => void;
+  upgrading: boolean;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState<"cancel" | "keep" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+
+  const status = organization.subscriptionStatus;
+  const trialing = status === "trialing";
+  const cancelling = organization.cancelAtPeriodEnd;
+  const canCancel = !cancelling && (trialing || status === "active" || status === "past_due");
+  const ends = longDate(trialing ? organization.trialEndsAt ?? organization.currentPeriodEnd : organization.currentPeriodEnd);
+
+  const plan = PLANS.find((item) => item.plan === organization.plan);
+  const price = plan
+    ? planPrice(
+        organization.foundingCustomer ? plan.foundingMonthly : plan.monthly,
+        organization.billingInterval === "year" ? "year" : "month"
+      )
+    : null;
+  const priceText = price ? `$${price.amount.toLocaleString()} a ${price.per}` : null;
+
+  const summary = cancelling
+    ? trialing
+      ? `Your plan is cancelled. Your trial ends${ends ? ` on ${ends}` : ""} and you won't be charged.`
+      : `Your plan is cancelled. Clerova keeps working${ends ? ` until ${ends}` : " until the end of this billing period"}. You won't be charged again.`
+    : status === "past_due"
+      ? "Your last payment didn't go through. Update your card to keep Clerova running."
+      : trialing
+        ? `${planName(organization.plan)} · free trial${ends ? ` until ${ends}` : ""}.${priceText ? ` Then ${priceText}.` : ""}`
+        : `${planName(organization.plan)}${priceText ? ` · ${priceText}` : ""}${ends ? ` · renews on ${ends}` : ""}.`;
+
+  function run(kind: "cancel" | "keep") {
+    setBusy(kind);
+    setError(null);
+    setDone(null);
+
+    (kind === "cancel" ? cancelPlan() : keepPlan())
+      .then(() => onBillingChanged())
+      .then(() => {
+        setConfirming(false);
+        // The summary above already says the plan is cancelled
+        setDone(kind === "keep" ? "Your plan will continue." : null);
+      })
+      .catch((err) =>
+        setError(
+          errorMessage(
+            err,
+            kind === "cancel"
+              ? "Couldn't cancel your plan. Please try again."
+              : "Couldn't keep your plan. Please try again."
+          )
+        )
+      )
+      .finally(() => setBusy(null));
+  }
+
+  return (
+    <section className="settings-section" aria-label="Plan and billing">
+      <h2>Plan and billing</h2>
+      <p>{summary}</p>
+
+      {confirming ? (
+        <div className="billing-confirm" role="group" aria-label="Cancel your plan">
+          <strong>Cancel your plan?</strong>
+          <p>
+            {trialing
+              ? `Clerova keeps working until your trial ends${ends ? ` on ${ends}` : ""}. You won't be charged.`
+              : `Clerova keeps working until ${ends ?? "the end of this billing period"}. You won't be charged again.`}{" "}
+            After that, new emails won't be organized. Your requests and
+            history stay saved, and you can choose a plan again anytime.
+          </p>
+          <div className="settings-actions">
+            <button
+              type="button"
+              className="rq-button rq-button-small rq-button-danger"
+              onClick={() => run("cancel")}
+              disabled={busy !== null}
+            >
+              {busy === "cancel" ? "Cancelling..." : "Yes, cancel my plan"}
+            </button>
+            <button
+              type="button"
+              className="secondary-action-button"
+              onClick={() => setConfirming(false)}
+              disabled={busy !== null}
+            >
+              Keep my plan
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="settings-actions">
+          {cancelling && (
+            <button
+              type="button"
+              className="rq-button rq-button-small rq-button-primary"
+              onClick={() => run("keep")}
+              disabled={busy !== null}
+            >
+              {busy === "keep" ? "Keeping your plan..." : "Keep my plan"}
+            </button>
+          )}
+          {organization.plan === "STARTER" && status !== "past_due" && (
+            <button
+              type="button"
+              className="secondary-action-button"
+              onClick={onUpgrade}
+              disabled={upgrading || busy !== null}
+            >
+              {upgrading ? "Upgrading..." : "Upgrade to Growth"}
+            </button>
+          )}
+          <button
+            type="button"
+            className="secondary-action-button"
+            onClick={onManageBilling}
+            disabled={busy !== null}
+          >
+            {status === "past_due" ? "Update card" : "Card and invoices"}
+          </button>
+          {canCancel && (
+            <button
+              type="button"
+              className="rq-button rq-button-small rq-button-quiet"
+              onClick={() => {
+                setConfirming(true);
+                setDone(null);
+                setError(null);
+              }}
+              disabled={busy !== null}
+            >
+              Cancel plan
+            </button>
+          )}
+        </div>
+      )}
+
+      {done && (
+        <p className="request-success" role="status">
+          {done}
+        </p>
+      )}
+      {error && <p className="action-error">{error}</p>}
     </section>
   );
 }

@@ -99,7 +99,8 @@ Email forwarded              Request typed in the app
   send a test email, approve the first reply
 - Multi-tenant organizations: each organization only sees its own data
 - Stripe billing: card up front, 14-day free trial, founding prices,
-  self-service billing portal
+  cancel or keep the plan in Settings in one step, Stripe portal for card
+  and invoices
 - Monthly AI quota per organization and per-client rate limits
 - Responsive desktop and mobile interface
 
@@ -245,7 +246,9 @@ POST /api/onboarding
 GET  /api/billing/offer
 POST /api/billing/checkout                        ({"plan":"STARTER","interval":"month"})
 POST /api/billing/checkout/{sessionId}/complete
-POST /api/billing/portal
+POST /api/billing/portal                          (card and invoices in Stripe)
+POST /api/billing/cancel                          (cancel at the end of the trial or period)
+POST /api/billing/keep                            (undo a scheduled cancellation)
 POST /api/billing/upgrade                         (Starter to Growth)
 POST /api/stripe/webhook                          (Stripe webhook, signed)
 

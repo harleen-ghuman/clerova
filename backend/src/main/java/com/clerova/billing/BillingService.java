@@ -3,6 +3,7 @@ package com.clerova.billing;
 import com.clerova.domain.Organization;
 import com.clerova.domain.Plan;
 import com.clerova.exception.ApiException;
+import com.clerova.exception.ConflictException;
 import com.clerova.exception.NotFoundException;
 import com.clerova.repository.InboundMessageRepository;
 import com.clerova.repository.OrganizationRepository;
@@ -259,7 +260,87 @@ public class BillingService {
         form.put("items[0][price]", priceId);
         form.put("proration_behavior", "create_prorations");
 
+        // Upgrading means staying, so a scheduled cancellation is dropped
+        form.putAll(keepForm(subscription));
+
         syncSubscription(stripe.post("/v1/subscriptions/" + encode(subscription.path("id").asString()), form));
+    }
+
+    /**
+     * Cancels at the end of the trial or billing period. Clerova keeps
+     * working until then and nothing more is charged. Safe to repeat.
+     */
+    public void cancelAtPeriodEnd(UUID organizationId) {
+        JsonNode subscription = currentSubscription(organizationId, "You don't have a plan to cancel.");
+
+        if (isScheduledToEnd(subscription)) {
+            syncSubscription(subscription);
+            return;
+        }
+
+        syncSubscription(stripe.post(
+                "/v1/subscriptions/" + encode(subscription.path("id").asString()),
+                Map.of("cancel_at_period_end", "true")
+        ));
+    }
+
+    /** Undoes a scheduled cancellation. Safe to repeat. */
+    public void keepPlan(UUID organizationId) {
+        JsonNode subscription = currentSubscription(
+                organizationId,
+                "Your plan has ended. Choose a plan to start again."
+        );
+
+        Map<String, String> form = keepForm(subscription);
+
+        if (form.isEmpty()) {
+            syncSubscription(subscription);
+            return;
+        }
+
+        syncSubscription(stripe.post("/v1/subscriptions/" + encode(subscription.path("id").asString()), form));
+    }
+
+    /** The organization's live subscription from Stripe, or a plain error. */
+    private JsonNode currentSubscription(UUID organizationId, String noneMessage) {
+        requireEnabled();
+
+        Organization organization = findOrganization(organizationId);
+
+        if (organization.getStripeSubscriptionId() == null) {
+            throw new ConflictException(noneMessage);
+        }
+
+        JsonNode subscription = fetchSubscription(organization.getStripeSubscriptionId());
+
+        if (!hasAccessStatus(subscription.path("status").asString(null))) {
+            // Bring Clerova up to date (e.g. a missed webhook) before saying so
+            syncSubscription(subscription);
+            throw new ConflictException(noneMessage);
+        }
+
+        return subscription;
+    }
+
+    private static boolean isScheduledToEnd(JsonNode subscription) {
+        return subscription.path("cancel_at_period_end").asBoolean(false)
+                || subscription.path("cancel_at").isNumber();
+    }
+
+    /**
+     * Clears a scheduled cancellation, set either way: cancel_at_period_end
+     * (Clerova, classic billing) or cancel_at (the portal, flexible billing).
+     */
+    private static Map<String, String> keepForm(JsonNode subscription) {
+        if (subscription.path("cancel_at_period_end").asBoolean(false)) {
+            return Map.of("cancel_at_period_end", "false");
+        }
+
+        if (subscription.path("cancel_at").isNumber()) {
+            return Map.of("cancel_at", "");
+        }
+
+        return Map.of();
     }
 
     public void handleWebhook(String payload, String signatureHeader) {
