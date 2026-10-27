@@ -565,7 +565,12 @@ function App({
 
         {activeView === "email-setup" && (
           <div className="page-padded">
-            <EmailSetupPage settings={emailSettings} error={emailSettingsError} />
+            <EmailSetupPage
+              settings={emailSettings}
+              error={emailSettingsError}
+              userEmail={userEmail}
+              onSettingsChanged={setEmailSettings}
+            />
           </div>
         )}
 

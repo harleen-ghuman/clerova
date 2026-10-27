@@ -248,6 +248,7 @@ function seedState(): DemoState {
       sendingEnabled: true,
       forwardingAddress: "maple-property-k3j9x2@in.clerova-ai.com",
       gmailConfirmation: null,
+      replyCopyEmail: null,
     },
     nextEmail: 0,
   };
@@ -1080,6 +1081,13 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
   }
 
   if (route === "GET /api/email-settings") return state.settings;
+  if (route === "PUT /api/email-settings/reply-copy") {
+    const email = String(body.email ?? "").trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ApiRequestError("Enter a valid email address.", 400);
+    if (email.toLowerCase().endsWith("@in.clerova-ai.com")) conflict("Use your own email here, not your Clerova address.");
+    state.settings.replyCopyEmail = email || null;
+    return state.settings;
+  }
   if (route === "GET /api/summary") return state.summary;
 
   if (route === "GET /api/billing/offer") return { enabled: false, foundingSpotsLeft: 0 };

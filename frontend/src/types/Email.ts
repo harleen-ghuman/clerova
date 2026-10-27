@@ -28,6 +28,8 @@ export interface EmailSettings {
     subject: string | null;
     text: string | null;
   } | null;
+  /** Gets a hidden copy of each reply sent from Clerova; null means off. */
+  replyCopyEmail?: string | null;
 }
 
 export interface ConversationEntry {

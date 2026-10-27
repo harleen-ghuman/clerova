@@ -52,6 +52,10 @@ public class PostmarkEmailSender implements EmailSender {
 
         body.put("From", email.from());
         body.put("To", email.to());
+
+        if (email.bcc() != null) {
+            body.put("Bcc", email.bcc());
+        }
         body.put("ReplyTo", email.replyTo());
         body.put("Subject", email.subject());
         body.put("TextBody", email.textBody());

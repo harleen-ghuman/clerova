@@ -43,6 +43,7 @@ public class InboundEmailProcessor {
 
     public static final String GMAIL_CONFIRMATION_REASON = "Gmail forwarding confirmation";
     public static final String AUTOMATED_REASON = "Automated or bulk email";
+    public static final String OWN_COPY_REASON = "Your copy of a reply sent from Clerova";
     public static final String EMPTY_REASON = "Empty email, with no subject, text or attachments";
     public static final String RETRY_REASON = "Couldn't read this email yet. Clerova will try again in a few minutes.";
     static final String QUOTA_WAIT_REASON =
@@ -79,6 +80,7 @@ public class InboundEmailProcessor {
     private final AiUsageService aiUsageService;
     private final AiRateLimitInterceptor aiRateLimiter;
     private final TransactionTemplate transactionTemplate;
+    private final EmailProperties emailProperties;
 
     public InboundEmailProcessor(
             @Value("${app.email.processing.enabled}") boolean enabled,
@@ -87,7 +89,8 @@ public class InboundEmailProcessor {
             WorkItemService workItemService,
             AiUsageService aiUsageService,
             AiRateLimitInterceptor aiRateLimiter,
-            TransactionTemplate transactionTemplate
+            TransactionTemplate transactionTemplate,
+            EmailProperties emailProperties
     ) {
         this.enabled = enabled;
         this.inboundMessageRepository = inboundMessageRepository;
@@ -96,6 +99,7 @@ public class InboundEmailProcessor {
         this.aiUsageService = aiUsageService;
         this.aiRateLimiter = aiRateLimiter;
         this.transactionTemplate = transactionTemplate;
+        this.emailProperties = emailProperties;
     }
 
     @Scheduled(fixedDelayString = "${app.email.processing.interval-ms}")
@@ -172,7 +176,9 @@ public class InboundEmailProcessor {
         }
 
         if (message.isAutomated()) {
-            finish(message, InboundMessageStatus.IGNORED, AUTOMATED_REASON);
+            // A forwarded inbox also forwards the copy of each sent reply
+            finish(message, InboundMessageStatus.IGNORED,
+                    isFromClerova(message.getFromEmail()) ? OWN_COPY_REASON : AUTOMATED_REASON);
             return;
         }
 
@@ -200,6 +206,11 @@ public class InboundEmailProcessor {
         finish(message, InboundMessageStatus.PROCESSED, null);
 
         generateProposal(workItem);
+    }
+
+    private boolean isFromClerova(String fromEmail) {
+        return fromEmail != null && fromEmail.trim().toLowerCase(java.util.Locale.ROOT)
+                .endsWith("@" + emailProperties.getInboundDomain().toLowerCase(java.util.Locale.ROOT));
     }
 
     private void attachFollowUp(InboundMessage message, WorkItem workItem) {

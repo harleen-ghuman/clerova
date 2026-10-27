@@ -52,6 +52,10 @@ public class Organization {
     @Column(length = 64, unique = true)
     private String stripeCustomerId;
 
+    /** Gets a hidden copy of each reply sent from Clerova; null means off. */
+    @Column(length = 320)
+    private String replyCopyEmail;
+
     @Column(length = 64)
     private String stripeSubscriptionId;
 
@@ -170,6 +174,14 @@ public class Organization {
 
     public void setInboundEmailToken(String inboundEmailToken) {
         this.inboundEmailToken = inboundEmailToken;
+    }
+
+    public String getReplyCopyEmail() {
+        return replyCopyEmail;
+    }
+
+    public void setReplyCopyEmail(String replyCopyEmail) {
+        this.replyCopyEmail = replyCopyEmail;
     }
 
     public String getStripeCustomerId() {

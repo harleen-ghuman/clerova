@@ -40,6 +40,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -684,6 +685,73 @@ class EmailIntakeTest {
         mockMvc.perform(post("/api/work-items/{id}/draft-reply", workItemId).with(onboardNewUser(mockMvc)))
                 .andExpect(status().isNotFound());
         assertThat(suggestionsLeft(workItemId)).isEqualTo(5);
+    }
+
+    private ResultActions setReplyCopy(String json) throws Exception {
+        return mockMvc.perform(put("/api/email-settings/reply-copy")
+                .with(user)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json));
+    }
+
+    @Test
+    void repliesCanBeCopiedToTheCompanysOwnInbox() throws Exception {
+        String workItemId = inProgressRequest("<copy1@x>");
+        String reply = """
+                {"message":"The plumber comes Friday."}
+                """;
+
+        // Off until someone sets it up
+        mockMvc.perform(get("/api/email-settings").with(user))
+                .andExpect(jsonPath("$.replyCopyEmail").isEmpty());
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user).contentType(MediaType.APPLICATION_JSON).content(reply))
+                .andExpect(status().isOk());
+
+        // Bad addresses are refused, including Clerova's own
+        setReplyCopy("""
+                {"email":"not an email"}
+                """).andExpect(status().isBadRequest());
+        setReplyCopy("{\"email\":\"" + forwardingAddress + "\"}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Use your own email here, not your Clerova address."));
+
+        setReplyCopy("""
+                {"email":"office@maple.example"}
+                """)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.replyCopyEmail").value("office@maple.example"))
+                .andExpect(jsonPath("$.forwardingAddress").value(forwardingAddress));
+
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user).contentType(MediaType.APPLICATION_JSON).content(reply))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<OutgoingEmail> sent = ArgumentCaptor.forClass(OutgoingEmail.class);
+        verify(emailSender, org.mockito.Mockito.times(2)).send(sent.capture());
+        assertThat(sent.getAllValues().get(0).bcc()).isNull();
+        assertThat(sent.getAllValues().get(1).bcc()).isEqualTo("office@maple.example");
+        assertThat(sent.getAllValues().get(1).to()).isEqualTo("tina@example.com");
+
+        // Their inbox forwards everything, so the copy comes back: set aside,
+        // and the request isn't flagged
+        deliver(payload(forwardingAddress, "<copy-back@x>", "<copy1@x>", null,
+                forwardingAddress, "The plumber comes Friday."))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/inbox").with(user))
+                .andExpect(jsonPath("$[0].status").value("IGNORED"))
+                .andExpect(jsonPath("$[0].statusReason").value(InboundEmailProcessor.OWN_COPY_REASON));
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.unreadReplyAt").isEmpty());
+
+        // Blank turns it off; other workspaces are unaffected
+        setReplyCopy("""
+                {"email":""}
+                """).andExpect(jsonPath("$.replyCopyEmail").isEmpty());
+        mockMvc.perform(get("/api/email-settings").with(onboardNewUser(mockMvc)))
+                .andExpect(jsonPath("$.replyCopyEmail").isEmpty());
     }
 
     private String inProgressRequest(String firstMessageId) throws Exception {

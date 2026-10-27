@@ -1,10 +1,15 @@
-import { useState, type ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 
+import { errorMessage } from "../api/client";
+import { setReplyCopyEmail } from "../api/email";
 import type { EmailSettings } from "../types/Email";
 
 interface EmailSetupPageProps {
   settings: EmailSettings | null;
   error: string | null;
+  /** Suggested for copies of sent replies. */
+  userEmail: string;
+  onSettingsChanged: (settings: EmailSettings) => void;
 }
 
 interface Step {
@@ -133,7 +138,123 @@ function gmailSteps(address: string): Step[] {
   ];
 }
 
-export function EmailSetupPage({ settings, error }: EmailSetupPageProps) {
+/** Copies of replies sent from Clerova go to the company's own inbox. */
+function ReplyCopySection({
+  current,
+  userEmail,
+  onSaved,
+}: {
+  current: string | null;
+  userEmail: string;
+  onSaved: (settings: EmailSettings) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [email, setEmail] = useState(current ?? userEmail);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save(value: string) {
+    setSaving(true);
+    setError(null);
+
+    try {
+      onSaved(await setReplyCopyEmail(value.trim()));
+      setEditing(false);
+    } catch (err) {
+      setError(errorMessage(err, "Couldn't save. Please try again."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void save(email);
+  }
+
+  return (
+    <section className="setup-section" aria-labelledby="reply-copy-title">
+      <h2 id="reply-copy-title">Keep a copy of your replies</h2>
+      <p>
+        Replies go out from your Clerova address, so they don't show up in
+        your own inbox. Add your email and Clerova sends you a hidden copy of
+        each reply. Residents don't see it.
+      </p>
+
+      {current && !editing ? (
+        <div className="settings-actions">
+          <span className="request-success">Copies go to {current}.</span>
+          <button
+            type="button"
+            className="rq-button rq-button-small"
+            onClick={() => {
+              setEmail(current);
+              setEditing(true);
+            }}
+            disabled={saving}
+          >
+            Change
+          </button>
+          <button
+            type="button"
+            className="rq-button rq-button-small rq-button-quiet"
+            onClick={() => void save("")}
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Stop copies"}
+          </button>
+        </div>
+      ) : (
+        <form className="auth-form settings-form" onSubmit={submit}>
+          <label>
+            Send copies to
+            <input
+              type="email"
+              autoComplete="email"
+              required
+              maxLength={320}
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              disabled={saving}
+            />
+          </label>
+          <div className="settings-actions">
+            <button type="submit" className="primary-button" disabled={saving || email.trim() === ""}>
+              {saving ? "Saving..." : "Send me copies"}
+            </button>
+            {editing && (
+              <button
+                type="button"
+                className="rq-button rq-button-quiet"
+                onClick={() => {
+                  setEditing(false);
+                  setError(null);
+                }}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </form>
+      )}
+
+      {error && <p className="action-error">{error}</p>}
+
+      <p className="setup-tip">
+        If your inbox forwards everything to Clerova, the copies come back too.
+        Clerova sets them aside in the Inbox, so they never become requests.
+      </p>
+    </section>
+  );
+}
+
+export function EmailSetupPage({
+  settings,
+  error,
+  userEmail,
+  onSettingsChanged,
+}: EmailSetupPageProps) {
   const [copied, setCopied] = useState<"idle" | "done" | "failed">("idle");
 
   async function handleCopy(address: string) {
@@ -245,6 +366,14 @@ export function EmailSetupPage({ settings, error }: EmailSetupPageProps) {
           use an inbox rule that forwards specific emails.
         </p>
       </section>
+
+      {settings.sendingEnabled && (
+        <ReplyCopySection
+          current={settings.replyCopyEmail ?? null}
+          userEmail={userEmail}
+          onSaved={onSettingsChanged}
+        />
+      )}
 
       <section className="setup-section">
         <h2>Try it now</h2>

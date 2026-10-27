@@ -260,6 +260,10 @@ public class ReplyService {
         String inReplyTo = threadIds.isEmpty() ? null : threadIds.get(threadIds.size() - 1);
         String references = threadIds.isEmpty() ? null : threadIds.stream().collect(Collectors.joining(" "));
 
+        // The customer's own copy; pointless if they are writing to themselves
+        String copy = organization.getReplyCopyEmail();
+        String bcc = copy != null && !copy.equalsIgnoreCase(workItem.getSenderEmail()) ? copy : null;
+
         return new OutgoingEmail(
                 "\"" + displayName(organization.getName()) + " via Clerova\" <"
                         + emailProperties.forwardingAddress(token) + ">",
@@ -268,7 +272,8 @@ public class ReplyService {
                 replySubject(workItem.getSubject()),
                 body,
                 inReplyTo,
-                references
+                references,
+                bcc
         );
     }
 

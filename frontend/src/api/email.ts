@@ -20,6 +20,14 @@ export function getEmailSettings(): Promise<EmailSettings> {
   return apiRequest("/api/email-settings");
 }
 
+/** Where copies of sent replies go; an empty email turns them off. */
+export function setReplyCopyEmail(email: string): Promise<EmailSettings> {
+  return apiRequest("/api/email-settings/reply-copy", {
+    method: "PUT",
+    body: { email },
+  });
+}
+
 export function getConversation(
   workItemId: string
 ): Promise<ConversationEntry[]> {
