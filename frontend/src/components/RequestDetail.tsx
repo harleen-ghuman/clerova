@@ -16,7 +16,7 @@ import {
   getProposedActions,
   rejectProposedAction,
 } from "../api/workItems";
-import type { ConversationEntry, WorkItemEvent } from "../types/Email";
+import type { AttachmentFile, ConversationEntry, WorkItemEvent } from "../types/Email";
 import type { ProposedAction } from "../types/ProposedAction";
 import { MAX_SUGGESTIONS, type WorkItem } from "../types/WorkItem";
 import { decisionCopy, hasResponseToSend } from "../utils/actionCopy";
@@ -32,6 +32,7 @@ import {
   suggestionTitle,
 } from "../utils/requestStatus";
 import { ApprovedResponse } from "./ApprovedResponse";
+import { FileList } from "./FileList";
 
 interface RequestDetailProps {
   workItem: WorkItem;
@@ -50,6 +51,7 @@ interface ThreadMessage {
   when: string;
   text: string;
   mine: boolean;
+  files: AttachmentFile[];
 }
 
 function latest(actions: ProposedAction[]): ProposedAction | null {
@@ -185,6 +187,7 @@ export function RequestDetail({
           when: longTime(entry.at),
           text: entry.text ?? "",
           mine: entry.direction === "OUTBOUND",
+          files: entry.files ?? [],
         }))
       : [
           {
@@ -193,6 +196,7 @@ export function RequestDetail({
             when: longTime(workItem.createdAt),
             text: workItem.originalMessage,
             mine: false,
+            files: [],
           },
         ];
 
@@ -267,6 +271,7 @@ export function RequestDetail({
               <span>{message.when}</span>
             </div>
             <p>{message.text}</p>
+            <FileList files={message.files} />
           </article>
         ))}
       </div>

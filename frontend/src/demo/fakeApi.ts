@@ -1,6 +1,13 @@
 import { ApiRequestError } from "../api/client";
 import type { Me, Organization } from "../types/Account";
+import {
+  COMPANY_INFO_FIELDS,
+  MAX_FIELD_LENGTH,
+  MAX_TOTAL_LENGTH,
+  type CompanyInfo,
+} from "../api/companyInfo";
 import type {
+  AttachmentFile,
   ConversationEntry,
   EmailSettings,
   InboundMessage,
@@ -43,6 +50,7 @@ interface DemoState {
   events: Record<string, WorkItemEvent[]>;
   summary: WeekSummary;
   settings: EmailSettings;
+  companyInfo: CompanyInfo;
   nextEmail: number;
 }
 
@@ -92,6 +100,8 @@ interface Seed {
   summary: string;
   address: string | null;
   minutesAgo: number;
+  /** Sample files that came with the email. */
+  files?: { name: string; type: string; size: number }[];
 }
 
 const SEEDS: Seed[] = [
@@ -107,6 +117,7 @@ const SEEDS: Seed[] = [
     summary: "Water leaking under the kitchen sink; the floor is getting wet.",
     address: "12 Oak St, Unit 4B",
     minutesAgo: 18,
+    files: [{ name: "under-the-sink.jpg", type: "image/jpeg", size: 245_760 }],
   },
   {
     key: "fee",
@@ -250,6 +261,15 @@ function seedState(): DemoState {
       gmailConfirmation: null,
       replyCopyEmail: null,
     },
+    companyInfo: {
+      rentAndPayments:
+        "Rent is due on the 1st. Pay in the resident portal at pay.mapleproperty.com. There is a 5-day grace period, then a $50 late fee.",
+      officeAndContact: "Monday to Friday, 9am to 5pm. Call (555) 201-3300.",
+      emergencies:
+        "After hours, call (555) 201-3399. Emergencies are fire, gas, flooding, no heat in winter and lockouts.",
+      pets: "Cats and dogs under 40 lb, two at most, with a $300 pet deposit.",
+      parking: "One assigned spot per unit. Guests park on the street.",
+    },
     nextEmail: 0,
   };
 
@@ -312,6 +332,13 @@ function seedState(): DemoState {
 /** An email arrives and becomes a request, as the server does. */
 function receiveEmail(state: DemoState, seed: Omit<Seed, "key" | "minutesAgo">, minutesAgo: number): WorkItem {
   const at = ago(minutesAgo);
+  const files: AttachmentFile[] = (seed.files ?? []).map((file) => ({
+    id: id("file"),
+    fileName: file.name,
+    contentType: file.type,
+    sizeBytes: file.size,
+    available: true,
+  }));
   const item: WorkItem = {
     id: id("request"),
     organizationId: ORG_ID,
@@ -342,7 +369,8 @@ function receiveEmail(state: DemoState, seed: Omit<Seed, "key" | "minutesAgo">, 
       subject: seed.subject,
       text: seed.message,
       at,
-      attachments: [],
+      attachments: files.map((file) => file.fileName ?? ""),
+      files,
     },
   ];
   state.events[item.id] = [];
@@ -358,7 +386,8 @@ function receiveEmail(state: DemoState, seed: Omit<Seed, "key" | "minutesAgo">, 
     status: "PROCESSED",
     statusReason: null,
     workItemId: item.id,
-    attachments: [],
+    attachments: files.map((file) => file.fileName ?? ""),
+    files,
   });
 
   return item;
@@ -804,6 +833,54 @@ export function resetDemo() {
   refreshApp();
 }
 
+/** A sample photo for any file in the demo, drawn in the browser. */
+export async function demoAttachment(fileId: string): Promise<Blob> {
+  const known = Object.values(state.conversations)
+    .flat()
+    .some((entry) => entry.files?.some((file) => file.id === fileId));
+
+  if (!known) {
+    throw new ApiRequestError("This file isn't available.", 404);
+  }
+
+  await wait(300);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 800;
+  canvas.height = 600;
+  const context = canvas.getContext("2d");
+
+  if (context) {
+    // Cabinet, pipe and a puddle on the floor
+    context.fillStyle = "#e9e4dc";
+    context.fillRect(0, 0, 800, 600);
+    context.fillStyle = "#8a6f52";
+    context.fillRect(80, 60, 640, 330);
+    context.fillStyle = "#6e573f";
+    context.fillRect(100, 80, 600, 290);
+    context.fillStyle = "#b8bcc4";
+    context.fillRect(380, 80, 40, 200);
+    context.fillRect(380, 260, 160, 36);
+    context.fillStyle = "#c9b79c";
+    context.fillRect(0, 390, 800, 210);
+    context.fillStyle = "rgba(43, 74, 203, 0.35)";
+    context.beginPath();
+    context.ellipse(420, 470, 260, 70, 0, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = "#16181d";
+    context.font = "600 28px system-ui, sans-serif";
+    context.fillText("Sample photo (demo)", 24, 572);
+  }
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new ApiRequestError("Couldn't open this file.", 500))),
+      "image/jpeg",
+      0.85
+    );
+  });
+}
+
 function bumpUsage() {
   const organization = state.me.organization!;
   organization.aiRequestsUsedThisMonth += 1;
@@ -1089,6 +1166,23 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
     return state.settings;
   }
   if (route === "GET /api/summary") return state.summary;
+
+  if (route === "GET /api/company-info") return { ...state.companyInfo };
+  if (route === "PUT /api/company-info") {
+    const info: CompanyInfo = {};
+    let total = 0;
+    for (const field of COMPANY_INFO_FIELDS) {
+      const value = typeof body[field.key] === "string" ? String(body[field.key]).trim() : "";
+      if (value.length > MAX_FIELD_LENGTH) throw new ApiRequestError("Keep each answer under 1,500 characters.", 400);
+      total += value.length;
+      info[field.key] = value || null;
+    }
+    if (total > MAX_TOTAL_LENGTH) {
+      throw new ApiRequestError("That's more than Clerova can use. Keep all answers together under 8,000 characters.", 400);
+    }
+    state.companyInfo = info;
+    return { ...info };
+  }
 
   if (route === "GET /api/billing/offer") return { enabled: false, foundingSpotsLeft: 0 };
 

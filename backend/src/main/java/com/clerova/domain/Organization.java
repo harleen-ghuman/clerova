@@ -56,6 +56,10 @@ public class Organization {
     @Column(length = 320)
     private String replyCopyEmail;
 
+    /** The company's standard answers as JSON (see CompanyInfo); null when empty. */
+    @Column(columnDefinition = "TEXT")
+    private String companyInfo;
+
     @Column(length = 64)
     private String stripeSubscriptionId;
 
@@ -174,6 +178,14 @@ public class Organization {
 
     public void setInboundEmailToken(String inboundEmailToken) {
         this.inboundEmailToken = inboundEmailToken;
+    }
+
+    public String getCompanyInfo() {
+        return companyInfo;
+    }
+
+    public void setCompanyInfo(String companyInfo) {
+        this.companyInfo = companyInfo;
     }
 
     public String getReplyCopyEmail() {

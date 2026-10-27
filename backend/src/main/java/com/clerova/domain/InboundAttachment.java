@@ -5,8 +5,8 @@ import jakarta.persistence.*;
 import java.util.UUID;
 
 /**
- * Metadata for an attachment on an inbound email. File contents are not
- * stored yet.
+ * An attachment on an inbound email. The file itself is in FileStorage at
+ * storagePath; older or oversized files keep only their name.
  */
 @Entity
 @Table(name = "inbound_attachments")
@@ -26,6 +26,10 @@ public class InboundAttachment {
     private String contentType;
 
     private Long sizeBytes;
+
+    /** Where the file is in storage; null when only the name was kept. */
+    @Column(length = 500)
+    private String storagePath;
 
     public UUID getId() {
         return id;
@@ -61,5 +65,13 @@ public class InboundAttachment {
 
     public void setSizeBytes(Long sizeBytes) {
         this.sizeBytes = sizeBytes;
+    }
+
+    public String getStoragePath() {
+        return storagePath;
+    }
+
+    public void setStoragePath(String storagePath) {
+        this.storagePath = storagePath;
     }
 }

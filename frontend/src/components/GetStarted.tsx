@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+import { getCompanyInfo, hasCompanyInfo } from "../api/companyInfo";
 
 interface GetStartedProps {
   /** Just finished checkout. */
@@ -7,6 +9,7 @@ interface GetStartedProps {
   hasRequest: boolean;
   hasReply: boolean;
   onOpenEmailSetup: () => void;
+  onOpenCompanyInfo: () => void;
   onOpenRequests: () => void;
   onHide: () => void;
 }
@@ -15,17 +18,40 @@ const TEST_SUBJECT = "Kitchen sink is leaking";
 const TEST_BODY =
   "Hi, water is leaking under the kitchen sink at 12 Oak St, Unit 4B. The floor is getting wet. Can someone come today?";
 
-/** First-run checklist on Today: forward email, send a test, approve a reply. */
+/**
+ * First-run checklist on Today: forward email, send a test, add company
+ * info, approve a reply.
+ */
 export function GetStarted({
   welcome,
   forwardingAddress,
   hasRequest,
   hasReply,
   onOpenEmailSetup,
+  onOpenCompanyInfo,
   onOpenRequests,
   onHide,
 }: GetStartedProps) {
   const [copied, setCopied] = useState<"idle" | "done" | "failed">("idle");
+  const [infoAdded, setInfoAdded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getCompanyInfo()
+      .then((info) => {
+        if (!cancelled) {
+          setInfoAdded(hasCompanyInfo(info));
+        }
+      })
+      .catch(() => {
+        // The step just stays unchecked
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function copy(address: string) {
     try {
@@ -116,8 +142,22 @@ export function GetStarted({
             </div>
           </li>
         )}
+        <li className={infoAdded ? "done" : ""}>
+          <span className="get-started-num">{infoAdded ? "✓" : forwardingAddress ? "4" : "2"}</span>
+          <div>
+            <strong>Add your company info</strong>
+            <p>
+              {infoAdded
+                ? "Added. Suggested replies use it."
+                : "Rent due date, fees, office hours, emergency number. Suggested replies use it to answer residents."}
+            </p>
+            <button type="button" className="rq-button rq-button-small" onClick={onOpenCompanyInfo}>
+              {infoAdded ? "Review it" : "Add company info"}
+            </button>
+          </div>
+        </li>
         <li className={hasReply ? "done" : ""}>
-          <span className="get-started-num">{hasReply ? "✓" : forwardingAddress ? "4" : "2"}</span>
+          <span className="get-started-num">{hasReply ? "✓" : forwardingAddress ? "5" : "3"}</span>
           <div>
             <strong>Approve your first reply</strong>
             <p>

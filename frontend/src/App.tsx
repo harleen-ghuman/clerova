@@ -494,6 +494,14 @@ function App({
             }
             hasAnyRequest={openRequests.length + closedRequests.length > 0}
             onOpenEmailSetup={() => navigate("email-setup")}
+            onOpenCompanyInfo={() => {
+              navigate("settings");
+              window.setTimeout(() => {
+                const section = document.getElementById("company-info");
+                section?.scrollIntoView({ block: "start" });
+                section?.querySelector<HTMLElement>("textarea, h2")?.focus({ preventScroll: true });
+              }, 50);
+            }}
             requests={openRequests}
             jobs={jobs}
             refreshKey={refreshTick}

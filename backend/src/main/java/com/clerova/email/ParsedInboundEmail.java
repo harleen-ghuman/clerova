@@ -20,6 +20,12 @@ public record ParsedInboundEmail(
         List<Attachment> attachments
 ) {
 
-    public record Attachment(String fileName, String contentType, Long sizeBytes) {
+    /** @param content the file as base64, or null when the provider didn't send it */
+    public record Attachment(String fileName, String contentType, Long sizeBytes, String content) {
+
+        @Override
+        public String toString() {
+            return "Attachment[" + fileName + ", " + contentType + ", " + sizeBytes + " bytes]";
+        }
     }
 }

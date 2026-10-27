@@ -47,7 +47,8 @@ public class PostmarkInboundParser {
             attachments.add(new ParsedInboundEmail.Attachment(
                     text(attachment, "Name"),
                     text(attachment, "ContentType"),
-                    length.isNumber() ? length.asLong() : null
+                    length.isNumber() ? length.asLong() : null,
+                    text(attachment, "Content")
             ));
         }
 
