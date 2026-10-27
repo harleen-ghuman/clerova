@@ -37,6 +37,13 @@ interface AppProps {
   onSignOut: () => void;
 }
 
+/** What the browser history remembers for each screen. */
+interface NavState {
+  clerova: true;
+  view: AppView;
+  selectedId: string | null;
+}
+
 const MOBILE_NAV: { view: AppView; label: string }[] = [
   { view: "today", label: "Today" },
   { view: "requests", label: "Requests" },
@@ -185,6 +192,43 @@ function App({
     (job) => job.status === "OPEN" || job.status === "IN_PROGRESS"
   ).length;
 
+  /**
+   * Shows a screen and records it in the browser history, so the phone's
+   * Back button returns to the previous screen instead of leaving Clerova.
+   */
+  function show(view: AppView, workItemId: string | null = null) {
+    setActiveView(view);
+    setSelectedId(workItemId);
+
+    const current = window.history.state as NavState | null;
+
+    if (current?.clerova && current.view === view && current.selectedId === workItemId) {
+      return;
+    }
+
+    const state: NavState = { clerova: true, view, selectedId: workItemId };
+    window.history.pushState(state, "");
+  }
+
+  useEffect(() => {
+    // The first screen, so Back from the next one comes back here
+    const initial: NavState = { clerova: true, view: "today", selectedId: null };
+    window.history.replaceState(initial, "");
+
+    function onPopState(event: PopStateEvent) {
+      const state = event.state as NavState | null;
+
+      if (state?.clerova) {
+        setActiveView(state.view);
+        setSelectedId(state.selectedId);
+        setHighlightJobFor(null);
+      }
+    }
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
   function navigate(view: AppView) {
     if (view === "email-setup") {
       // A Gmail confirmation email may have arrived since the last load
@@ -195,17 +239,29 @@ function App({
       setHighlightJobFor(null);
     }
 
-    setActiveView(view);
+    show(view, view === "requests" ? selectedId : null);
   }
 
   function selectRequest(item: WorkItem | null) {
-    setSelectedId(item?.id ?? null);
     setSelectedFallback(item);
+
+    if (item) {
+      show("requests", item.id);
+      return;
+    }
+
+    // Closing a request opened from the list steps back to the list
+    const current = window.history.state as NavState | null;
+
+    if (current?.clerova && current.selectedId) {
+      window.history.back();
+    } else {
+      setSelectedId(null);
+    }
   }
 
   async function openRequest(workItemId: string) {
-    setActiveView("requests");
-    setSelectedId(workItemId);
+    show("requests", workItemId);
 
     if (!requests.some((item) => item.id === workItemId)) {
       try {
@@ -403,8 +459,8 @@ function App({
             refreshKey={refreshTick}
             onOpenRequests={(filter) => {
               setRequestFilter(filter);
-              selectRequest(null);
-              setActiveView("requests");
+              setSelectedFallback(null);
+              show("requests");
             }}
             onOpenRequest={(workItemId) => {
               setRequestFilter("all");
@@ -428,7 +484,7 @@ function App({
             onChanged={handleChanged}
             onOpenJobs={(workItemId) => {
               setHighlightJobFor(workItemId);
-              setActiveView("jobs");
+              show("jobs");
             }}
           />
         )}

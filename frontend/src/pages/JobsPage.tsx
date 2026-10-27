@@ -145,7 +145,7 @@ export function JobsPage({
                       }`}
                     >
                       <div className="jobs-card-top">
-                        <strong>{job.description}</strong>
+                        <strong>{job.description || "Maintenance job"}</strong>
                         {job.priority === "HIGH" && !finished && (
                           <span className="rq-urgent">Urgent</span>
                         )}

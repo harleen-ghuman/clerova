@@ -143,18 +143,22 @@ public class WorkItemService {
     /**
      * Creates a work item from a received email and links the email to it.
      */
-    public WorkItem createWorkItemFromEmail(InboundMessage email) {
+    public WorkItem createWorkItemFromEmail(InboundMessage email, List<String> attachmentNames) {
 
         UUID organizationId = email.getOrganizationId();
 
         aiUsageService.requireQuota(organizationId);
 
         String content = email.getContentText() != null ? email.getContentText() : "";
+        String attachments = attachmentNames.isEmpty()
+                ? ""
+                : "Attachments: " + String.join(", ", attachmentNames);
 
         String extractionInput = """
                 From: %s
                 Subject: %s
 
+                %s
                 %s
                 """.formatted(
                 email.getFromName() != null
@@ -163,7 +167,8 @@ public class WorkItemService {
                 email.getSubject() != null ? email.getSubject() : "(no subject)",
                 content.length() > MAX_EXTRACTION_CHARS
                         ? content.substring(0, MAX_EXTRACTION_CHARS)
-                        : content
+                        : content,
+                attachments
         );
 
         ExtractionResult extraction = aiService.extract(extractionInput);
@@ -174,8 +179,11 @@ public class WorkItemService {
         WorkItem workItem = new WorkItem();
 
         workItem.setOrganizationId(organizationId);
+        // A photo-only email still shows something in the request
         workItem.setOriginalMessage(
-                content.isBlank() && email.getSubject() != null ? email.getSubject() : content
+                !content.isBlank() ? content
+                        : email.getSubject() != null && !email.getSubject().isBlank() ? email.getSubject()
+                        : "(No message text. " + attachments + ")"
         );
         workItem.setSource(WorkItemSource.EMAIL);
         workItem.setSenderEmail(email.getFromEmail());

@@ -38,6 +38,7 @@ public class InboundEmailProcessor {
 
     public static final String GMAIL_CONFIRMATION_REASON = "Gmail forwarding confirmation";
     public static final String AUTOMATED_REASON = "Automated or bulk email";
+    public static final String EMPTY_REASON = "Empty email, with no subject, text or attachments";
     public static final String RETRY_REASON = "Couldn't read this email yet. Clerova will try again in a few minutes.";
     public static final String FAILED_REASON = "Couldn't read this email. Click Retry to try again.";
 
@@ -155,7 +156,18 @@ public class InboundEmailProcessor {
             return;
         }
 
-        WorkItem workItem = workItemService.createWorkItemFromEmail(message);
+        String text = message.getContentText();
+        boolean noText = (text == null || text.isBlank())
+                && (message.getSubject() == null || message.getSubject().isBlank());
+        List<String> attachmentNames = inboundMessageRepository.findAttachmentNames(message.getId());
+
+        // Nothing to read: don't spend a request on it
+        if (noText && attachmentNames.isEmpty()) {
+            finish(message, InboundMessageStatus.IGNORED, EMPTY_REASON);
+            return;
+        }
+
+        WorkItem workItem = workItemService.createWorkItemFromEmail(message, attachmentNames);
 
         message.setWorkItemId(workItem.getId());
         finish(message, InboundMessageStatus.PROCESSED, null);

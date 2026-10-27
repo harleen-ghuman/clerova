@@ -78,4 +78,8 @@ public interface InboundMessageRepository
               and m.updatedAt < :cutoff
             """)
     int releaseStale(@Param("cutoff") Instant cutoff);
+
+    /** Attachment names, read without loading the message's collection. */
+    @Query("select a.fileName from InboundAttachment a where a.inboundMessage.id = :messageId")
+    List<String> findAttachmentNames(@Param("messageId") UUID messageId);
 }

@@ -148,6 +148,8 @@ class BillingTest {
 
         when(stripe.post(eq("/v1/customers"), anyMap()))
                 .thenReturn(stripeJson.readTree("{\"id\":\"cus_new\"}"));
+        when(stripe.get(org.mockito.ArgumentMatchers.startsWith("/v1/subscriptions?status=all")))
+                .thenReturn(stripeJson.readTree("{\"data\":[]}"));
         when(stripe.get("/v1/prices?active=true&lookup_keys%5B%5D=founding_growth_yearly"))
                 .thenReturn(stripeJson.readTree("{\"data\":[{\"id\":\"price_founding\"}]}"));
         when(stripe.post(eq("/v1/checkout/sessions"), anyMap()))
@@ -325,5 +327,31 @@ class BillingTest {
         mockMvc.perform(get("/api/me").with(user))
                 .andExpect(jsonPath("$.organization.subscriptionStatus").value("active"))
                 .andExpect(jsonPath("$.organization.subscriptionRequired").value(false));
+    }
+
+    @Test
+    void checkoutIsRefusedWhenStripeAlreadyHasAPlanThatWasNotAppliedYet() throws Exception {
+        RequestPostProcessor user = onboardNewUser(mockMvc);
+        String organizationId = organizationIdOf(user);
+
+        when(stripe.post(eq("/v1/customers"), anyMap()))
+                .thenReturn(stripeJson.readTree("{\"id\":\"cus_" + organizationId + "\"}"));
+        when(stripe.get("/v1/subscriptions?status=all&limit=10&customer=cus_" + organizationId))
+                .thenReturn(stripeJson.readTree("{\"data\":[" + subscriptionJson("sub_paid", organizationId, "trialing", "null") + "]}"));
+
+        mockMvc.perform(post("/api/billing/checkout")
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"plan":"STARTER","interval":"month"}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Your plan is already active. Refresh the page to continue."));
+
+        // The plan was applied, and no second checkout was opened
+        mockMvc.perform(get("/api/me").with(user))
+                .andExpect(jsonPath("$.organization.subscriptionStatus").value("trialing"))
+                .andExpect(jsonPath("$.organization.subscriptionRequired").value(false));
+        org.mockito.Mockito.verify(stripe, org.mockito.Mockito.never()).post(eq("/v1/checkout/sessions"), anyMap());
     }
 }

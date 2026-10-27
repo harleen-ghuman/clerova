@@ -233,6 +233,36 @@ class EmailIntakeTest {
     }
 
     @Test
+    void emptyEmailIsIgnoredAndPhotoOnlyEmailBecomesARequest() throws Exception {
+        var empty = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(
+                payload(forwardingAddress, "<empty@x>", null, null, "tina@example.com", ""));
+        empty.put("Subject", "");
+        empty.putArray("Attachments");
+        deliver(empty.toString()).andExpect(jsonPath("$.status").value("STORED"));
+
+        var photo = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(
+                payload(forwardingAddress, "<photo@x>", null, null, "tina@example.com", ""));
+        photo.put("Subject", "");
+        deliver(photo.toString()).andExpect(jsonPath("$.status").value("STORED"));
+
+        processor.processDue();
+
+        JsonNode inbox = json(mockMvc.perform(get("/api/inbox").with(user)));
+        JsonNode emptyMessage = inbox.get(0).get("subject").isNull() || inbox.get(0).get("attachments").isEmpty()
+                ? inbox.get(0) : inbox.get(1);
+
+        assertThat(emptyMessage.get("status").asText()).isEqualTo("IGNORED");
+
+        // Only the photo email used a request
+        mockMvc.perform(get("/api/me").with(user))
+                .andExpect(jsonPath("$.organization.aiRequestsUsedThisMonth").value(1));
+
+        JsonNode item = json(mockMvc.perform(get("/api/work-items").with(user))).get(0);
+        assertThat(item.get("originalMessage").asText())
+                .isEqualTo("(No message text. Attachments: photo.jpg)");
+    }
+
+    @Test
     void emailForwardedByHandUsesTheResidentAsSender() throws Exception {
         var root = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(
                 payload(forwardingAddress, "<fwd@x>", null, null, "pm@maple.com", """

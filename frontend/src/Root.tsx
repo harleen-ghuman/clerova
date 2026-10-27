@@ -35,6 +35,8 @@ export function Root() {
   const [meError, setMeError] = useState<string | null>(null);
 
   const [checkoutReturn] = useState(readCheckoutReturn);
+  // Stripe hasn't confirmed after about 30 seconds
+  const [confirmSlow, setConfirmSlow] = useState(false);
 
   const userId = session?.user.id;
   // Changes once a new sign-in email is confirmed, so the account reloads
@@ -42,7 +44,7 @@ export function Root() {
 
   useEffect(() => {
     if (checkoutReturn.result) {
-      window.history.replaceState(null, "", window.location.pathname);
+      window.history.replaceState(window.history.state, "", window.location.pathname);
     }
   }, [checkoutReturn]);
 
@@ -115,6 +117,7 @@ export function Root() {
 
       if (attempts > 15) {
         window.clearInterval(interval);
+        setConfirmSlow(true);
         return;
       }
 
@@ -216,7 +219,9 @@ export function Root() {
           checkoutReturn.result === "cancelled"
             ? "Checkout was cancelled. Choose a plan when you're ready."
             : checkoutReturn.result === "success"
-              ? "Confirming your card with Stripe. This takes a few seconds."
+              ? confirmSlow
+                ? "Stripe is taking longer than usual to confirm. Refresh this page in a minute. You don't need to start the trial again."
+                : "Confirming your card with Stripe. This takes a few seconds."
               : null
         }
         onSignOut={handleSignOut}

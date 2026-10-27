@@ -124,6 +124,21 @@ public class BillingService {
 
         String customerId = ensureCustomer(organization, email);
 
+        // A finished checkout that hasn't been applied yet (slow webhook,
+        // second tab) must not lead to a second subscription and charge
+        JsonNode existing = stripe.get("/v1/subscriptions?status=all&limit=10&customer=" + encode(customerId));
+
+        for (JsonNode subscription : existing.path("data")) {
+            if (ACCESS_STATUSES.contains(subscription.path("status").asString(""))) {
+                syncSubscription(subscription);
+                throw new ApiException(
+                        HttpStatus.CONFLICT,
+                        "ALREADY_SUBSCRIBED",
+                        "Your plan is already active. Refresh the page to continue."
+                );
+            }
+        }
+
         boolean founding = organization.isFoundingCustomer() || foundingSpotsLeft() > 0;
         String priceId = findPrice(lookupKey(plan, interval, founding))
                 .or(() -> founding ? findPrice(lookupKey(plan, interval, false)) : Optional.empty())

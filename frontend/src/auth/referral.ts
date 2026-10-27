@@ -52,7 +52,7 @@ function stripWebsiteParams() {
     }
 
     if (changed) {
-      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
     }
   } catch {
     // Leave the address as it is
