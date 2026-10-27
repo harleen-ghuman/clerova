@@ -1,5 +1,7 @@
 package com.clerova.email;
 
+import com.clerova.billing.BillingService;
+import com.clerova.config.AiRateLimitInterceptor;
 import com.clerova.domain.InboundMessage;
 import com.clerova.domain.InboundMessageStatus;
 import com.clerova.domain.WorkItem;
@@ -8,6 +10,7 @@ import com.clerova.exception.AiServiceException;
 import com.clerova.exception.ApiException;
 import com.clerova.repository.InboundMessageRepository;
 import com.clerova.repository.WorkItemRepository;
+import com.clerova.service.AiUsageService;
 import com.clerova.service.WorkItemService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,6 +22,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -38,10 +43,21 @@ public class InboundEmailProcessor {
 
     public static final String GMAIL_CONFIRMATION_REASON = "Gmail forwarding confirmation";
     public static final String AUTOMATED_REASON = "Automated or bulk email";
+    public static final String EMPTY_REASON = "Empty email, with no subject, text or attachments";
     public static final String RETRY_REASON = "Couldn't read this email yet. Clerova will try again in a few minutes.";
+    static final String QUOTA_WAIT_REASON =
+            "Your plan's requests for this month are used up. This email will be organized on %s, or as soon as you upgrade.";
+
+    static final String PLAN_WAIT_REASON =
+            "Your plan has ended. This email will be organized as soon as you choose a plan.";
+
     public static final String FAILED_REASON = "Couldn't read this email. Click Retry to try again.";
 
     static final int MAX_ATTEMPTS = 3;
+
+    /** More follow-ups than this on one request within the window skip the AI. */
+    static final int FOLLOW_UP_BURST_LIMIT = 10;
+    static final Duration FOLLOW_UP_BURST_WINDOW = Duration.ofHours(1);
     private static final int BATCH_SIZE = 10;
     private static final Duration STALE_PROCESSING = Duration.ofMinutes(10);
 
@@ -60,6 +76,8 @@ public class InboundEmailProcessor {
     private final InboundMessageRepository inboundMessageRepository;
     private final WorkItemRepository workItemRepository;
     private final WorkItemService workItemService;
+    private final AiUsageService aiUsageService;
+    private final AiRateLimitInterceptor aiRateLimiter;
     private final TransactionTemplate transactionTemplate;
 
     public InboundEmailProcessor(
@@ -67,12 +85,16 @@ public class InboundEmailProcessor {
             InboundMessageRepository inboundMessageRepository,
             WorkItemRepository workItemRepository,
             WorkItemService workItemService,
+            AiUsageService aiUsageService,
+            AiRateLimitInterceptor aiRateLimiter,
             TransactionTemplate transactionTemplate
     ) {
         this.enabled = enabled;
         this.inboundMessageRepository = inboundMessageRepository;
         this.workItemRepository = workItemRepository;
         this.workItemService = workItemService;
+        this.aiUsageService = aiUsageService;
+        this.aiRateLimiter = aiRateLimiter;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -126,8 +148,14 @@ public class InboundEmailProcessor {
             failOrRetry(message);
 
         } catch (ApiException e) {
-            // Trial ended or quota used up: needs a person to act
-            finish(message, InboundMessageStatus.FAILED, e.getMessage());
+            if (AiUsageService.QUOTA_EXCEEDED.equals(e.getCode())) {
+                waitForQuota(message);
+            } else if (BillingService.SUBSCRIPTION_REQUIRED.equals(e.getCode())) {
+                waitForPlan(message);
+            } else {
+                // Plan or trial ended: needs a person to act
+                finish(message, InboundMessageStatus.FAILED, e.getMessage());
+            }
 
         } catch (RuntimeException e) {
             log.error("Unexpected error processing inbound email {}", messageId, e);
@@ -155,7 +183,18 @@ public class InboundEmailProcessor {
             return;
         }
 
-        WorkItem workItem = workItemService.createWorkItemFromEmail(message);
+        String text = message.getContentText();
+        boolean noText = (text == null || text.isBlank())
+                && (message.getSubject() == null || message.getSubject().isBlank());
+        List<String> attachmentNames = inboundMessageRepository.findAttachmentNames(message.getId());
+
+        // Nothing to read: don't spend a request on it
+        if (noText && attachmentNames.isEmpty()) {
+            finish(message, InboundMessageStatus.IGNORED, EMPTY_REASON);
+            return;
+        }
+
+        WorkItem workItem = workItemService.createWorkItemFromEmail(message, attachmentNames);
 
         message.setWorkItemId(workItem.getId());
         finish(message, InboundMessageStatus.PROCESSED, null);
@@ -173,8 +212,27 @@ public class InboundEmailProcessor {
                 message.getFromEmail()
         );
 
+        // Follow-ups don't count against the plan, so a burst of them (a
+        // loop, or someone replying over and over) must not run the AI
+        // each time; the request is still updated and flagged.
+        long recent = inboundMessageRepository.countByWorkItemIdAndReceivedAtAfter(
+                workItem.getId(), Instant.now().minus(FOLLOW_UP_BURST_WINDOW));
+
+        if (recent > FOLLOW_UP_BURST_LIMIT || !aiRateLimiter.tryAcquireBackground()) {
+            log.warn("Skipping automatic AI for follow-up on work item {} ({} emails in the last hour)",
+                    workItem.getId(), recent);
+            return;
+        }
+
         if (needsProposal) {
             generateProposal(workItem);
+        } else {
+            // During a job: the request is flagged; check whether it's urgent
+            workItemService.checkFollowUpUrgency(
+                    workItem.getOrganizationId(),
+                    workItem.getId(),
+                    message.getContentText()
+            );
         }
     }
 
@@ -270,6 +328,36 @@ public class InboundEmailProcessor {
         } else {
             retryLater(message);
         }
+    }
+
+    /**
+     * The month's requests are used up. The email waits until they reset,
+     * or until an upgrade (BillingService releases waiting emails then).
+     */
+    private void waitForQuota(InboundMessage message) {
+        Instant reset = aiUsageService.nextReset();
+
+        message.setStatus(InboundMessageStatus.RECEIVED);
+        message.setAttempts(0);
+        message.setStatusReason(QUOTA_WAIT_REASON.formatted(
+                DateTimeFormatter.ofPattern("MMMM d", Locale.US).withZone(ZoneOffset.UTC).format(reset)
+        ));
+        message.setNextAttemptAt(reset);
+
+        inboundMessageRepository.save(message);
+    }
+
+    /**
+     * The plan ended. The email waits for a new plan (BillingService
+     * releases waiting emails then) and is checked again weekly.
+     */
+    private void waitForPlan(InboundMessage message) {
+        message.setStatus(InboundMessageStatus.RECEIVED);
+        message.setAttempts(0);
+        message.setStatusReason(PLAN_WAIT_REASON);
+        message.setNextAttemptAt(Instant.now().plus(Duration.ofDays(7)));
+
+        inboundMessageRepository.save(message);
     }
 
     private void retryLater(InboundMessage message) {

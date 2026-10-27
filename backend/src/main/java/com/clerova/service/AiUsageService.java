@@ -2,17 +2,22 @@ package com.clerova.service;
 
 import com.clerova.billing.BillingService;
 import com.clerova.domain.Organization;
+import com.clerova.domain.Plan;
 import com.clerova.exception.ApiException;
 import com.clerova.exception.NotFoundException;
 import com.clerova.repository.OrganizationRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -26,15 +31,21 @@ public class AiUsageService {
     private final BillingService billingService;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    private final String supportAddress;
+    private final int growthMonthlyRequests;
 
     public AiUsageService(
             OrganizationRepository organizationRepository,
             BillingService billingService,
-            ApplicationEventPublisher events
+            ApplicationEventPublisher events,
+            @Value("${app.email.support-address}") String supportAddress,
+            @Value("${app.billing.growth-monthly-requests:1500}") int growthMonthlyRequests
     ) {
         this.organizationRepository = organizationRepository;
         this.billingService = billingService;
         this.events = events;
+        this.supportAddress = supportAddress;
+        this.growthMonthlyRequests = growthMonthlyRequests;
         this.clock = Clock.systemUTC();
     }
 
@@ -49,7 +60,7 @@ public class AiUsageService {
         String period = YearMonth.now(clock.withZone(ZoneOffset.UTC)).toString();
 
         if (organizationRepository.tryConsumeAiRequest(organizationId, period) == 0) {
-            throw quotaExceeded();
+            throw quotaExceeded(organizationRepository.findById(organizationId).orElseThrow());
         }
 
         // Each count is reached by exactly one request, so this fires once per month
@@ -81,16 +92,48 @@ public class AiUsageService {
                 : 0;
 
         if (limit <= 0 || used >= limit) {
-            throw quotaExceeded();
+            throw quotaExceeded(organization);
         }
     }
 
-    private static ApiException quotaExceeded() {
-        return new ApiException(
-                HttpStatus.TOO_MANY_REQUESTS,
-                "AI_QUOTA_EXCEEDED",
-                "You have used all requests included in your plan this month."
-        );
+    public static final String QUOTA_EXCEEDED = "AI_QUOTA_EXCEEDED";
+
+    /** Says what happens next, and recommends Growth to Starter customers. */
+    private ApiException quotaExceeded(Organization organization) {
+        int limit = organization.getAiMonthlyLimit() != null ? organization.getAiMonthlyLimit() : 0;
+        String reset = resetDate();
+        String used = limit > 0
+                ? "You've used all %,d requests in your plan this month.".formatted(limit)
+                : "Your plan has no requests left this month.";
+
+        String next;
+
+        if (billingService.isEnabled() && organization.getPlan() == Plan.STARTER) {
+            next = "Upgrade to Growth for %,d a month, or new requests wait until %s."
+                    .formatted(growthMonthlyRequests, reset);
+        } else if (billingService.isEnabled() && organization.getPlan() == Plan.GROWTH) {
+            next = "New requests wait until %s. Email %s if you need more."
+                    .formatted(reset, supportAddress);
+        } else {
+            next = "Email %s to get more.".formatted(supportAddress);
+        }
+
+        return new ApiException(HttpStatus.TOO_MANY_REQUESTS, QUOTA_EXCEEDED, used + " " + next);
+    }
+
+    /** When the monthly requests reset: the 1st of next month, UTC. */
+    public Instant nextReset() {
+        return YearMonth.now(clock.withZone(ZoneOffset.UTC))
+                .plusMonths(1)
+                .atDay(1)
+                .atStartOfDay(ZoneOffset.UTC)
+                .toInstant();
+    }
+
+    private String resetDate() {
+        return DateTimeFormatter.ofPattern("MMMM d", Locale.US)
+                .withZone(ZoneOffset.UTC)
+                .format(nextReset());
     }
 
     /** Usage at which to warn that the monthly limit is close. */

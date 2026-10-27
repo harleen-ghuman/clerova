@@ -7,6 +7,7 @@ import com.clerova.dto.CloseWorkItemRequest;
 import com.clerova.dto.ConversationEntryResponse;
 import com.clerova.dto.CreateWorkItemRequest;
 import com.clerova.dto.ProposedActionResponse;
+import com.clerova.dto.SendMessageRequest;
 import com.clerova.dto.WorkItemEventResponse;
 import com.clerova.email.ReplyService;
 import com.clerova.repository.AppUserRepository;
@@ -123,6 +124,36 @@ public class WorkItemController {
                 organizationId(),
                 id,
                 request.status(),
+                currentUserService.currentUserId()
+        );
+    }
+
+    /** A draft answer to the sender's latest email while the job is in progress. */
+    @PostMapping("/{id}/draft-reply")
+    public Map<String, String> draftReply(@PathVariable UUID id) {
+        return Map.of("reply", workItemService.draftFollowUpReply(organizationId(), id));
+    }
+
+    /** Emails a message written by a person to the request's sender. */
+    @PostMapping("/{id}/reply")
+    public WorkItem sendMessage(
+            @PathVariable UUID id,
+            @Valid @RequestBody SendMessageRequest request
+    ) {
+        return replyService.sendMessage(
+                organizationId(),
+                id,
+                request.message(),
+                currentUserService.currentUserId()
+        );
+    }
+
+    /** The sender's new email needs no answer. */
+    @PostMapping("/{id}/reply-handled")
+    public WorkItem markReplyHandled(@PathVariable UUID id) {
+        return workItemService.markReplyHandled(
+                organizationId(),
+                id,
                 currentUserService.currentUserId()
         );
     }

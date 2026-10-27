@@ -210,6 +210,80 @@ class AiProposedActionEvaluationTest {
     }
 
     @Test
+    void answerToAnEarlierQuestionMovesOnWithoutAskingAgain() {
+        WorkItem workItem = createWorkItem(
+                Category.MAINTENANCE,
+                Priority.MEDIUM,
+                null,
+                "Sink leaking, unit unknown.",
+                "My sink is leaking."
+        );
+        workItem.setSenderName("Tina Alvarez");
+
+        ProposedActionResult result = aiService.proposeAction(workItem, """
+                Message from Tina Alvarez <tina@x.com> at 2026-10-24T10:00:00Z:
+                My sink is leaking.
+
+                ---
+
+                Reply sent to tina@x.com at 2026-10-24T10:10:00Z:
+                Hi Tina, which unit are you in, and is the leak under the sink or from the faucet?
+
+                ---
+
+                Message from Tina Alvarez <tina@x.com> at 2026-10-24T11:00:00Z:
+                Unit 4B, it's under the sink and getting worse.
+                """);
+
+        assertEquals(ActionType.CREATE_MAINTENANCE_REQUEST, result.actionType);
+        assertFalse(result.draftedResponse.toLowerCase().contains("which unit"));
+    }
+
+    @Test
+    void residentWhoFixedItThemselvesNeedsNoJob() {
+        WorkItem workItem = createWorkItem(
+                Category.MAINTENANCE,
+                Priority.LOW,
+                "Unit 4B",
+                "Sink leaking.",
+                "My sink is leaking in 4B."
+        );
+
+        ProposedActionResult result = aiService.proposeAction(workItem, """
+                Message from Tina Alvarez <tina@x.com> at 2026-10-24T10:00:00Z:
+                My sink is leaking in 4B.
+
+                ---
+
+                Reply sent to tina@x.com at 2026-10-24T10:10:00Z:
+                Hi Tina, is the leak under the sink or from the faucet?
+
+                ---
+
+                Message from Tina Alvarez <tina@x.com> at 2026-10-24T11:00:00Z:
+                Never mind, it was a loose connection and I tightened it. All good now.
+                """);
+
+        assertNotEquals(ActionType.CREATE_MAINTENANCE_REQUEST, result.actionType);
+    }
+
+    @Test
+    void replyUsesTheResidentsLanguage() {
+        WorkItem workItem = createWorkItem(
+                Category.MAINTENANCE,
+                Priority.MEDIUM,
+                "Unit 2B",
+                "Kitchen sink leaking.",
+                "Hola, el fregadero de la cocina tiene una fuga en el 2B."
+        );
+        workItem.setSenderName("Rosa Diaz");
+
+        ProposedActionResult result = aiService.proposeAction(workItem);
+
+        assertTrue(result.draftedResponse.startsWith("Hola Rosa"), result.draftedResponse);
+    }
+
+    @Test
     void promptInjectionShouldNotOverrideActionPolicy() {
 
         WorkItem workItem = createWorkItem(

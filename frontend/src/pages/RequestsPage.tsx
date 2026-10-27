@@ -5,6 +5,8 @@ import { RequestDetail } from "../components/RequestDetail";
 import type { WorkItem } from "../types/WorkItem";
 import {
   BUCKET_LABELS,
+  hasNewReply,
+  hasUrgentReply,
   requestBucket,
   requestSender,
   requestStatusLabel,
@@ -26,6 +28,8 @@ interface RequestsPageProps {
   filter: RequestFilter;
   onFilterChange: (filter: RequestFilter) => void;
   emailSendingEnabled: boolean;
+  /** Request opened to send a reminder, which starts with a draft. */
+  remindFor: string | null;
   onSelect: (workItem: WorkItem | null) => void;
   onCreate: (message: string) => Promise<WorkItem>;
   onChanged: () => void;
@@ -40,6 +44,7 @@ export function RequestsPage({
   filter,
   onFilterChange: setFilter,
   emailSendingEnabled,
+  remindFor,
   onSelect,
   onCreate,
   onChanged,
@@ -65,14 +70,31 @@ export function RequestsPage({
       )
     : requests;
 
-  const visible = matching.filter(
-    (item) => filter === "all" || requestBucket(item) === filter
-  );
+  // A new email during a job needs a person too, so it shows in review
+  function inFilter(item: WorkItem, key: RequestFilter) {
+    return (
+      key === "all" ||
+      requestBucket(item) === key ||
+      (key === "review" && hasNewReply(item))
+    );
+  }
+
+  // Newest activity first: a new email moves an older request up
+  const activityAt = (item: WorkItem) =>
+    hasNewReply(item) && item.unreadReplyAt ? item.unreadReplyAt : item.createdAt;
+  const visible = matching.filter((item) => inFilter(item, filter));
+
+  if (filter !== "all") {
+    // Urgent replies first, then newest activity
+    visible.sort(
+      (a, b) =>
+        Number(hasUrgentReply(b)) - Number(hasUrgentReply(a)) ||
+        activityAt(b).localeCompare(activityAt(a))
+    );
+  }
 
   function countFor(key: RequestFilter) {
-    return key === "all"
-      ? matching.length
-      : matching.filter((item) => requestBucket(item) === key).length;
+    return matching.filter((item) => inFilter(item, key)).length;
   }
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
@@ -163,6 +185,7 @@ export function RequestsPage({
           <textarea
             id="new-request"
             rows={4}
+            maxLength={10000}
             value={draft}
             disabled={creating}
             placeholder="Example: Water is leaking under the kitchen sink at 12 Oak St, Unit 4B."
@@ -215,10 +238,19 @@ export function RequestsPage({
                 <span className="rq-row-top">
                   <span className={`rq-dot rq-dot-${bucket}`} aria-hidden="true" />
                   <strong>{requestSender(item)}</strong>
-                  {item.priority === "HIGH" && bucket !== "done" && (
-                    <span className="rq-urgent">Urgent</span>
+                  {hasUrgentReply(item) ? (
+                    <span className="rq-urgent">Urgent reply</span>
+                  ) : (
+                    <>
+                      {item.priority === "HIGH" && bucket !== "done" && (
+                        <span className="rq-urgent">Urgent</span>
+                      )}
+                      {hasNewReply(item) && (
+                        <span className="rq-new-reply">New reply</span>
+                      )}
+                    </>
                   )}
-                  <time>{shortTime(item.createdAt)}</time>
+                  <time>{shortTime(activityAt(item))}</time>
                 </span>
                 <span className="rq-row-title">{requestTitle(item)}</span>
                 <span className="rq-row-preview">{item.summary}</span>
@@ -236,6 +268,7 @@ export function RequestsPage({
             key={selected.id}
             workItem={selected}
             emailSendingEnabled={emailSendingEnabled}
+            startReminder={remindFor === selected.id}
             onChanged={onChanged}
             onOpenJobs={onOpenJobs}
             onBack={() => onSelect(null)}

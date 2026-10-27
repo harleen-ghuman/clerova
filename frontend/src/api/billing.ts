@@ -37,3 +37,13 @@ export function openBillingPortal(): Promise<{ url: string }> {
 export function upgradeToGrowth(): Promise<unknown> {
   return apiRequest("/api/billing/upgrade", { method: "POST" });
 }
+
+/** Cancels at the end of the trial or billing period. */
+export function cancelPlan(): Promise<unknown> {
+  return apiRequest("/api/billing/cancel", { method: "POST" });
+}
+
+/** Undoes a scheduled cancellation. */
+export function keepPlan(): Promise<unknown> {
+  return apiRequest("/api/billing/keep", { method: "POST" });
+}

@@ -12,6 +12,7 @@ import com.clerova.domain.WorkItemSource;
 import com.clerova.domain.WorkItemStatus;
 import com.clerova.dto.ExtractionResult;
 import com.clerova.dto.ProposedActionResult;
+import com.clerova.dto.UrgencyResult;
 import com.clerova.exception.NotFoundException;
 import com.clerova.repository.MaintenanceRequestRepository;
 import com.clerova.repository.ProposedActionRepository;
@@ -19,6 +20,7 @@ import com.clerova.repository.WorkItemRepository;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -46,6 +48,9 @@ public class WorkItemService {
             MaintenanceRequestStatus.IN_PROGRESS
     );
 
+    /** Limit on a follow-up's text sent to the AI for the urgency check. */
+    private static final int MAX_URGENCY_CHARS = 4_000;
+
     /** Limit on email text sent to the AI for extraction. */
     private static final int MAX_EXTRACTION_CHARS = 8_000;
 
@@ -58,6 +63,7 @@ public class WorkItemService {
     private final WorkItemEventService workItemEventService;
     private final ConversationService conversationService;
     private final TransactionTemplate transactionTemplate;
+    private final ApplicationEventPublisher events;
 
     public WorkItemService(
             AiService aiService,
@@ -68,7 +74,8 @@ public class WorkItemService {
             AiUsageService aiUsageService,
             WorkItemEventService workItemEventService,
             ConversationService conversationService,
-            TransactionTemplate transactionTemplate
+            TransactionTemplate transactionTemplate,
+            ApplicationEventPublisher events
     ) {
         this.aiService = aiService;
         this.workItemRepository = workItemRepository;
@@ -79,6 +86,7 @@ public class WorkItemService {
         this.workItemEventService = workItemEventService;
         this.conversationService = conversationService;
         this.transactionTemplate = transactionTemplate;
+        this.events = events;
     }
 
     public WorkItem createWorkItem(
@@ -143,18 +151,22 @@ public class WorkItemService {
     /**
      * Creates a work item from a received email and links the email to it.
      */
-    public WorkItem createWorkItemFromEmail(InboundMessage email) {
+    public WorkItem createWorkItemFromEmail(InboundMessage email, List<String> attachmentNames) {
 
         UUID organizationId = email.getOrganizationId();
 
         aiUsageService.requireQuota(organizationId);
 
         String content = email.getContentText() != null ? email.getContentText() : "";
+        String attachments = attachmentNames.isEmpty()
+                ? ""
+                : "Attachments: " + String.join(", ", attachmentNames);
 
         String extractionInput = """
                 From: %s
                 Subject: %s
 
+                %s
                 %s
                 """.formatted(
                 email.getFromName() != null
@@ -163,7 +175,8 @@ public class WorkItemService {
                 email.getSubject() != null ? email.getSubject() : "(no subject)",
                 content.length() > MAX_EXTRACTION_CHARS
                         ? content.substring(0, MAX_EXTRACTION_CHARS)
-                        : content
+                        : content,
+                attachments
         );
 
         ExtractionResult extraction = aiService.extract(extractionInput);
@@ -174,8 +187,11 @@ public class WorkItemService {
         WorkItem workItem = new WorkItem();
 
         workItem.setOrganizationId(organizationId);
+        // A photo-only email still shows something in the request
         workItem.setOriginalMessage(
-                content.isBlank() && email.getSubject() != null ? email.getSubject() : content
+                !content.isBlank() ? content
+                        : email.getSubject() != null && !email.getSubject().isBlank() ? email.getSubject()
+                        : "(No message text. " + attachments + ")"
         );
         workItem.setSource(WorkItemSource.EMAIL);
         workItem.setSenderEmail(email.getFromEmail());
@@ -203,7 +219,10 @@ public class WorkItemService {
         workItem.setCategory(extraction.category);
         workItem.setPriority(extraction.priority);
         workItem.setSummary(extraction.summary);
-        workItem.setAddress(extraction.address);
+        // The column holds 255 characters; a long AI answer must not fail the save
+        workItem.setAddress(extraction.address != null && extraction.address.length() > 255
+                ? extraction.address.substring(0, 255)
+                : extraction.address);
     }
 
     public List<WorkItem> getAllWorkItems(UUID organizationId) {
@@ -376,8 +395,10 @@ public class WorkItemService {
             );
 
             default -> {
-                // In progress (e.g. maintenance underway): keep the message
-                // on the item without changing its workflow.
+                // In progress (e.g. maintenance underway): the job keeps
+                // going, but the request is flagged so someone answers.
+                workItem.setUnreadReplyAt(Instant.now());
+                workItemRepository.save(workItem);
                 return false;
             }
         }
@@ -386,6 +407,150 @@ public class WorkItemService {
         workItemRepository.save(workItem);
 
         return true;
+    }
+
+    /**
+     * Drafts an answer to the sender's latest email on a request whose job
+     * is in progress. Nothing is saved; a person edits and sends it.
+     */
+    public String draftFollowUpReply(UUID organizationId, UUID workItemId) {
+
+        WorkItem workItem = getWorkItem(organizationId, workItemId);
+
+        if (workItem.getSource() != WorkItemSource.EMAIL || workItem.getSenderEmail() == null) {
+            throw new ConflictException("This request didn't come in by email, so there's no one to reply to.");
+        }
+
+        requireCanWrite(workItem);
+
+        aiUsageService.requireAccess(organizationId);
+
+        String conversation = conversationService.conversationForAi(workItem);
+
+        return aiService.draftReply(
+                workItem,
+                conversation != null ? conversation : "Message from the resident:\n" + workItem.getOriginalMessage()
+        );
+    }
+
+    /**
+     * People write to the sender directly while a job or escalation is
+     * underway, or to remind a sender who hasn't answered. Otherwise replies
+     * go through Clerova's suggestion, so a pending suggestion never goes
+     * stale.
+     */
+    public static void requireCanWrite(WorkItem workItem) {
+        switch (workItem.getStatus()) {
+            case IN_PROGRESS, ESCALATED, WAITING_FOR_INFORMATION -> {
+            }
+            case COMPLETED, CANCELLED -> throw new ConflictException("This request is already closed.");
+            default -> throw new ConflictException(
+                    "Reply using Clerova's suggestion for this request."
+            );
+        }
+    }
+
+    /**
+     * Checks whether a new email that arrived during a job is urgent, and if
+     * so marks the request and tells the owners. Best effort: if the AI or
+     * the plan stops it, the request keeps its plain "New reply" flag.
+     */
+    public void checkFollowUpUrgency(UUID organizationId, UUID workItemId, String message) {
+
+        WorkItem workItem = getWorkItem(organizationId, workItemId);
+
+        if (workItem.getUnreadReplyAt() == null
+                || workItem.isUnreadReplyUrgent()
+                || message == null
+                || message.isBlank()) {
+            return;
+        }
+
+        UrgencyResult result;
+
+        try {
+            aiUsageService.requireAccess(organizationId);
+            // The start says what is happening; a long quoted tail adds cost only
+            result = aiService.checkUrgency(
+                    workItem,
+                    message.length() > MAX_URGENCY_CHARS ? message.substring(0, MAX_URGENCY_CHARS) : message
+            );
+        } catch (RuntimeException e) {
+            log.warn("Could not check the urgency of a follow-up for work item {}", workItemId, e);
+            return;
+        }
+
+        if (result == null || !result.urgent) {
+            return;
+        }
+
+        String reason = result.reason != null && !result.reason.isBlank()
+                ? result.reason.trim()
+                : "The new email looks urgent.";
+
+        try {
+            markUrgent(organizationId, workItemId, reason, message);
+        } catch (RuntimeException e) {
+            // E.g. the request changed at the same moment; the email itself
+            // is already attached, so don't fail its processing
+            log.warn("Could not mark work item {} urgent", workItemId, e);
+        }
+    }
+
+    private void markUrgent(UUID organizationId, UUID workItemId, String reason, String message) {
+        transactionTemplate.executeWithoutResult(status -> {
+            WorkItem current = getWorkItem(organizationId, workItemId);
+
+            // Answered or closed while the check ran
+            if (current.getUnreadReplyAt() == null) {
+                return;
+            }
+
+            current.setUnreadReplyUrgent(true);
+            workItemRepository.save(current);
+
+            workItemEventService.record(
+                    organizationId,
+                    workItemId,
+                    WorkItemEventType.REPLY_URGENT,
+                    "Marked urgent: " + reason,
+                    null
+            );
+
+            events.publishEvent(new UrgentReplyReceived(
+                    organizationId,
+                    workItemId,
+                    current.getSenderName() != null ? current.getSenderName() : current.getSenderEmail(),
+                    current.getSubject() != null && !current.getSubject().isBlank()
+                            ? current.getSubject()
+                            : current.getSummary(),
+                    reason,
+                    message
+            ));
+        });
+    }
+
+    /** The sender's new email needs no answer, so the alert goes away. */
+    @Transactional
+    public WorkItem markReplyHandled(UUID organizationId, UUID workItemId, UUID actorUserId) {
+
+        WorkItem workItem = getWorkItem(organizationId, workItemId);
+
+        if (workItem.getUnreadReplyAt() == null) {
+            return workItem;
+        }
+
+        workItem.setUnreadReplyAt(null);
+
+        workItemEventService.record(
+                organizationId,
+                workItemId,
+                WorkItemEventType.REPLY_HANDLED,
+                "Marked the new email as handled",
+                actorUserId
+        );
+
+        return workItemRepository.save(workItem);
     }
 
     @Transactional

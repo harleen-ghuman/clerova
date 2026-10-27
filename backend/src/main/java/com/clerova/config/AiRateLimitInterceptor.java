@@ -102,6 +102,20 @@ public class AiRateLimitInterceptor implements HandlerInterceptor {
         return window.count.incrementAndGet() <= perClientPerMinute;
     }
 
+    /**
+     * Counts an AI call Clerova makes on its own (e.g. for a follow-up
+     * email) against the shared daily cap. False when the cap is reached.
+     */
+    public boolean tryAcquireBackground() {
+        boolean allowed = tryAcquireDaily();
+
+        if (!allowed) {
+            log.warn("Global daily AI request cap of {} reached; skipping background AI", globalPerDay);
+        }
+
+        return allowed;
+    }
+
     boolean tryAcquireDaily() {
         LocalDate today = LocalDate.now(clock.withZone(ZoneOffset.UTC));
 

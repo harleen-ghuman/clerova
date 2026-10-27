@@ -81,6 +81,17 @@ Email forwarded              Request typed in the app
 - One Requests list with search and filters: needs review, waiting on
   customer, in progress, done
 - "Approve & send" emails the edited reply in one step
+- New replies during a job: when a customer writes again while their job is
+  in progress, the request gets a "New reply" tag (Today, Requests, Jobs).
+  Answer it from the request, with a draft from Clerova if you like, or mark
+  it handled. The job doesn't change.
+- Urgent replies: a new email during a job is checked by the AI (not counted
+  as a request). If it reports something urgent (gas, fire, flooding, no
+  heat, a broken lock...) it shows as "Urgent reply" in red, first on Today,
+  and the workspace owners get an email.
+- Reminders: customers who haven't answered in 3+ days show on Today with
+  "Remind". It opens the request with a reminder drafted by Clerova; sending
+  it keeps the request waiting and restarts the 3 days.
 - Jobs board for maintenance: open, in progress, done, with notes
 - Conversation view and activity history for each request (newest first)
 - Inbox view of every received email with its status, and a retry for
@@ -92,7 +103,8 @@ Email forwarded              Request typed in the app
   send a test email, approve the first reply
 - Multi-tenant organizations: each organization only sees its own data
 - Stripe billing: card up front, 14-day free trial, founding prices,
-  self-service billing portal
+  cancel or keep the plan in Settings in one step, Stripe portal for card
+  and invoices
 - Monthly AI quota per organization and per-client rate limits
 - Responsive desktop and mobile interface
 
@@ -206,7 +218,8 @@ Background processor (every 5 seconds)
   - Clerova's own mail or a bounce . Ignored (can be processed anyway)
   - Gmail forwarding confirmation .. Ignored, code shown on Email Setup
   - reply to a request ............. Added to that request's conversation
-                                     and returned to review
+                                     and returned to review (flagged as a
+                                     new reply if its job is in progress)
   - anything else .................. New work item + AI suggestion
 ```
 
@@ -237,7 +250,9 @@ POST /api/onboarding
 GET  /api/billing/offer
 POST /api/billing/checkout                        ({"plan":"STARTER","interval":"month"})
 POST /api/billing/checkout/{sessionId}/complete
-POST /api/billing/portal
+POST /api/billing/portal                          (card and invoices in Stripe)
+POST /api/billing/cancel                          (cancel at the end of the trial or period)
+POST /api/billing/keep                            (undo a scheduled cancellation)
 POST /api/billing/upgrade                         (Starter to Growth)
 POST /api/stripe/webhook                          (Stripe webhook, signed)
 
@@ -261,6 +276,10 @@ GET  /api/work-items/proposed-actions/latest
 POST /api/work-items/proposed-actions/{id}/approve
 POST /api/work-items/proposed-actions/{id}/reject
 POST /api/work-items/proposed-actions/{id}/send-reply
+
+POST /api/work-items/{id}/draft-reply             (draft the next email: an answer, update or reminder)
+POST /api/work-items/{id}/reply                   (send a written message: {"message": "..."})
+POST /api/work-items/{id}/reply-handled           (clear the new-reply flag)
 
 GET   /api/maintenance-requests
 PATCH /api/maintenance-requests/{id}
@@ -286,8 +305,10 @@ Content-Type: application/json
 
 Requests that call the AI are rate limited per client and per day (`429`),
 and count against the organization's monthly quota (`429
-AI_QUOTA_EXCEEDED`). An expired trial returns `403 TRIAL_EXPIRED`, but
-existing data stays readable.
+AI_QUOTA_EXCEEDED`, with a message that recommends Growth on Starter). An
+expired trial returns `403 TRIAL_EXPIRED`, but existing data stays readable
+and existing requests can still be finished (approve, send, write to the
+sender, close).
 
 ---
 
@@ -478,9 +499,10 @@ How it works:
 - At 80% and at 100% of the monthly requests, owners get an email and the
   app shows a banner. On Starter both suggest upgrading to Growth, which
   upgrades the subscription in place (same billing period, founding price kept,
-  the difference added to the next invoice). At the limit, new emails are saved but
-  not organized until the next month; they can be retried from the Inbox
-  after upgrading.
+  the difference added to the next invoice). At the limit, new emails wait in
+  the Inbox ("Queued") until the 1st of next month (UTC). An upgrade or a
+  new plan releases them right away. Emails that arrive after a plan ends wait the same way
+  until a new plan starts.
 - Stripe is the source of truth. Webhooks and the return from Checkout read
   the current subscription from Stripe and copy its status, plan and dates
   to the organization.
@@ -542,7 +564,13 @@ cd website && npm run build && npm run lint
 ```
 
 AI evaluation tests are kept separate so normal builds don't make live model
-calls.
+calls. They need `OPENAI_API_KEY` and cover extraction, suggestions, and the
+drafts written in a request (answers during a job, reminders, escalations,
+the resident's language, and instructions hidden in emails):
+
+```bash
+cd backend && ./mvnw test -Pai-evaluation
+```
 
 ---
 
@@ -557,7 +585,7 @@ Clerova's suggestion, ready to edit and approve.
 
 ![Requests](docs/screenshots/requests.png)
 
-**Jobs:** approved repairs, moved from open to in progress to done.
+**Jobs:** approved repairs, moved from open to in progress to done. The board shows open jobs and those finished in the last 90 days.
 
 ![Jobs board](docs/screenshots/jobs.png)
 

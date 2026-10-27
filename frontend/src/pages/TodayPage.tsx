@@ -5,6 +5,8 @@ import { GetStarted } from "../components/GetStarted";
 import type { MaintenanceRequest } from "../types/MaintenanceRequest";
 import type { WorkItem } from "../types/WorkItem";
 import {
+  hasNewReply,
+  hasUrgentReply,
   requestBucket,
   requestSender,
   requestTitle,
@@ -40,6 +42,9 @@ interface TodayPageProps {
   refreshKey: number;
   onOpenRequests: (filter: RequestBucket) => void;
   onOpenRequest: (workItemId: string) => void;
+  /** Whether Clerova can email senders, so reminders can be sent. */
+  canRemind: boolean;
+  onRemind: (workItemId: string) => void;
   onOpenJobs: () => void;
 }
 
@@ -128,6 +133,8 @@ export function TodayPage({
   refreshKey,
   onOpenRequests,
   onOpenRequest,
+  canRemind,
+  onRemind,
   onOpenJobs,
 }: TodayPageProps) {
   const [summary, setSummary] = useState<WeekSummary | null>(null);
@@ -170,12 +177,23 @@ export function TodayPage({
       requestBucket(item) === "waiting" &&
       now - new Date(item.updatedAt).getTime() > WAITING_DAYS * DAY_MS
   );
+  // Urgent ones first, then newest
+  const newReplies = open
+    .filter(hasNewReply)
+    .sort(
+      (a, b) =>
+        Number(hasUrgentReply(b)) - Number(hasUrgentReply(a)) ||
+        (b.unreadReplyAt ?? "").localeCompare(a.unreadReplyAt ?? "")
+    );
   const openJobs = jobs.filter(
     (job) => job.status === "OPEN" || job.status === "IN_PROGRESS"
   );
 
   const allClear =
-    review.length === 0 && urgent.length === 0 && waitingLong.length === 0;
+    review.length === 0 &&
+    urgent.length === 0 &&
+    waitingLong.length === 0 &&
+    newReplies.length === 0;
 
   return (
     <div className="today page-padded">
@@ -224,7 +242,8 @@ export function TodayPage({
         <div className="today-tiles">
           <button type="button" className="today-tile" onClick={() => onOpenRequests("review")}>
             <span>Needs review</span>
-            <strong>{review.length}</strong>
+            {/* Matches the Needs review list, which includes new replies */}
+            <strong>{review.length + newReplies.length}</strong>
           </button>
           <button type="button" className="today-tile" onClick={() => onOpenRequests("waiting")}>
             <span>Waiting on customer</span>
@@ -238,6 +257,29 @@ export function TodayPage({
 
         {allClear && (
           <p className="today-clear">You're all caught up. New emails will show up here.</p>
+        )}
+
+        {newReplies.length > 0 && (
+          <div className="today-list">
+            <h3>New replies during a job</h3>
+            {newReplies.slice(0, 5).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="today-row"
+                onClick={() => onOpenRequest(item.id)}
+              >
+                {hasUrgentReply(item) ? (
+                  <span className="rq-urgent">Urgent reply</span>
+                ) : (
+                  <span className="rq-new-reply">New reply</span>
+                )}
+                <strong>{requestTitle(item)}</strong>
+                <span>{requestSender(item)}</span>
+                <time>{shortTime(item.unreadReplyAt ?? item.updatedAt)}</time>
+              </button>
+            ))}
+          </div>
         )}
 
         {urgent.length > 0 && (
@@ -262,19 +304,24 @@ export function TodayPage({
         {waitingLong.length > 0 && (
           <div className="today-list">
             <h3>No answer in {WAITING_DAYS}+ days</h3>
-            {waitingLong.slice(0, 5).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className="today-row"
-                onClick={() => onOpenRequest(item.id)}
-              >
-                <span className="rq-dot rq-dot-waiting" aria-hidden="true" />
-                <strong>{requestTitle(item)}</strong>
-                <span>{requestSender(item)}</span>
-                <time>asked {shortTime(item.updatedAt)}</time>
-              </button>
-            ))}
+            {waitingLong.slice(0, 5).map((item) => {
+              const remind = canRemind && item.source === "EMAIL" && Boolean(item.senderEmail);
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="today-row"
+                  onClick={() => (remind ? onRemind(item.id) : onOpenRequest(item.id))}
+                >
+                  <span className="rq-dot rq-dot-waiting" aria-hidden="true" />
+                  <strong>{requestTitle(item)}</strong>
+                  <span>{requestSender(item)}</span>
+                  <time>asked {shortTime(item.updatedAt)}</time>
+                  {remind && <span className="rq-remind">Remind</span>}
+                </button>
+              );
+            })}
           </div>
         )}
       </section>

@@ -13,4 +13,8 @@ export interface WorkItem {
   subject: string | null;
   createdAt: string;
   updatedAt: string;
+  /** The sender wrote again while the job is in progress. */
+  unreadReplyAt?: string | null;
+  /** That new email looks urgent (safety or active damage). */
+  unreadReplyUrgent?: boolean;
 }

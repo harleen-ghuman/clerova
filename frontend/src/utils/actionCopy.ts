@@ -51,11 +51,16 @@ export function decisionCopy(
     ? "Send the approved reply below."
     : "Copy the approved reply below and send it to the resident.";
 
+  // Approved but the reply hasn't gone out (sending failed, or no email)
+  const notSentYet = canEmailReply
+    ? " The reply hasn't been sent yet. Send it below."
+    : " Copy the reply below and send it to the resident.";
+
   switch (action.actionType) {
     case "CREATE_MAINTENANCE_REQUEST":
       return {
         title: "Maintenance job created",
-        description: "The job is on your Jobs board.",
+        description: `The job is on your Jobs board.${notSentYet}`,
       };
     case "RESPOND_TO_CUSTOMER":
       return {
@@ -72,8 +77,7 @@ export function decisionCopy(
     case "ESCALATE_TO_HUMAN":
       return {
         title: "Escalated to your team",
-        description:
-          "The request stays open until someone on your team resolves it.",
+        description: `The request stays open until someone on your team resolves it.${notSentYet}`,
       };
     case "NO_ACTION":
       return {

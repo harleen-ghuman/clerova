@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { errorMessage } from "../api/client";
+import { ApiRequestError, errorMessage } from "../api/client";
 import {
   getBillingOffer,
   startCheckout,
@@ -32,6 +32,9 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
 
   // A first subscription comes with the free trial
   const firstTime = organization.subscriptionStatus === null;
+  const ended = ["canceled", "unpaid", "incomplete_expired", "paused"].includes(
+    organization.subscriptionStatus ?? ""
+  );
   const founding = organization.foundingCustomer || foundingSpotsLeft > 0;
 
   useEffect(() => {
@@ -61,13 +64,20 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
       const { url } = await startCheckout(plan, interval);
       window.location.assign(url);
     } catch (err) {
+      // The plan is already active (another tab, or Stripe just confirmed):
+      // reload into the app instead of asking them to
+      if (err instanceof ApiRequestError && err.status === 409) {
+        window.location.reload();
+        return;
+      }
+
       setError(errorMessage(err, "Couldn't open checkout. Please try again."));
       setSubmitting(null);
     }
   }
 
   return (
-    <div className="auth-shell">
+    <div className="auth-shell" role="main">
       <div className="auth-card plan-card">
         <div className="auth-brand">
           <span className="brand-mark">C</span>
@@ -78,7 +88,9 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
         <p className="auth-description">
           {firstTime
             ? `Try Clerova free for ${TRIAL_DAYS} days. You won't be charged until your trial ends. Cancel anytime before then and you pay nothing.`
-            : `Choose a plan to keep using Clerova for ${organization.name}.`}
+            : ended
+              ? `Your plan has ended. Choose a plan to keep using Clerova for ${organization.name}. Your requests and history are saved.`
+              : `Choose a plan to keep using Clerova for ${organization.name}.`}
         </p>
 
         {notice && <p className="plan-notice">{notice}</p>}

@@ -87,14 +87,16 @@ public class ActionExecutionService {
 
         MaintenanceRequestStatus currentStatus = request.getStatus();
 
-        if (currentStatus.isTerminal()) {
+        boolean statusChanged =
+                status != null && status != currentStatus;
+
+        // Notes can still be saved on a finished job, e.g. a save that
+        // arrives just after "Mark done"
+        if (currentStatus.isTerminal() && statusChanged) {
             throw new ConflictException(
                     "This job is already done or cancelled."
             );
         }
-
-        boolean statusChanged =
-                status != null && status != currentStatus;
 
         if (statusChanged && !currentStatus.canTransitionTo(status)) {
             throw new ConflictException(
@@ -120,7 +122,19 @@ public class ActionExecutionService {
         }
 
         if (notes != null) {
-            request.setNotes(notes.trim());
+            String cleaned = notes.trim().isEmpty() ? null : notes.trim();
+
+            if (!java.util.Objects.equals(cleaned, request.getNotes())) {
+                request.setNotes(cleaned);
+
+                workItemEventService.record(
+                        organizationId,
+                        request.getWorkItem().getId(),
+                        WorkItemEventType.MAINTENANCE_UPDATED,
+                        cleaned == null ? "Job notes cleared" : "Job notes updated",
+                        actorUserId
+                );
+            }
         }
 
         if (statusChanged && status.isTerminal()) {

@@ -36,6 +36,7 @@ export function InboxPage({
 }: InboxPageProps) {
   const [messages, setMessages] = useState<InboundMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [itemError, setItemError] = useState<{ id: string; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "attention">("all");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -71,7 +72,7 @@ export function InboxPage({
   async function handleReprocess(message: InboundMessage) {
     try {
       setBusyId(message.id);
-      setError(null);
+      setItemError(null);
 
       const updated = await reprocessEmail(message.id);
 
@@ -79,7 +80,11 @@ export function InboxPage({
         current.map((item) => (item.id === updated.id ? updated : item))
       );
     } catch (err) {
-      setError(errorMessage(err, "Couldn't process this email. Please try again."));
+      // Shown on the email itself, not at the top of a long list
+      setItemError({
+        id: message.id,
+        message: errorMessage(err, "Couldn't process this email. Please try again."),
+      });
     } finally {
       setBusyId(null);
     }
@@ -225,6 +230,12 @@ export function InboxPage({
                   </button>
                 )}
               </div>
+
+              {itemError?.id === message.id && (
+                <p className="action-error" role="alert">
+                  {itemError.message}
+                </p>
+              )}
             </li>
           ))}
         </ul>

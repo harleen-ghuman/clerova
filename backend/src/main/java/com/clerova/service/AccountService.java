@@ -2,6 +2,7 @@ package com.clerova.service;
 
 import com.clerova.exception.ConflictException;
 import com.clerova.billing.BillingService;
+import com.clerova.email.InboundAddressService;
 import com.clerova.domain.AppUser;
 import com.clerova.domain.Organization;
 import com.clerova.domain.Plan;
@@ -27,6 +28,7 @@ public class AccountService {
     private final OrganizationRepository organizationRepository;
     private final AppUserRepository appUserRepository;
     private final BillingService billingService;
+    private final InboundAddressService inboundAddressService;
     private final int trialDays;
     private final int trialAiMonthlyLimit;
 
@@ -35,6 +37,7 @@ public class AccountService {
             OrganizationRepository organizationRepository,
             AppUserRepository appUserRepository,
             BillingService billingService,
+            InboundAddressService inboundAddressService,
             @Value("${app.trial.days}") int trialDays,
             @Value("${app.trial.ai-monthly-limit}") int trialAiMonthlyLimit
     ) {
@@ -42,6 +45,7 @@ public class AccountService {
         this.organizationRepository = organizationRepository;
         this.appUserRepository = appUserRepository;
         this.billingService = billingService;
+        this.inboundAddressService = inboundAddressService;
         this.trialDays = trialDays;
         this.trialAiMonthlyLimit = trialAiMonthlyLimit;
     }
@@ -85,6 +89,8 @@ public class AccountService {
         organization.setPlan(Plan.TRIAL);
         organization.setTrialEndsAt(Instant.now().plus(Duration.ofDays(trialDays)));
         organization.setAiMonthlyLimit(trialAiMonthlyLimit);
+        // The forwarding address exists from the start
+        organization.setInboundEmailToken(inboundAddressService.newToken(organization.getName()));
 
         Organization savedOrganization = organizationRepository.save(organization);
 

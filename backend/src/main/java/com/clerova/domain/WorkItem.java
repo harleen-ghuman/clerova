@@ -45,6 +45,13 @@ public class WorkItem {
     @Column(length = 1000)
     private String subject;
 
+    /** Set when the sender wrote again while the job is in progress. */
+    private Instant unreadReplyAt;
+
+    /** That new email looks urgent (safety or active damage). */
+    @Column(nullable = false)
+    private boolean unreadReplyUrgent;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -134,6 +141,33 @@ public class WorkItem {
 
     public void setStatus(WorkItemStatus status) {
         this.status = status;
+
+        // The alert only means something while the job is underway
+        if (status != WorkItemStatus.IN_PROGRESS) {
+            unreadReplyAt = null;
+            unreadReplyUrgent = false;
+        }
+    }
+
+    public Instant getUnreadReplyAt() {
+        return unreadReplyAt;
+    }
+
+    public void setUnreadReplyAt(Instant unreadReplyAt) {
+        this.unreadReplyAt = unreadReplyAt;
+
+        // Answered or dismissed: the urgency goes with it
+        if (unreadReplyAt == null) {
+            unreadReplyUrgent = false;
+        }
+    }
+
+    public boolean isUnreadReplyUrgent() {
+        return unreadReplyUrgent;
+    }
+
+    public void setUnreadReplyUrgent(boolean unreadReplyUrgent) {
+        this.unreadReplyUrgent = unreadReplyUrgent;
     }
 
     public Instant getCreatedAt() {

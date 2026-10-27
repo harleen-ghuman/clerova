@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
@@ -27,6 +28,8 @@ public interface InboundMessageRepository
     Optional<InboundMessage> findByIdAndOrganizationId(UUID id, UUID organizationId);
 
     long countByOrganizationIdAndReceivedAtAfter(UUID organizationId, Instant after);
+
+    long countByWorkItemIdAndReceivedAtAfter(UUID workItemId, Instant after);
 
     List<InboundMessage> findByWorkItemIdOrderByReceivedAtAsc(UUID workItemId);
 
@@ -78,4 +81,24 @@ public interface InboundMessageRepository
               and m.updatedAt < :cutoff
             """)
     int releaseStale(@Param("cutoff") Instant cutoff);
+
+    /**
+     * Emails waiting for next month's requests (or a retry) become due now,
+     * e.g. after an upgrade.
+     */
+    @Modifying
+    @Transactional
+    @Query("""
+            update InboundMessage m
+            set m.nextAttemptAt = :now,
+                m.version = m.version + 1
+            where m.organizationId = :organizationId
+              and m.status = com.clerova.domain.InboundMessageStatus.RECEIVED
+              and m.nextAttemptAt > :now
+            """)
+    int releaseWaiting(@Param("organizationId") UUID organizationId, @Param("now") Instant now);
+
+    /** Attachment names, read without loading the message's collection. */
+    @Query("select a.fileName from InboundAttachment a where a.inboundMessage.id = :messageId")
+    List<String> findAttachmentNames(@Param("messageId") UUID messageId);
 }

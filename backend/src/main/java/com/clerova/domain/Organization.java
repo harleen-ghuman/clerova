@@ -1,10 +1,14 @@
 package com.clerova.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.DynamicUpdate;
 
 import java.time.Instant;
 import java.util.UUID;
 
+// Updates write only changed columns, so a save never overwrites a usage
+// count or token another request just set
+@DynamicUpdate
 @Entity
 @Table(name = "organizations")
 public class Organization {

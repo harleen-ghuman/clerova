@@ -9,7 +9,7 @@ import {
 import { getMaintenanceRequests } from "./api/MaintenanceRequests";
 import { getEmailSettings } from "./api/email";
 import { errorMessage } from "./api/client";
-import { openBillingPortal, upgradeToGrowth } from "./api/billing";
+import { keepPlan, openBillingPortal, upgradeToGrowth } from "./api/billing";
 import { PLANS, planPrice } from "./utils/plans";
 import { getMe } from "./api/account";
 import { Sidebar, type AppView } from "./components/Sidebar";
@@ -23,7 +23,7 @@ import type { EmailSettings } from "./types/Email";
 import type { Me, Organization } from "./types/Account";
 import type { MaintenanceRequest } from "./types/MaintenanceRequest";
 import type { WorkItem } from "./types/WorkItem";
-import { requestBucket } from "./utils/requestStatus";
+import { hasNewReply, requestBucket } from "./utils/requestStatus";
 
 interface AppProps {
   /** Just came back from checkout. */
@@ -35,6 +35,13 @@ interface AppProps {
   /** Saved on the Settings page. */
   onAccountUpdated: (me: Me) => void;
   onSignOut: () => void;
+}
+
+/** What the browser history remembers for each screen. */
+interface NavState {
+  clerova: true;
+  view: AppView;
+  selectedId: string | null;
 }
 
 const MOBILE_NAV: { view: AppView; label: string }[] = [
@@ -57,6 +64,8 @@ function App({
   const [organization, setOrganization] = useState(initialOrganization);
   const [activeView, setActiveView] = useState<AppView>("today");
   const [requestFilter, setRequestFilter] = useState<RequestFilter>("review");
+  // Opened from Today to send a reminder: the request starts with a draft
+  const [remindFor, setRemindFor] = useState<string | null>(null);
 
   const [openRequests, setOpenRequests] = useState<WorkItem[]>([]);
   const [closedRequests, setClosedRequests] = useState<WorkItem[]>([]);
@@ -178,12 +187,52 @@ function App({
     requests.find((item) => item.id === selectedId) ??
     (selectedFallback?.id === selectedId ? selectedFallback : null);
 
+  // Requests needing a person: new ones, and new emails during a job
   const reviewCount = openRequests.filter(
-    (item) => requestBucket(item) === "review"
+    (item) => requestBucket(item) === "review" || hasNewReply(item)
   ).length;
   const openJobCount = jobs.filter(
     (job) => job.status === "OPEN" || job.status === "IN_PROGRESS"
   ).length;
+
+  /**
+   * Shows a screen and records it in the browser history, so the phone's
+   * Back button returns to the previous screen instead of leaving Clerova.
+   */
+  function show(view: AppView, workItemId: string | null = null) {
+    setActiveView(view);
+    setSelectedId(workItemId);
+    setRemindFor(null);
+
+    const current = window.history.state as NavState | null;
+
+    if (current?.clerova && current.view === view && current.selectedId === workItemId) {
+      return;
+    }
+
+    const state: NavState = { clerova: true, view, selectedId: workItemId };
+    window.history.pushState(state, "");
+  }
+
+  useEffect(() => {
+    // The first screen, so Back from the next one comes back here
+    const initial: NavState = { clerova: true, view: "today", selectedId: null };
+    window.history.replaceState(initial, "");
+
+    function onPopState(event: PopStateEvent) {
+      const state = event.state as NavState | null;
+
+      if (state?.clerova) {
+        setActiveView(state.view);
+        setSelectedId(state.selectedId);
+        setHighlightJobFor(null);
+        setRemindFor(null);
+      }
+    }
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   function navigate(view: AppView) {
     if (view === "email-setup") {
@@ -195,17 +244,29 @@ function App({
       setHighlightJobFor(null);
     }
 
-    setActiveView(view);
+    show(view, view === "requests" ? selectedId : null);
   }
 
   function selectRequest(item: WorkItem | null) {
-    setSelectedId(item?.id ?? null);
     setSelectedFallback(item);
+
+    if (item) {
+      show("requests", item.id);
+      return;
+    }
+
+    // Closing a request opened from the list steps back to the list
+    const current = window.history.state as NavState | null;
+
+    if (current?.clerova && current.selectedId) {
+      window.history.back();
+    } else {
+      setSelectedId(null);
+    }
   }
 
   async function openRequest(workItemId: string) {
-    setActiveView("requests");
-    setSelectedId(workItemId);
+    show("requests", workItemId);
 
     if (!requests.some((item) => item.id === workItemId)) {
       try {
@@ -245,7 +306,9 @@ function App({
     organization.subscriptionStatus === "past_due"
       ? "Your last payment didn't go through. Update your card to keep Clerova running."
       : organization.cancelAtPeriodEnd && planEnds
-        ? `Your plan is cancelled. You can keep using Clerova until ${planEnds}.`
+        ? organization.subscriptionStatus === "trialing"
+          ? `Your plan is cancelled. Your trial ends on ${planEnds} and you won't be charged.`
+          : `Your plan is cancelled. You can keep using Clerova until ${planEnds}.`
         : null;
 
   function handleChanged() {
@@ -255,6 +318,19 @@ function App({
   }
 
   const [upgrading, setUpgrading] = useState(false);
+  const [keeping, setKeeping] = useState(false);
+
+  /** Undoes a scheduled cancellation, in one click. */
+  function keep() {
+    setKeeping(true);
+    setBillingError(null);
+    keepPlan()
+      .then(() => loadOrganization())
+      .catch((err) =>
+        setBillingError(errorMessage(err, "Couldn't keep your plan. Please try again."))
+      )
+      .finally(() => setKeeping(false));
+  }
 
   function upgrade() {
     const growth = PLANS.find((item) => item.plan === "GROWTH")!;
@@ -269,7 +345,7 @@ function App({
 
     if (
       !window.confirm(
-        `Upgrade to Growth for $${price.amount.toLocaleString()} / ${price.per}? You get ${growth.requests.toLocaleString()} requests a month starting now. ${when}`
+        `Upgrade to Growth for $${price.amount.toLocaleString()} / ${price.per}? You get ${growth.requests.toLocaleString()} requests a month starting now. ${when}${organization.cancelAtPeriodEnd ? " Your plan will also stop being cancelled." : ""}`
       )
     ) {
       return;
@@ -305,7 +381,7 @@ function App({
   ).toLocaleDateString([], { month: "long", day: "numeric", timeZone: "UTC" });
   const usageNotice =
     usageLevel === "limit"
-      ? `You've used all ${limit} requests this month. New emails are saved but won't be organized until ${resetDate}.`
+      ? `You've used all ${limit.toLocaleString()} requests this month. New emails are saved and will be organized on ${resetDate}${canUpgrade ? ", or as soon as you upgrade" : ""}.`
       : usageLevel === "warning"
         ? `You've used ${used} of ${limit} requests this month.`
         : null;
@@ -320,7 +396,7 @@ function App({
         userEmail={userEmail}
         onNavigate={navigate}
         onSignOut={onSignOut}
-        onManageBilling={manageBilling}
+        onManageBilling={() => navigate("settings")}
       />
 
       <nav className="mobile-nav" aria-label="Mobile navigation">
@@ -358,8 +434,13 @@ function App({
               </button>
             )}
             {!billingError && organization.cancelAtPeriodEnd && (
-              <button type="button" className="rq-button rq-button-small" onClick={manageBilling}>
-                Keep my plan
+              <button
+                type="button"
+                className="rq-button rq-button-small"
+                onClick={keep}
+                disabled={keeping}
+              >
+                {keeping ? "Keeping your plan..." : "Keep my plan"}
               </button>
             )}
           </div>
@@ -403,12 +484,18 @@ function App({
             refreshKey={refreshTick}
             onOpenRequests={(filter) => {
               setRequestFilter(filter);
-              selectRequest(null);
-              setActiveView("requests");
+              setSelectedFallback(null);
+              show("requests");
             }}
             onOpenRequest={(workItemId) => {
               setRequestFilter("all");
               void openRequest(workItemId);
+            }}
+            canRemind={emailSettings?.sendingEnabled ?? false}
+            onRemind={(workItemId) => {
+              setRequestFilter("all");
+              void openRequest(workItemId);
+              setRemindFor(workItemId);
             }}
             onOpenJobs={() => navigate("jobs")}
           />
@@ -423,12 +510,13 @@ function App({
             filter={requestFilter}
             onFilterChange={setRequestFilter}
             emailSendingEnabled={emailSettings?.sendingEnabled ?? false}
+            remindFor={remindFor}
             onSelect={selectRequest}
             onCreate={handleCreate}
             onChanged={handleChanged}
             onOpenJobs={(workItemId) => {
               setHighlightJobFor(workItemId);
-              setActiveView("jobs");
+              show("jobs");
             }}
           />
         )}
@@ -479,6 +567,9 @@ function App({
                 onAccountUpdated(me);
               }}
               onManageBilling={manageBilling}
+              onBillingChanged={loadOrganization}
+              onUpgrade={upgrade}
+              upgrading={upgrading}
               onSignOut={onSignOut}
             />
           </div>

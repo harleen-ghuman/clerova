@@ -25,6 +25,16 @@ export function requestBucket(item: WorkItem): RequestBucket {
   }
 }
 
+/** The sender wrote again while the job is in progress, unanswered. */
+export function hasNewReply(item: WorkItem): boolean {
+  return item.status === "IN_PROGRESS" && Boolean(item.unreadReplyAt);
+}
+
+/** The new email during a job looks urgent. */
+export function hasUrgentReply(item: WorkItem): boolean {
+  return hasNewReply(item) && Boolean(item.unreadReplyUrgent);
+}
+
 /** Status shown on a single request, a bit more specific than its bucket. */
 export function requestStatusLabel(item: WorkItem): string {
   switch (item.status) {

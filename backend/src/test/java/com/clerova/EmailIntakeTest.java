@@ -59,6 +59,9 @@ class EmailIntakeTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private com.clerova.repository.InboundMessageRepository inboundMessageRepository;
+
     @MockitoBean
     private AiService aiService;
 
@@ -230,6 +233,36 @@ class EmailIntakeTest {
         assertThat(extractionInput.getValue())
                 .contains("tina@example.com")
                 .contains("Subject: Sink leaking");
+    }
+
+    @Test
+    void emptyEmailIsIgnoredAndPhotoOnlyEmailBecomesARequest() throws Exception {
+        var empty = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(
+                payload(forwardingAddress, "<empty@x>", null, null, "tina@example.com", ""));
+        empty.put("Subject", "");
+        empty.putArray("Attachments");
+        deliver(empty.toString()).andExpect(jsonPath("$.status").value("STORED"));
+
+        var photo = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(
+                payload(forwardingAddress, "<photo@x>", null, null, "tina@example.com", ""));
+        photo.put("Subject", "");
+        deliver(photo.toString()).andExpect(jsonPath("$.status").value("STORED"));
+
+        processor.processDue();
+
+        JsonNode inbox = json(mockMvc.perform(get("/api/inbox").with(user)));
+        JsonNode emptyMessage = inbox.get(0).get("subject").isNull() || inbox.get(0).get("attachments").isEmpty()
+                ? inbox.get(0) : inbox.get(1);
+
+        assertThat(emptyMessage.get("status").asText()).isEqualTo("IGNORED");
+
+        // Only the photo email used a request
+        mockMvc.perform(get("/api/me").with(user))
+                .andExpect(jsonPath("$.organization.aiRequestsUsedThisMonth").value(1));
+
+        JsonNode item = json(mockMvc.perform(get("/api/work-items").with(user))).get(0);
+        assertThat(item.get("originalMessage").asText())
+                .isEqualTo("(No message text. Attachments: photo.jpg)");
     }
 
     @Test
@@ -426,6 +459,310 @@ class EmailIntakeTest {
     }
 
     @Test
+    void emailDuringAJobIsFlaggedAndCanBeAnsweredOnTheSameRequest() throws Exception {
+        proposeAction(ActionType.CREATE_MAINTENANCE_REQUEST);
+        String workItemId = deliverNew("<job1@x>", "My sink is leaking.");
+
+        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/approve",
+                        latestAction(workItemId).get("id").asText()).with(user))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.unreadReplyAt").isEmpty());
+
+        // The tenant writes again while the job is underway
+        deliver(payload(forwardingAddress, "<job2@x>", "<job1@x>", null,
+                "tina@example.com", "Any update on the plumber?"))
+                .andExpect(jsonPath("$.status").value("STORED"));
+
+        processor.processDue();
+
+        mockMvc.perform(get("/api/inbox").with(user))
+                .andExpect(jsonPath("$[0].status").value("ATTACHED"))
+                .andExpect(jsonPath("$[0].workItemId").value(workItemId));
+
+        // Same request, job untouched, now flagged
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.unreadReplyAt").isNotEmpty());
+
+        when(aiService.draftReply(any(), anyString())).thenReturn("Hi Tina, the team is on it.");
+
+        mockMvc.perform(post("/api/work-items/{id}/draft-reply", workItemId).with(user))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reply").value("Hi Tina, the team is on it."));
+
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"message":"   "}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        // Another workspace can't reach it
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(onboardNewUser(mockMvc))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"message":"Hello"}
+                                """))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"message":"Hi Tina, the plumber comes Friday."}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.unreadReplyAt").isEmpty());
+
+        ArgumentCaptor<OutgoingEmail> sent = ArgumentCaptor.forClass(OutgoingEmail.class);
+        verify(emailSender).send(sent.capture());
+
+        assertThat(sent.getValue().to()).isEqualTo("tina@example.com");
+        assertThat(sent.getValue().textBody()).isEqualTo("Hi Tina, the plumber comes Friday.");
+        assertThat(sent.getValue().inReplyTo()).isEqualTo("<job2@x>");
+        assertThat(sent.getValue().replyTo())
+                .isEqualTo(forwardingAddress.replace("@", "+wi-" + workItemId.replace("-", "") + "@"));
+
+        mockMvc.perform(get("/api/work-items/{id}/conversation", workItemId).with(user))
+                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$[2].direction").value("OUTBOUND"));
+
+        // A later email needing no answer can be dismissed
+        deliver(payload(forwardingAddress, "<job3@x>", "<job2@x>", null,
+                "tina@example.com", "Thanks!"))
+                .andExpect(jsonPath("$.status").value("STORED"));
+
+        processor.processDue();
+
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.unreadReplyAt").isNotEmpty());
+
+        mockMvc.perform(post("/api/work-items/{id}/reply-handled", workItemId).with(user))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.unreadReplyAt").isEmpty());
+
+        JsonNode events = json(mockMvc.perform(get("/api/work-items/{id}/events", workItemId).with(user)));
+        assertThat(events.findValuesAsText("type")).contains("REPLY_SENT", "REPLY_HANDLED");
+
+        // No new suggestion was made for these emails
+        verify(aiService).proposeAction(any(), any());
+    }
+
+    @Test
+    void writingToTheSenderNeedsAJobOrEscalation() throws Exception {
+        String workItemId = deliverNew("<write1@x>", "My sink is leaking.");
+        String message = """
+                {"message":"Hello"}
+                """;
+
+        // A suggestion is waiting, so replies go through it
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user).contentType(MediaType.APPLICATION_JSON).content(message))
+                .andExpect(status().isConflict());
+        mockMvc.perform(post("/api/work-items/{id}/draft-reply", workItemId).with(user))
+                .andExpect(status().isConflict());
+
+        proposeAction(ActionType.ESCALATE_TO_HUMAN);
+        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/reject",
+                        latestAction(workItemId).get("id").asText()).with(user))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/work-items/{id}/proposed-actions", workItemId).with(user))
+                .andExpect(status().isCreated());
+        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/approve",
+                        latestAction(workItemId).get("id").asText()).with(user))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.status").value("ESCALATED"));
+
+        // Escalated: the team can write, and nothing about the request changes
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user).contentType(MediaType.APPLICATION_JSON).content(message))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ESCALATED"));
+
+        String organizationId = json(mockMvc.perform(get("/api/me").with(user)))
+                .get("organization").get("id").asText();
+        jdbcTemplate.update(
+                "update organizations set trial_ends_at = ? where id = ?",
+                java.sql.Timestamp.from(java.time.Instant.now().minusSeconds(60)),
+                UUID.fromString(organizationId)
+        );
+
+        // An ended trial can still finish the request, but not use AI
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user).contentType(MediaType.APPLICATION_JSON).content(message))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/work-items/{id}/draft-reply", workItemId).with(user))
+                .andExpect(status().isForbidden());
+
+        verify(emailSender, org.mockito.Mockito.times(2)).send(any());
+    }
+
+    private String inProgressRequest(String firstMessageId) throws Exception {
+        proposeAction(ActionType.CREATE_MAINTENANCE_REQUEST);
+        String workItemId = deliverNew(firstMessageId, "The AC is not cooling.");
+
+        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/approve",
+                        latestAction(workItemId).get("id").asText()).with(user))
+                .andExpect(status().isOk());
+
+        return workItemId;
+    }
+
+    @Test
+    void urgentEmailDuringAJobIsMarkedAndOwnersAreEmailed() throws Exception {
+        String workItemId = inProgressRequest("<urgent1@x>");
+
+        com.clerova.dto.UrgencyResult urgent = new com.clerova.dto.UrgencyResult();
+        urgent.urgent = true;
+        urgent.reason = "Resident smells gas near the stove.";
+        when(aiService.checkUrgency(any(), anyString())).thenReturn(urgent);
+
+        deliver(payload(forwardingAddress, "<urgent2@x>", "<urgent1@x>", null,
+                "tina@example.com", "I smell gas near the stove."))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.unreadReplyAt").isNotEmpty())
+                .andExpect(jsonPath("$.unreadReplyUrgent").value(true));
+
+        ArgumentCaptor<OutgoingEmail> sent = ArgumentCaptor.forClass(OutgoingEmail.class);
+        verify(emailSender).send(sent.capture());
+        assertThat(sent.getValue().subject()).isEqualTo("Urgent: Tenant Tina wrote again about Sink leaking");
+        assertThat(sent.getValue().textBody())
+                .contains("Resident smells gas near the stove.")
+                .contains("I smell gas near the stove.");
+
+        JsonNode events = json(mockMvc.perform(get("/api/work-items/{id}/events", workItemId).with(user)));
+        assertThat(events.findValuesAsText("detail")).contains("Marked urgent: Resident smells gas near the stove.");
+
+        // Handled: the urgency goes with the flag
+        mockMvc.perform(post("/api/work-items/{id}/reply-handled", workItemId).with(user))
+                .andExpect(jsonPath("$.unreadReplyAt").isEmpty())
+                .andExpect(jsonPath("$.unreadReplyUrgent").value(false));
+    }
+
+    @Test
+    void ordinaryOrUncheckedEmailDuringAJobIsJustANewReply() throws Exception {
+        String workItemId = inProgressRequest("<calm1@x>");
+
+        com.clerova.dto.UrgencyResult calm = new com.clerova.dto.UrgencyResult();
+        calm.urgent = false;
+        when(aiService.checkUrgency(any(), anyString())).thenReturn(calm);
+
+        deliver(payload(forwardingAddress, "<calm2@x>", "<calm1@x>", null,
+                "tina@example.com", "Any update on when the technician comes?"))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.unreadReplyAt").isNotEmpty())
+                .andExpect(jsonPath("$.unreadReplyUrgent").value(false));
+
+        // The AI failing doesn't stop the email from being attached and flagged
+        when(aiService.checkUrgency(any(), anyString()))
+                .thenThrow(new AiServiceException("down", null));
+
+        deliver(payload(forwardingAddress, "<calm3@x>", "<calm2@x>", null,
+                "tina@example.com", "Still waiting."))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/inbox").with(user))
+                .andExpect(jsonPath("$[0].status").value("ATTACHED"));
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.unreadReplyUrgent").value(false));
+
+        verify(emailSender, never()).send(any());
+    }
+
+    @Test
+    void aBurstOfFollowUpsStopsRunningTheAi() throws Exception {
+        String workItemId = inProgressRequest("<burst0@x>");
+
+        com.clerova.dto.UrgencyResult calm = new com.clerova.dto.UrgencyResult();
+        when(aiService.checkUrgency(any(), anyString())).thenReturn(calm);
+
+        for (int i = 1; i <= 14; i++) {
+            deliver(payload(forwardingAddress, "<burst" + i + "@x>", "<burst0@x>", null,
+                    "tina@example.com", "Follow-up number " + i))
+                    .andExpect(jsonPath("$.status").value("STORED"));
+        }
+
+        processor.processDue();
+        processor.processDue();
+
+        // Every email is still attached to the request
+        JsonNode inbox = json(mockMvc.perform(get("/api/inbox").with(user)));
+        long attached = 0;
+        for (JsonNode message : inbox) {
+            if ("ATTACHED".equals(message.get("status").asText())) {
+                attached++;
+            }
+        }
+        assertThat(attached).isEqualTo(14);
+
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.unreadReplyAt").isNotEmpty());
+
+        // The original plus 9 follow-ups ran the check; the rest were skipped
+        verify(aiService, org.mockito.Mockito.times(9)).checkUrgency(any(), anyString());
+    }
+
+    @Test
+    void customerWhoHasNotAnsweredCanBeReminded() throws Exception {
+        String workItemId = deliverNew("<nudge1@x>", "My sink is leaking.");
+
+        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/approve",
+                        latestAction(workItemId).get("id").asText()).with(user))
+                .andExpect(status().isOk());
+
+        // Asked a question four days ago
+        jdbcTemplate.update(
+                "update work_items set updated_at = ? where id = ?",
+                java.sql.Timestamp.from(java.time.Instant.now().minus(java.time.Duration.ofDays(4))),
+                UUID.fromString(workItemId)
+        );
+
+        when(aiService.draftReply(any(), anyString())).thenReturn("Hi Tina, just checking in: which unit are you in?");
+
+        mockMvc.perform(post("/api/work-items/{id}/draft-reply", workItemId).with(user))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reply").value("Hi Tina, just checking in: which unit are you in?"));
+
+        JsonNode reminded = json(mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"message":"Hi Tina, just checking in: which unit are you in?"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("WAITING_FOR_INFORMATION")));
+
+        // The wait starts again from the reminder
+        assertThat(java.time.Instant.parse(reminded.get("updatedAt").asText()))
+                .isAfter(java.time.Instant.now().minusSeconds(60));
+
+        // Their answer goes back to review as usual
+        deliver(payload(forwardingAddress, "<nudge2@x>", "<nudge1@x>", null, "tina@example.com", "Unit 4B."))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.status").value("WAITING_FOR_APPROVAL"));
+    }
+
+    @Test
     void approvedResponseIsSentAsThreadedReplyOnce() throws Exception {
         proposeAction(ActionType.RESPOND_TO_CUSTOMER);
         String workItemId = deliverNew("<send1@x>", "When is rent due?");
@@ -535,7 +872,7 @@ class EmailIntakeTest {
     }
 
     @Test
-    void quotaExhaustionMarksEmailFailed() throws Exception {
+    void emailWaitsWhenRequestsAreUsedUpAndGoesAfterAnUpgrade() throws Exception {
         String organizationId = json(mockMvc.perform(get("/api/me").with(user)))
                 .get("organization").get("id").asText();
 
@@ -549,10 +886,47 @@ class EmailIntakeTest {
 
         processor.processDue();
 
+        // Waits for next month instead of failing
+        JsonNode waiting = json(mockMvc.perform(get("/api/inbox").with(user))).get(0);
+        assertThat(waiting.get("status").asText()).isEqualTo("RECEIVED");
+        assertThat(waiting.get("statusReason").asText()).contains("will be organized on");
+
+        processor.processDue();
+        assertThat(json(mockMvc.perform(get("/api/inbox").with(user))).get(0).get("status").asText())
+                .isEqualTo("RECEIVED");
+
+        // An upgrade raises the limit and releases waiting emails
+        jdbcTemplate.update(
+                "update organizations set ai_monthly_limit = 100 where id = ?",
+                UUID.fromString(organizationId)
+        );
+        inboundMessageRepository.releaseWaiting(UUID.fromString(organizationId), java.time.Instant.now());
+        processor.processDue();
+
         mockMvc.perform(get("/api/inbox").with(user))
-                .andExpect(jsonPath("$[0].status").value("FAILED"))
-                .andExpect(jsonPath("$[0].statusReason").value(
-                        "You have used all requests included in your plan this month."));
+                .andExpect(jsonPath("$[0].status").value("PROCESSED"))
+                .andExpect(jsonPath("$[0].workItemId").isNotEmpty());
+    }
+
+    @Test
+    void typedRequestOverTheLimitSaysWhatToDo() throws Exception {
+        String organizationId = json(mockMvc.perform(get("/api/me").with(user)))
+                .get("organization").get("id").asText();
+
+        jdbcTemplate.update(
+                "update organizations set ai_monthly_limit = 0 where id = ?",
+                UUID.fromString(organizationId)
+        );
+
+        mockMvc.perform(post("/api/work-items")
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"message":"Sink is leaking"}
+                                """))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.error").value("AI_QUOTA_EXCEEDED"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Email ")));
     }
 
     @Test

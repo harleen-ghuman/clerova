@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 
 import { errorMessage } from "../api/client";
-import { getConversation, getWorkItemEvents, sendReply } from "../api/email";
+import {
+  draftReply,
+  getConversation,
+  getWorkItemEvents,
+  markReplyHandled,
+  sendMessage,
+  sendReply,
+} from "../api/email";
 import {
   approveProposedAction,
   closeWorkItem,
@@ -15,6 +22,8 @@ import type { WorkItem } from "../types/WorkItem";
 import { decisionCopy, hasResponseToSend } from "../utils/actionCopy";
 import {
   capitalize,
+  hasNewReply,
+  hasUrgentReply,
   longTime,
   requestBucket,
   requestSender,
@@ -27,6 +36,8 @@ import { ApprovedResponse } from "./ApprovedResponse";
 interface RequestDetailProps {
   workItem: WorkItem;
   emailSendingEnabled: boolean;
+  /** Opened to send a reminder: the reply box starts with a draft. */
+  startReminder?: boolean;
   /** Something changed on the server; reload the request lists. */
   onChanged: () => void;
   onOpenJobs: (workItemId: string) => void;
@@ -53,6 +64,7 @@ function latest(actions: ProposedAction[]): ProposedAction | null {
 export function RequestDetail({
   workItem,
   emailSendingEnabled,
+  startReminder = false,
   onChanged,
   onOpenJobs,
   onBack,
@@ -193,6 +205,27 @@ export function RequestDetail({
     workItem.status === "ESCALATED" ||
     workItem.status === "WAITING_FOR_INFORMATION" ||
     (workItem.status === "NEW" && !pending);
+  const newReply = hasNewReply(workItem);
+  const urgentReply = hasUrgentReply(workItem);
+  // Why Clerova marked it urgent, from the latest activity entry
+  const urgentReason = urgentReply
+    ? [...events]
+        .reverse()
+        .find((event) => event.type === "REPLY_URGENT")
+        ?.detail?.replace(/^Marked urgent:\s*/, "")
+    : undefined;
+  // While a job or escalation is underway there's no suggestion to approve,
+  // so people can write to the sender directly, or remind a sender who
+  // hasn't answered
+  const situation: ComposerSituation | null =
+    workItem.status === "IN_PROGRESS"
+      ? "job"
+      : workItem.status === "ESCALATED"
+        ? "escalated"
+        : workItem.status === "WAITING_FOR_INFORMATION"
+          ? "waiting"
+          : null;
+  const canWrite = Boolean(replyTo) && situation !== null;
   const meta = [
     workItem.address,
     capitalize(workItem.category),
@@ -237,6 +270,54 @@ export function RequestDetail({
           </article>
         ))}
       </div>
+
+      {newReply && (
+        <section
+          className={`rq-new-reply-banner ${urgentReply ? "urgent" : ""}`}
+          aria-label={urgentReply ? "Urgent reply" : "New reply"}
+          role={urgentReply ? "alert" : undefined}
+        >
+          <div>
+            <strong>
+              {urgentReply ? "Urgent reply" : "New reply"} from {requestSender(workItem)}
+            </strong>
+            <span>
+              {urgentReply
+                ? `This looks urgent${urgentReason ? `: ${urgentReason}` : "."} Read it and act now.`
+                : "They wrote again while the job is in progress. The job hasn't changed."}
+              {!replyTo &&
+                " Reply from your own email, then mark it as handled."}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="rq-button"
+            onClick={() =>
+              run("Updating...", () => markReplyHandled(workItem.id))
+            }
+            disabled={busy !== null}
+          >
+            {busy === "Updating..." ? busy : "Mark as handled"}
+          </button>
+        </section>
+      )}
+
+      {canWrite && replyTo && situation && (
+        <ReplyComposer
+          key={workItem.id}
+          workItemId={workItem.id}
+          sendTo={replyTo}
+          recipient={workItem.senderName || replyTo}
+          startOpen={newReply || (startReminder && situation === "waiting")}
+          autoDraft={startReminder && situation === "waiting"}
+          situation={situation}
+          disabled={busy !== null}
+          onSent={() => {
+            setReloadKey((key) => key + 1);
+            onChanged();
+          }}
+        />
+      )}
 
       {error && <p className="action-error">{error}</p>}
 
@@ -332,7 +413,15 @@ export function RequestDetail({
           <button
             type="button"
             className="rq-button"
-            onClick={() => close("CANCELLED")}
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Cancel this request? It moves to Done and nothing is sent. If the sender writes again, it comes back."
+                )
+              ) {
+                void close("CANCELLED");
+              }
+            }}
             disabled={busy !== null}
           >
             Cancel request
@@ -397,6 +486,7 @@ function SuggestionCard({
           <textarea
             value={response}
             rows={6}
+            maxLength={10000}
             disabled={busy !== null}
             onChange={(event) => setResponse(event.target.value)}
           />
@@ -434,6 +524,187 @@ function SuggestionCard({
             approving.
           </span>
         )}
+      </div>
+    </section>
+  );
+}
+
+type ComposerSituation = "job" | "escalated" | "waiting";
+
+interface ReplyComposerProps {
+  workItemId: string;
+  sendTo: string;
+  recipient: string;
+  startOpen: boolean;
+  /** Start with a draft from Clerova (a reminder opened from Today). */
+  autoDraft: boolean;
+  situation: ComposerSituation;
+  disabled: boolean;
+  onSent: () => void;
+}
+
+/** Write to the sender without changing the request or its job. */
+function ReplyComposer({
+  workItemId,
+  sendTo,
+  recipient,
+  startOpen,
+  autoDraft,
+  situation,
+  disabled,
+  onSent,
+}: ReplyComposerProps) {
+  const [open, setOpen] = useState(startOpen);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState<string | null>(autoDraft ? "Drafting..." : null);
+  const [error, setError] = useState<string | null>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const reminder = situation === "waiting";
+
+  useEffect(() => {
+    if (!autoDraft) {
+      return;
+    }
+
+    let cancelled = false;
+
+    draftReply(workItemId)
+      .then((result) => {
+        if (!cancelled) {
+          setMessage((current) => (current.trim() === "" ? result.reply : current));
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(errorMessage(err, "Couldn't draft a reminder. Write your own or try again."));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setBusy(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [autoDraft, workItemId]);
+
+  if (!open) {
+    return (
+      <div className="rq-compose-open">
+        {sentTo && <span className="rq-hint">Sent to {sentTo}.</span>}
+        <button
+          type="button"
+          className="rq-button"
+          onClick={() => {
+            setOpen(true);
+            setSentTo(null);
+
+            if (reminder && message.trim() === "") {
+              void draft();
+            }
+          }}
+          disabled={disabled}
+        >
+          {reminder ? `Send a reminder to ${recipient}` : `Write to ${recipient}`}
+        </button>
+      </div>
+    );
+  }
+
+  async function draft() {
+    try {
+      setBusy("Drafting...");
+      setError(null);
+      const result = await draftReply(workItemId);
+      setMessage(result.reply);
+    } catch (err) {
+      setError(errorMessage(err, "Couldn't draft a message. Write your own or try again."));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function send() {
+    try {
+      setBusy("Sending...");
+      setError(null);
+      await sendMessage(workItemId, message.trim());
+      setMessage("");
+      setSentTo(sendTo);
+      setOpen(false);
+      onSent();
+    } catch (err) {
+      setError(errorMessage(err, "Couldn't send the reply. Please try again."));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const locked = disabled || busy !== null;
+
+  return (
+    <section className="rq-card" aria-label={`${reminder ? "Reminder" : "Reply"} to ${recipient}`}>
+      <label className="rq-reply">
+        {reminder ? "Reminder" : "Reply"} to {recipient}
+        <textarea
+          value={message}
+          rows={6}
+          maxLength={10000}
+          disabled={locked}
+          placeholder={
+            busy === "Drafting..."
+              ? "Clerova is drafting..."
+              : `Write a ${reminder ? "reminder" : "reply"}, or let Clerova draft one.`
+          }
+          onChange={(event) => setMessage(event.target.value)}
+        />
+      </label>
+
+      {error && <p className="action-error">{error}</p>}
+
+      <div className="rq-card-actions">
+        <button
+          type="button"
+          className="rq-button rq-button-primary"
+          onClick={send}
+          disabled={locked || message.trim() === ""}
+        >
+          {busy === "Sending..." ? busy : "Send"}
+        </button>
+        <button
+          type="button"
+          className="rq-button"
+          onClick={draft}
+          disabled={locked}
+        >
+          {busy === "Drafting..."
+            ? busy
+            : message.trim() === ""
+              ? "Draft with Clerova"
+              : "Replace with a draft"}
+        </button>
+        <button
+          type="button"
+          className="rq-button rq-button-quiet"
+          onClick={() => {
+            setOpen(false);
+            setMessage("");
+            setError(null);
+          }}
+          disabled={busy !== null}
+        >
+          Cancel
+        </button>
+        <span className="rq-hint">
+          Goes to {sendTo}.{" "}
+          {situation === "job"
+            ? "The job doesn't change."
+            : situation === "escalated"
+              ? "The request doesn't change."
+              : `It stays waiting on ${recipient}.`}
+        </span>
       </div>
     </section>
   );

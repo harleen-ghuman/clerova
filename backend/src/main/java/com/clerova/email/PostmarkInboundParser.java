@@ -8,6 +8,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 import java.util.Optional;
 
 /**
@@ -139,14 +141,52 @@ public class PostmarkInboundParser {
                 .replaceAll("(?i)<br\\s*/?>", "\n")
                 .replaceAll("(?i)</(p|div|tr|li|h[1-6])>", "\n")
                 .replaceAll("<[^>]+>", "")
-                .replace("&nbsp;", " ")
-                .replace("&amp;", "&")
-                .replace("&lt;", "<")
-                .replace("&gt;", ">")
-                .replace("&quot;", "\"")
-                .replace("&#39;", "'")
+                .transform(PostmarkInboundParser::decodeEntities)
                 .replaceAll("[ \\t]+\\n", "\n")
                 .replaceAll("\\n{3,}", "\n\n")
                 .trim();
+    }
+
+    private static final Pattern ENTITY = Pattern.compile("&(#x?[0-9a-fA-F]+|[a-zA-Z]+);");
+
+    private static final Map<String, String> NAMED_ENTITIES = Map.ofEntries(
+            Map.entry("nbsp", " "),
+            Map.entry("amp", "&"),
+            Map.entry("lt", "<"),
+            Map.entry("gt", ">"),
+            Map.entry("quot", "\""),
+            Map.entry("apos", "'"),
+            Map.entry("rsquo", "\u2019"),
+            Map.entry("lsquo", "\u2018"),
+            Map.entry("rdquo", "\u201D"),
+            Map.entry("ldquo", "\u201C"),
+            Map.entry("ndash", "\u2013"),
+            Map.entry("mdash", "\u2014"),
+            Map.entry("hellip", "\u2026")
+    );
+
+    /** One pass, so "&amp;lt;" becomes "&lt;" and not "<". */
+    static String decodeEntities(String text) {
+        return ENTITY.matcher(text).replaceAll(match -> {
+            String entity = match.group(1);
+            String decoded;
+
+            if (entity.startsWith("#")) {
+                try {
+                    int codePoint = entity.startsWith("#x") || entity.startsWith("#X")
+                            ? Integer.parseInt(entity.substring(2), 16)
+                            : Integer.parseInt(entity.substring(1));
+                    decoded = Character.isValidCodePoint(codePoint) && codePoint != 0
+                            ? Character.toString(codePoint == 160 ? ' ' : codePoint)
+                            : match.group();
+                } catch (NumberFormatException e) {
+                    decoded = match.group();
+                }
+            } else {
+                decoded = NAMED_ENTITIES.getOrDefault(entity.toLowerCase(Locale.ROOT), match.group());
+            }
+
+            return Matcher.quoteReplacement(decoded);
+        });
     }
 }

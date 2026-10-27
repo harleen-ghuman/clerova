@@ -3,7 +3,9 @@ package com.clerova.billing;
 import com.clerova.domain.Organization;
 import com.clerova.domain.Plan;
 import com.clerova.exception.ApiException;
+import com.clerova.exception.ConflictException;
 import com.clerova.exception.NotFoundException;
+import com.clerova.repository.InboundMessageRepository;
 import com.clerova.repository.OrganizationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,11 +34,14 @@ public class BillingService {
     private static final Logger log = LoggerFactory.getLogger(BillingService.class);
 
     /** Statuses that allow using Clerova. past_due keeps access while Stripe retries. */
+    public static final String SUBSCRIPTION_REQUIRED = "SUBSCRIPTION_REQUIRED";
+
     static final Set<String> ACCESS_STATUSES = Set.of("trialing", "active", "past_due");
 
     private final BillingProperties properties;
     private final StripeClient stripe;
     private final OrganizationRepository organizationRepository;
+    private final InboundMessageRepository inboundMessageRepository;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
@@ -44,11 +49,13 @@ public class BillingService {
             BillingProperties properties,
             StripeClient stripe,
             OrganizationRepository organizationRepository,
+            InboundMessageRepository inboundMessageRepository,
             ObjectMapper objectMapper
     ) {
         this.properties = properties;
         this.stripe = stripe;
         this.organizationRepository = organizationRepository;
+        this.inboundMessageRepository = inboundMessageRepository;
         this.objectMapper = objectMapper;
         this.clock = Clock.systemUTC();
     }
@@ -85,7 +92,7 @@ public class BillingService {
             message = "Your payment didn't go through. Update your card to keep using Clerova.";
         }
 
-        throw new ApiException(HttpStatus.PAYMENT_REQUIRED, "SUBSCRIPTION_REQUIRED", message);
+        throw new ApiException(HttpStatus.PAYMENT_REQUIRED, SUBSCRIPTION_REQUIRED, message);
     }
 
     public int foundingSpotsLeft() {
@@ -118,11 +125,26 @@ public class BillingService {
             throw new ApiException(
                     HttpStatus.CONFLICT,
                     "ALREADY_SUBSCRIBED",
-                    "You already have a plan. Use Manage billing to change it."
+                    "You already have a plan. Change it in Settings, under Plan and billing."
             );
         }
 
         String customerId = ensureCustomer(organization, email);
+
+        // A finished checkout that hasn't been applied yet (slow webhook,
+        // second tab) must not lead to a second subscription and charge
+        JsonNode existing = stripe.get("/v1/subscriptions?status=all&limit=10&customer=" + encode(customerId));
+
+        for (JsonNode subscription : existing.path("data")) {
+            if (ACCESS_STATUSES.contains(subscription.path("status").asString(""))) {
+                syncSubscription(subscription);
+                throw new ApiException(
+                        HttpStatus.CONFLICT,
+                        "ALREADY_SUBSCRIBED",
+                        "Your plan is already active. Refresh the page to continue."
+                );
+            }
+        }
 
         boolean founding = organization.isFoundingCustomer() || foundingSpotsLeft() > 0;
         String priceId = findPrice(lookupKey(plan, interval, founding))
@@ -240,7 +262,87 @@ public class BillingService {
         form.put("items[0][price]", priceId);
         form.put("proration_behavior", "create_prorations");
 
+        // Upgrading means staying, so a scheduled cancellation is dropped
+        form.putAll(keepForm(subscription));
+
         syncSubscription(stripe.post("/v1/subscriptions/" + encode(subscription.path("id").asString()), form));
+    }
+
+    /**
+     * Cancels at the end of the trial or billing period. Clerova keeps
+     * working until then and nothing more is charged. Safe to repeat.
+     */
+    public void cancelAtPeriodEnd(UUID organizationId) {
+        JsonNode subscription = currentSubscription(organizationId, "You don't have a plan to cancel.");
+
+        if (isScheduledToEnd(subscription)) {
+            syncSubscription(subscription);
+            return;
+        }
+
+        syncSubscription(stripe.post(
+                "/v1/subscriptions/" + encode(subscription.path("id").asString()),
+                Map.of("cancel_at_period_end", "true")
+        ));
+    }
+
+    /** Undoes a scheduled cancellation. Safe to repeat. */
+    public void keepPlan(UUID organizationId) {
+        JsonNode subscription = currentSubscription(
+                organizationId,
+                "Your plan has ended. Choose a plan to start again."
+        );
+
+        Map<String, String> form = keepForm(subscription);
+
+        if (form.isEmpty()) {
+            syncSubscription(subscription);
+            return;
+        }
+
+        syncSubscription(stripe.post("/v1/subscriptions/" + encode(subscription.path("id").asString()), form));
+    }
+
+    /** The organization's live subscription from Stripe, or a plain error. */
+    private JsonNode currentSubscription(UUID organizationId, String noneMessage) {
+        requireEnabled();
+
+        Organization organization = findOrganization(organizationId);
+
+        if (organization.getStripeSubscriptionId() == null) {
+            throw new ConflictException(noneMessage);
+        }
+
+        JsonNode subscription = fetchSubscription(organization.getStripeSubscriptionId());
+
+        if (!hasAccessStatus(subscription.path("status").asString(null))) {
+            // Bring Clerova up to date (e.g. a missed webhook) before saying so
+            syncSubscription(subscription);
+            throw new ConflictException(noneMessage);
+        }
+
+        return subscription;
+    }
+
+    private static boolean isScheduledToEnd(JsonNode subscription) {
+        return subscription.path("cancel_at_period_end").asBoolean(false)
+                || subscription.path("cancel_at").isNumber();
+    }
+
+    /**
+     * Clears a scheduled cancellation, set either way: cancel_at_period_end
+     * (Clerova, classic billing) or cancel_at (the portal, flexible billing).
+     */
+    private static Map<String, String> keepForm(JsonNode subscription) {
+        if (subscription.path("cancel_at_period_end").asBoolean(false)) {
+            return Map.of("cancel_at_period_end", "false");
+        }
+
+        if (subscription.path("cancel_at").isNumber()) {
+            return Map.of("cancel_at", "");
+        }
+
+        return Map.of();
     }
 
     public void handleWebhook(String payload, String signatureHeader) {
@@ -337,6 +439,11 @@ public class BillingService {
         }
 
         organizationRepository.save(organization);
+
+        // An upgrade or a new plan: emails waiting for requests go now
+        if (hasAccessStatus(status)) {
+            inboundMessageRepository.releaseWaiting(organization.getId(), clock.instant());
+        }
     }
 
     static String lookupKey(Plan plan, String interval, boolean founding) {

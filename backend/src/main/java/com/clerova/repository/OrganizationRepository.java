@@ -16,6 +16,14 @@ public interface OrganizationRepository
 
     boolean existsByInboundEmailToken(String inboundEmailToken);
 
+    /** Sets the forwarding token only if none is set yet. */
+    @Modifying
+    @Query("update Organization o set o.inboundEmailToken = :token where o.id = :id and o.inboundEmailToken is null")
+    int setInboundEmailTokenIfMissing(@Param("id") UUID id, @Param("token") String token);
+
+    @Query("select o.inboundEmailToken from Organization o where o.id = :id")
+    String findInboundEmailToken(@Param("id") UUID id);
+
     Optional<Organization> findByStripeCustomerId(String stripeCustomerId);
 
     @Query("select o.aiUsageCount from Organization o where o.id = :id")

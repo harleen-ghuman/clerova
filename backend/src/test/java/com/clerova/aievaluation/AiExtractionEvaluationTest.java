@@ -47,6 +47,24 @@ public class AiExtractionEvaluationTest {
         );
     }
 
+    @org.junit.jupiter.api.Test
+    void spanishEmailIsSummarizedInEnglishForStaff() {
+        ExtractionResult result = aiService.extract(
+                "Hola, el fregadero de la cocina tiene una fuga y el piso está mojado. Apartamento 2B, 310 Cedar Ave."
+        );
+
+        assertEquals(Category.MAINTENANCE, result.category);
+        String summary = result.summary.toLowerCase();
+        org.junit.jupiter.api.Assertions.assertTrue(
+                summary.contains("sink") || summary.contains("leak"),
+                "Summary should be in English: " + result.summary
+        );
+        org.junit.jupiter.api.Assertions.assertTrue(
+                result.address != null && result.address.contains("310 Cedar"),
+                "Address: " + result.address
+        );
+    }
+
     static Stream<Arguments> extractionCases() {
         return Stream.of(
 
