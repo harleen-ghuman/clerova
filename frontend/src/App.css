@@ -1712,7 +1712,7 @@ h3 {
   }
 
   .jobs-board {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     padding: 16px 16px 40px;
   }
 

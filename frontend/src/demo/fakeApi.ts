@@ -214,7 +214,8 @@ function seedState(): DemoState {
     currentPeriodEnd: new Date(loadedAt + 19 * 24 * 60 * 60_000).toISOString(),
     cancelAtPeriodEnd: false,
     foundingCustomer: true,
-    billingEnabled: true,
+    // Plans and billing aren't part of the demo
+    billingEnabled: false,
     subscriptionRequired: false,
   };
 
@@ -1081,27 +1082,7 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
   if (route === "GET /api/email-settings") return state.settings;
   if (route === "GET /api/summary") return state.summary;
 
-  // Billing
-  if (route === "GET /api/billing/offer") return { enabled: true, foundingSpotsLeft: 14 };
-  if (route === "POST /api/billing/portal" || route === "POST /api/billing/checkout") {
-    conflict("Card and invoices aren't part of the demo. Start a free trial to see the real thing.");
-  }
-  if (route === "POST /api/billing/cancel") {
-    state.me.organization!.cancelAtPeriodEnd = true;
-    return { ok: true };
-  }
-  if (route === "POST /api/billing/keep") {
-    state.me.organization!.cancelAtPeriodEnd = false;
-    return { ok: true };
-  }
-  if (route === "POST /api/billing/upgrade") {
-    const organization = state.me.organization!;
-    if (organization.plan !== "STARTER") conflict("Only an active Starter plan can be upgraded.");
-    organization.plan = "GROWTH";
-    organization.aiMonthlyLimit = 1500;
-    organization.cancelAtPeriodEnd = false;
-    return { ok: true };
-  }
+  if (route === "GET /api/billing/offer") return { enabled: false, foundingSpotsLeft: 0 };
 
   throw new ApiRequestError("That isn't part of the demo.", 404);
 }
