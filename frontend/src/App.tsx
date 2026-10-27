@@ -10,6 +10,7 @@ import { getMaintenanceRequests } from "./api/MaintenanceRequests";
 import { getEmailSettings } from "./api/email";
 import { errorMessage } from "./api/client";
 import { keepPlan, openBillingPortal, upgradeToGrowth } from "./api/billing";
+import { REFRESH_EVENT } from "./demo/mode";
 import { PLANS, planPrice } from "./utils/plans";
 import { getMe } from "./api/account";
 import { Sidebar, type AppView } from "./components/Sidebar";
@@ -42,6 +43,8 @@ interface NavState {
   clerova: true;
   view: AppView;
   selectedId: string | null;
+  /** The request was opened from the Requests list (not Today or Jobs). */
+  fromList?: boolean;
 }
 
 const MOBILE_NAV: { view: AppView; label: string }[] = [
@@ -168,18 +171,26 @@ function App({
   // New emails are processed in the background, so check for new work
   // regularly while the tab is visible.
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      if (document.visibilityState !== "visible") {
-        return;
-      }
-
+    function refresh() {
       void loadRequests();
       void loadJobs();
       void loadOrganization();
       setRefreshTick((tick) => tick + 1);
+    }
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        refresh();
+      }
     }, 30_000);
 
-    return () => window.clearInterval(interval);
+    // The demo asks for a refresh after simulating an email
+    window.addEventListener(REFRESH_EVENT, refresh);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener(REFRESH_EVENT, refresh);
+    };
   }, []);
 
   const requests = [...openRequests, ...closedRequests];
@@ -199,7 +210,7 @@ function App({
    * Shows a screen and records it in the browser history, so the phone's
    * Back button returns to the previous screen instead of leaving Clerova.
    */
-  function show(view: AppView, workItemId: string | null = null) {
+  function show(view: AppView, workItemId: string | null = null, fromList = false) {
     setActiveView(view);
     setSelectedId(workItemId);
     setRemindFor(null);
@@ -210,7 +221,7 @@ function App({
       return;
     }
 
-    const state: NavState = { clerova: true, view, selectedId: workItemId };
+    const state: NavState = { clerova: true, view, selectedId: workItemId, fromList };
     window.history.pushState(state, "");
   }
 
@@ -251,18 +262,22 @@ function App({
     setSelectedFallback(item);
 
     if (item) {
-      show("requests", item.id);
+      show("requests", item.id, true);
       return;
     }
 
-    // Closing a request opened from the list steps back to the list
     const current = window.history.state as NavState | null;
 
-    if (current?.clerova && current.selectedId) {
+    // Opened from the list: step back to it, so Back doesn't loop
+    if (current?.clerova && current.selectedId && current.fromList) {
       window.history.back();
-    } else {
-      setSelectedId(null);
+      return;
     }
+
+    // Opened from Today or Jobs: show the list here, without leaving Requests
+    setSelectedId(null);
+    const list: NavState = { clerova: true, view: "requests", selectedId: null };
+    window.history.replaceState(list, "");
   }
 
   async function openRequest(workItemId: string) {

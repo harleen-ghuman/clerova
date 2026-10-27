@@ -5,6 +5,7 @@ import { cancelPlan, keepPlan } from "../api/billing";
 import { errorMessage } from "../api/client";
 import { friendlyError } from "../auth/friendlyError";
 import { supabase } from "../auth/supabase";
+import { isDemo } from "../demo/mode";
 import type { Me, Organization } from "../types/Account";
 import { PLANS, planName, planPrice } from "../utils/plans";
 
@@ -48,8 +49,20 @@ export function SettingsPage({
         organizationName={organization.name}
         onSaved={onSaved}
       />
-      <EmailSection email={email} />
-      <PasswordSection />
+      {isDemo() ? (
+        <section className="settings-section">
+          <h2>Sign-in</h2>
+          <p>
+            In the demo, the sign-in email and password can't be changed. In
+            your own workspace, you change them here.
+          </p>
+        </section>
+      ) : (
+        <>
+          <EmailSection email={email} />
+          <PasswordSection />
+        </>
+      )}
 
       {hasBilling && (
         <BillingSection

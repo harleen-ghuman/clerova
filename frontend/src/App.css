@@ -2549,3 +2549,124 @@ h3 {
   border-radius: 8px;
   background: var(--surface-soft);
 }
+
+/* =========================================================
+   Demo (/demo): controls over the app
+   ========================================================= */
+
+body.demo-mode .app-main {
+  padding-bottom: 240px;
+}
+
+.demo-bar {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 50;
+  display: grid;
+  gap: 10px;
+  width: min(360px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(16, 24, 40, 0.16);
+}
+
+.demo-bar p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.demo-bar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.demo-bar-head strong {
+  font-size: 14px;
+}
+
+.demo-tag {
+  margin-right: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.demo-hide {
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.demo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.demo-actions a {
+  text-decoration: none;
+}
+
+.demo-bar .demo-note {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--brand-soft);
+  color: var(--text);
+}
+
+.demo-pill {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 50;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.18);
+  cursor: pointer;
+}
+
+@media (max-width: 800px) {
+  .demo-bar {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .demo-bar .demo-desc {
+    display: none;
+  }
+
+  .demo-simulate .rq-button {
+    flex: 1 1 0;
+    padding: 0 8px;
+  }
+
+  body.demo-mode .app-main {
+    padding-bottom: 200px;
+  }
+
+  .demo-pill {
+    right: 16px;
+    bottom: 16px;
+  }
+}

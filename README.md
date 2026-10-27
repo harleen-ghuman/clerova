@@ -107,6 +107,10 @@ Email forwarded              Request typed in the app
   and invoices
 - Monthly AI quota per organization and per-client rate limits
 - Responsive desktop and mobile interface
+- No-sign-up demo at `/demo` (app.clerova-ai.com/demo): the real app on
+  sample data, run entirely in the browser (`frontend/src/demo/`). It never
+  calls the API, sends nothing, and resets on refresh. A demo bar can
+  simulate a tenant email or an urgent reply
 
 ---
 
