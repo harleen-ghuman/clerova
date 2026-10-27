@@ -11,7 +11,8 @@ public record EmailSettingsResponse(
         boolean intakeEnabled,
         boolean sendingEnabled,
         String forwardingAddress,
-        GmailConfirmation gmailConfirmation
+        GmailConfirmation gmailConfirmation,
+        String replyCopyEmail
 ) {
 
     public record GmailConfirmation(Instant receivedAt, String subject, String text) {

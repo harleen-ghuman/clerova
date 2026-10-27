@@ -1226,6 +1226,103 @@ h3 {
   margin: 6px 0 0;
 }
 
+/* Company info in Settings */
+.company-info-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 10px;
+  border: 1px solid #d5d9e0;
+  border-radius: 8px;
+  background: #fff;
+  color: #16181d;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.company-info-form textarea:focus-visible {
+  outline: 2px solid #2b4acb;
+  outline-offset: 1px;
+}
+
+.company-info-form .company-info-over {
+  color: #b42318;
+}
+
+/* Files that came with an email */
+.file-list {
+  margin-top: 8px;
+  min-width: 0;
+}
+
+.file-list ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.file-list li {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.file-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #d5d9e0);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-primary, #16181d);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+}
+
+button.file-chip {
+  cursor: pointer;
+}
+
+button.file-chip:hover:not(:disabled) {
+  border-color: #2b4acb;
+}
+
+button.file-chip:focus-visible {
+  outline: 2px solid #2b4acb;
+  outline-offset: 2px;
+}
+
+.file-chip-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-chip-action {
+  color: #2b4acb;
+  font-size: 12px;
+}
+
+.file-chip-missing {
+  background: transparent;
+  color: var(--text-muted, #5d6470);
+}
+
+.file-chip-missing .file-chip-action {
+  color: var(--text-muted, #5d6470);
+}
+
 .inbox-item-footer {
   display: flex;
   flex-wrap: wrap;
@@ -1712,7 +1809,7 @@ h3 {
   }
 
   .jobs-board {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     padding: 16px 16px 40px;
   }
 

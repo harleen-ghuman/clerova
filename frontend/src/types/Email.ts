@@ -6,6 +6,16 @@ export type InboundMessageStatus =
   | "IGNORED"
   | "FAILED";
 
+/** A file that came with an email. */
+export interface AttachmentFile {
+  id: string;
+  fileName: string | null;
+  contentType: string | null;
+  sizeBytes: number | null;
+  /** False when only the name was kept (older or very large files). */
+  available: boolean;
+}
+
 export interface InboundMessage {
   id: string;
   fromEmail: string | null;
@@ -17,6 +27,7 @@ export interface InboundMessage {
   statusReason: string | null;
   workItemId: string | null;
   attachments: string[];
+  files?: AttachmentFile[];
 }
 
 export interface EmailSettings {
@@ -28,6 +39,8 @@ export interface EmailSettings {
     subject: string | null;
     text: string | null;
   } | null;
+  /** Gets a hidden copy of each reply sent from Clerova; null means off. */
+  replyCopyEmail?: string | null;
 }
 
 export interface ConversationEntry {
@@ -39,6 +52,7 @@ export interface ConversationEntry {
   text: string | null;
   at: string;
   attachments: string[];
+  files?: AttachmentFile[];
 }
 
 export interface WorkItemEvent {

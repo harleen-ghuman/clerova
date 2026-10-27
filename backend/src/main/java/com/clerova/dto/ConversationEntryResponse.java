@@ -16,7 +16,8 @@ public record ConversationEntryResponse(
         String subject,
         String text,
         Instant at,
-        List<String> attachments
+        List<String> attachments,
+        List<AttachmentFile> files
 ) {
 
     public enum Direction {
@@ -39,6 +40,9 @@ public record ConversationEntryResponse(
                 message.getReceivedAt(),
                 message.getAttachments().stream()
                         .map(InboundAttachment::getFileName)
+                        .toList(),
+                message.getAttachments().stream()
+                        .map(AttachmentFile::from)
                         .toList()
         );
     }
@@ -52,6 +56,7 @@ public record ConversationEntryResponse(
                 message.getSubject(),
                 message.getBody(),
                 message.getSentAt(),
+                List.of(),
                 List.of()
         );
     }

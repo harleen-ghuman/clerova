@@ -20,6 +20,14 @@ export function getEmailSettings(): Promise<EmailSettings> {
   return apiRequest("/api/email-settings");
 }
 
+/** Where copies of sent replies go; an empty email turns them off. */
+export function setReplyCopyEmail(email: string): Promise<EmailSettings> {
+  return apiRequest("/api/email-settings/reply-copy", {
+    method: "PUT",
+    body: { email },
+  });
+}
+
 export function getConversation(
   workItemId: string
 ): Promise<ConversationEntry[]> {
@@ -33,7 +41,7 @@ export function getWorkItemEvents(
 }
 
 /** A draft answer to the sender's latest email, not saved. */
-export function draftReply(workItemId: string): Promise<{ reply: string }> {
+export function draftReply(workItemId: string): Promise<{ reply: string; suggestionsLeft: number }> {
   return apiRequest(`/api/work-items/${workItemId}/draft-reply`, {
     method: "POST",
   });

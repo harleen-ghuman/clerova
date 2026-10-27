@@ -18,7 +18,8 @@ public record InboundMessageResponse(
         InboundMessageStatus status,
         String statusReason,
         UUID workItemId,
-        List<String> attachments
+        List<String> attachments,
+        List<AttachmentFile> files
 ) {
 
     private static final int PREVIEW_LENGTH = 240;
@@ -40,6 +41,9 @@ public record InboundMessageResponse(
                 message.getWorkItemId(),
                 message.getAttachments().stream()
                         .map(InboundAttachment::getFileName)
+                        .toList(),
+                message.getAttachments().stream()
+                        .map(AttachmentFile::from)
                         .toList()
         );
     }

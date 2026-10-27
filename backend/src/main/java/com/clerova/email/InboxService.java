@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -75,7 +76,7 @@ public class InboxService {
     @Transactional
     public EmailSettingsResponse getSettings(UUID organizationId) {
         if (!emailProperties.isInboundEnabled()) {
-            return new EmailSettingsResponse(false, false, null, null);
+            return new EmailSettingsResponse(false, false, null, null, null);
         }
 
         Organization organization = organizationRepository.findById(organizationId).orElseThrow();
@@ -97,7 +98,28 @@ public class InboxService {
                 true,
                 emailProperties.isSendingEnabled(),
                 emailProperties.forwardingAddress(token),
-                confirmation
+                confirmation,
+                organization.getReplyCopyEmail()
         );
+    }
+
+    /**
+     * Sets where copies of sent replies go, or turns them off when the email
+     * is blank. Clerova's own addresses would only loop back in.
+     */
+    @Transactional
+    public EmailSettingsResponse setReplyCopyEmail(UUID organizationId, String email) {
+        String copy = email == null || email.isBlank() ? null : email.trim();
+
+        if (copy != null && copy.toLowerCase(Locale.ROOT)
+                .endsWith("@" + emailProperties.getInboundDomain().toLowerCase(Locale.ROOT))) {
+            throw new ConflictException("Use your own email here, not your Clerova address.");
+        }
+
+        Organization organization = organizationRepository.findById(organizationId).orElseThrow();
+        organization.setReplyCopyEmail(copy);
+        organizationRepository.save(organization);
+
+        return getSettings(organizationId);
     }
 }

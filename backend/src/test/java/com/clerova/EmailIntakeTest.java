@@ -40,6 +40,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -100,7 +101,7 @@ class EmailIntakeTest {
         result.actionType = actionType;
         result.reasoning = "Reasoning";
         result.draftedResponse = "Thanks, which unit are you in?";
-        when(aiService.proposeAction(any(), any())).thenReturn(result);
+        org.mockito.Mockito.doReturn(result).when(aiService).proposeAction(any(), any());
     }
 
     private JsonNode json(ResultActions actions) throws Exception {
@@ -604,6 +605,180 @@ class EmailIntakeTest {
                 .andExpect(status().isForbidden());
 
         verify(emailSender, org.mockito.Mockito.times(2)).send(any());
+    }
+
+    private int suggestionsLeft(String workItemId) throws Exception {
+        return json(mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user)))
+                .get("suggestionsLeft").asInt();
+    }
+
+    private ResultActions suggestAgain(String workItemId) throws Exception {
+        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/reject",
+                        latestAction(workItemId).get("id").asText()).with(user))
+                .andExpect(status().isOk());
+
+        return mockMvc.perform(post("/api/work-items/{id}/proposed-actions", workItemId).with(user));
+    }
+
+    @Test
+    void newSuggestionsAreCappedPerEmail() throws Exception {
+        String workItemId = deliverNew("<cap1@x>", "My sink is leaking.");
+
+        // Clerova's own first suggestion doesn't count
+        assertThat(suggestionsLeft(workItemId)).isEqualTo(5);
+
+        // A failed call gives its turn back
+        org.mockito.Mockito.doThrow(new RuntimeException("AI down")).when(aiService).proposeAction(any(), any());
+        assertThat(suggestAgain(workItemId).andReturn().getResponse().getStatus()).isNotEqualTo(201);
+        assertThat(suggestionsLeft(workItemId)).isEqualTo(5);
+        proposeAction(ActionType.REQUEST_MORE_INFORMATION);
+
+        // The failed call left the request without a suggestion
+        mockMvc.perform(post("/api/work-items/{id}/proposed-actions", workItemId).with(user))
+                .andExpect(status().isCreated());
+
+        for (int i = 0; i < 4; i++) {
+            suggestAgain(workItemId).andExpect(status().isCreated());
+        }
+
+        assertThat(suggestionsLeft(workItemId)).isZero();
+
+        suggestAgain(workItemId)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("all 5 new suggestions")));
+
+        // The tenant writes again: a fresh set
+        deliver(payload(forwardingAddress, "<cap2@x>", "<cap1@x>", null,
+                "tina@example.com", "It's unit 4B."))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        assertThat(suggestionsLeft(workItemId)).isEqualTo(5);
+        suggestAgain(workItemId).andExpect(status().isCreated());
+        assertThat(suggestionsLeft(workItemId)).isEqualTo(4);
+    }
+
+    @Test
+    void draftsShareTheCapAndSendingStartsAFreshSet() throws Exception {
+        String workItemId = inProgressRequest("<capjob1@x>");
+        when(aiService.draftReply(any(), anyString())).thenReturn("Hi Tina, the team is on it.");
+
+        for (int left = 4; left >= 0; left--) {
+            mockMvc.perform(post("/api/work-items/{id}/draft-reply", workItemId).with(user))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.suggestionsLeft").value(left));
+        }
+
+        mockMvc.perform(post("/api/work-items/{id}/draft-reply", workItemId).with(user))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"message":"The plumber comes Friday."}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.suggestionsLeft").value(5));
+
+        // Another workspace can't use them up
+        mockMvc.perform(post("/api/work-items/{id}/draft-reply", workItemId).with(onboardNewUser(mockMvc)))
+                .andExpect(status().isNotFound());
+        assertThat(suggestionsLeft(workItemId)).isEqualTo(5);
+    }
+
+    private ResultActions setReplyCopy(String json) throws Exception {
+        return mockMvc.perform(put("/api/email-settings/reply-copy")
+                .with(user)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json));
+    }
+
+    @Test
+    void repliesCanBeCopiedToTheCompanysOwnInbox() throws Exception {
+        String workItemId = inProgressRequest("<copy1@x>");
+        String reply = """
+                {"message":"The plumber comes Friday."}
+                """;
+
+        // Off until someone sets it up
+        mockMvc.perform(get("/api/email-settings").with(user))
+                .andExpect(jsonPath("$.replyCopyEmail").isEmpty());
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user).contentType(MediaType.APPLICATION_JSON).content(reply))
+                .andExpect(status().isOk());
+
+        // Bad addresses are refused, including Clerova's own
+        setReplyCopy("""
+                {"email":"not an email"}
+                """).andExpect(status().isBadRequest());
+        setReplyCopy("{\"email\":\"" + forwardingAddress + "\"}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Use your own email here, not your Clerova address."));
+
+        setReplyCopy("""
+                {"email":"office@maple.example"}
+                """)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.replyCopyEmail").value("office@maple.example"))
+                .andExpect(jsonPath("$.forwardingAddress").value(forwardingAddress));
+
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user).contentType(MediaType.APPLICATION_JSON).content(reply))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<OutgoingEmail> sent = ArgumentCaptor.forClass(OutgoingEmail.class);
+        verify(emailSender, org.mockito.Mockito.times(2)).send(sent.capture());
+        assertThat(sent.getAllValues().get(0).bcc()).isNull();
+        assertThat(sent.getAllValues().get(1).bcc()).isEqualTo("office@maple.example");
+        assertThat(sent.getAllValues().get(1).to()).isEqualTo("tina@example.com");
+
+        // Their inbox forwards everything, so the copy comes back: set aside,
+        // and the request isn't flagged
+        deliver(payload(forwardingAddress, "<copy-back@x>", "<copy1@x>", null,
+                forwardingAddress, "The plumber comes Friday."))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/inbox").with(user))
+                .andExpect(jsonPath("$[0].status").value("IGNORED"))
+                .andExpect(jsonPath("$[0].statusReason").value(InboundEmailProcessor.OWN_COPY_REASON));
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.unreadReplyAt").isEmpty());
+
+        // The tenant replies to Clerova's email: the company gets a copy
+        String replyAddress = forwardingAddress.replace("@", "+wi-" + workItemId.replace("-", "") + "@");
+        deliver(payload(replyAddress, "<copy3@x>", "<copy1@x>", null,
+                "tina@example.com", "Friday works, thanks."))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        sent = ArgumentCaptor.forClass(OutgoingEmail.class);
+        verify(emailSender, org.mockito.Mockito.times(3)).send(sent.capture());
+        OutgoingEmail copy = sent.getAllValues().get(2);
+        assertThat(copy.to()).isEqualTo("office@maple.example");
+        assertThat(copy.replyTo()).isEqualTo("tina@example.com");
+        assertThat(copy.from()).isEqualTo("\"Tenant Tina via Clerova\" <" + forwardingAddress + ">");
+        assertThat(copy.subject()).isEqualTo("Sink leaking");
+        assertThat(copy.inReplyTo()).isEqualTo("<copy3@x>");
+        assertThat(copy.textBody())
+                .contains("Tenant Tina <tina@example.com> replied to an email you sent through Clerova.")
+                .contains("Friday works, thanks.")
+                .contains("Attachments (open the request in Clerova to see them): photo.jpg");
+
+        // Mail forwarded from their own inbox is already there: no copy
+        deliver(payload(forwardingAddress, "<copy4@x>", "<copy3@x>", null,
+                "tina@example.com", "One more thing."))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+        verify(emailSender, org.mockito.Mockito.times(3)).send(any());
+
+        // Blank turns it off; other workspaces are unaffected
+        setReplyCopy("""
+                {"email":""}
+                """).andExpect(jsonPath("$.replyCopyEmail").isEmpty());
+        mockMvc.perform(get("/api/email-settings").with(onboardNewUser(mockMvc)))
+                .andExpect(jsonPath("$.replyCopyEmail").isEmpty());
     }
 
     private String inProgressRequest(String firstMessageId) throws Exception {

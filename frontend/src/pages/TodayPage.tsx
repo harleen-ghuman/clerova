@@ -36,6 +36,7 @@ interface TodayPageProps {
   /** Any request ever, open or closed. */
   hasAnyRequest: boolean;
   onOpenEmailSetup: () => void;
+  onOpenCompanyInfo: () => void;
   /** Open requests; closed ones are ignored here. */
   requests: WorkItem[];
   jobs: MaintenanceRequest[];
@@ -128,6 +129,7 @@ export function TodayPage({
   forwardingAddress,
   hasAnyRequest,
   onOpenEmailSetup,
+  onOpenCompanyInfo,
   requests,
   jobs,
   refreshKey,
@@ -220,6 +222,7 @@ export function TodayPage({
               hasRequest={hasRequest}
               hasReply={hasReply}
               onOpenEmailSetup={onOpenEmailSetup}
+              onOpenCompanyInfo={onOpenCompanyInfo}
               onOpenRequests={() => onOpenRequests("review")}
               onHide={() => {
                 setChecklistHidden(true);

@@ -250,6 +250,8 @@ GET  /api/health
 GET  /api/me
 PATCH /api/me                                    ({"fullName":"...","organizationName":"..."})
 POST /api/onboarding
+GET  /api/company-info                            (the company's standard answers for suggested replies)
+PUT  /api/company-info                            (each answer up to 1,500 characters, 8,000 in total)
 
 GET  /api/billing/offer
 POST /api/billing/checkout                        ({"plan":"STARTER","interval":"month"})
@@ -265,7 +267,9 @@ GET  /api/summary                                 (last 7 days, for Today)
 GET  /api/inbox
 POST /api/inbox/{id}/reprocess
 GET  /api/email-settings
+PUT  /api/email-settings/reply-copy               (gets a copy of sent replies and of residents' replies to them; blank turns it off)
 POST /api/inbound/postmark                        (Postmark webhook, basic auth)
+GET  /api/attachments/{id}                        (a file from an email; photos and PDFs open, others download)
 
 GET  /api/work-items                              (?closed=true: closed in the last 30 days)
 GET  /api/work-items/{id}
@@ -313,6 +317,12 @@ AI_QUOTA_EXCEEDED`, with a message that recommends Growth on Starter). An
 expired trial returns `403 TRIAL_EXPIRED`, but existing data stays readable
 and existing requests can still be finished (approve, send, write to the
 sender, close).
+
+New suggestions (`POST /api/work-items/{id}/proposed-actions`) and drafts
+(`draft-reply`) don't count against the quota, but they share a cap of 5 per
+email: each new email from the sender, and each reply or approval, starts a
+fresh 5 (`suggestionsLeft` on the work item). Over the cap returns `409`. A
+failed AI call doesn't use one up.
 
 ---
 
@@ -371,6 +381,7 @@ Never commit API keys or passwords. `.env.local` is git-ignored.
 | `STRIPE_SECRET_KEY` | Turns billing on (a plan is then required to use AI) |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret of the Stripe webhook endpoint |
 | `APP_URL` | Where Stripe sends users back, e.g. `https://app.clerova-ai.com` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Keeps email attachments in the private `attachments` bucket in Supabase Storage (up to 10 MB a file, 25 MB an email). Without it, only file names are kept |
 
 Optional:
 

@@ -130,8 +130,13 @@ public class WorkItemController {
 
     /** A draft answer to the sender's latest email while the job is in progress. */
     @PostMapping("/{id}/draft-reply")
-    public Map<String, String> draftReply(@PathVariable UUID id) {
-        return Map.of("reply", workItemService.draftFollowUpReply(organizationId(), id));
+    public Map<String, Object> draftReply(@PathVariable UUID id) {
+        String reply = workItemService.draftFollowUpReply(organizationId(), id);
+
+        return Map.of(
+                "reply", reply,
+                "suggestionsLeft", workItemService.getWorkItem(organizationId(), id).getSuggestionsLeft()
+        );
     }
 
     /** Emails a message written by a person to the request's sender. */
@@ -164,7 +169,7 @@ public class WorkItemController {
     ) {
 
         ProposedAction proposedAction =
-                workItemService.generateProposedAction(
+                workItemService.requestProposedAction(
                         organizationId(),
                         workItemId,
                         currentUserService.currentUserId()

@@ -4,14 +4,18 @@ import com.clerova.domain.InboundAttachment;
 import com.clerova.domain.InboundMessage;
 import com.clerova.domain.Organization;
 import com.clerova.repository.InboundMessageRepository;
+import com.clerova.storage.FileStorage;
+import com.clerova.storage.FileStorageException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Stores inbound emails for background processing. Receiving is kept fast
@@ -24,18 +28,25 @@ public class InboundEmailService {
 
     private static final int MAX_BODY_LENGTH = 100_000;
 
+    /** Larger files keep only their name; the sender's original email still has them. */
+    static final long MAX_FILE_BYTES = 10L * 1024 * 1024;
+    static final long MAX_EMAIL_BYTES = 25L * 1024 * 1024;
+
     private final EmailProperties emailProperties;
     private final InboundAddressService inboundAddressService;
     private final InboundMessageRepository inboundMessageRepository;
+    private final FileStorage fileStorage;
 
     public InboundEmailService(
             EmailProperties emailProperties,
             InboundAddressService inboundAddressService,
-            InboundMessageRepository inboundMessageRepository
+            InboundMessageRepository inboundMessageRepository,
+            FileStorage fileStorage
     ) {
         this.emailProperties = emailProperties;
         this.inboundAddressService = inboundAddressService;
         this.inboundMessageRepository = inboundMessageRepository;
+        this.fileStorage = fileStorage;
     }
 
     public enum ReceiveResult {
@@ -82,12 +93,28 @@ public class InboundEmailService {
         // spoofed, and ordering must match when Clerova saw each message.
         message.setReceivedAt(Instant.now());
 
+        long keptBytes = 0;
+
         for (ParsedInboundEmail.Attachment parsed : email.attachments()) {
             InboundAttachment attachment = new InboundAttachment();
+            byte[] content = decode(parsed.content());
 
             attachment.setFileName(truncate(parsed.fileName(), 500));
             attachment.setContentType(truncate(parsed.contentType(), 255));
-            attachment.setSizeBytes(parsed.sizeBytes());
+            attachment.setSizeBytes(parsed.sizeBytes() != null || content == null
+                    ? parsed.sizeBytes()
+                    : Long.valueOf(content.length));
+
+            if (content != null
+                    && content.length <= MAX_FILE_BYTES
+                    && keptBytes + content.length <= MAX_EMAIL_BYTES) {
+                String path = keep(organization, parsed, content);
+
+                if (path != null) {
+                    attachment.setStoragePath(path);
+                    keptBytes += content.length;
+                }
+            }
 
             message.addAttachment(attachment);
         }
@@ -100,6 +127,59 @@ public class InboundEmailService {
         }
 
         return ReceiveResult.STORED;
+    }
+
+    /**
+     * Saves one file, trying twice. If storage is down the email is still
+     * kept with the file's name, since losing the email would be worse.
+     *
+     * @return the storage path, or null if the file wasn't kept
+     */
+    private String keep(Organization organization, ParsedInboundEmail.Attachment parsed, byte[] content) {
+        if (!fileStorage.isEnabled()) {
+            return null;
+        }
+
+        String path = organization.getId() + "/" + UUID.randomUUID() + "/" + safeFileName(parsed.fileName());
+        String contentType = parsed.contentType() != null && !parsed.contentType().isBlank()
+                ? parsed.contentType().trim()
+                : "application/octet-stream";
+
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            try {
+                fileStorage.put(path, content, contentType);
+                return path;
+            } catch (FileStorageException e) {
+                log.warn("Could not keep attachment {} (attempt {}): {}", parsed.fileName(), attempt, e.getMessage());
+            }
+        }
+
+        log.error("Kept only the name of attachment {} on inbound email {}", parsed.fileName(), parsed);
+        return null;
+    }
+
+    private static byte[] decode(String base64) {
+        if (base64 == null || base64.isBlank()) {
+            return null;
+        }
+
+        try {
+            return Base64.getMimeDecoder().decode(base64);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /** Letters, digits, dots, dashes and underscores; the real name stays in the database. */
+    static String safeFileName(String fileName) {
+        String name = fileName == null ? "" : fileName.replaceAll(".*[/\\\\]", "");
+        name = name.replaceAll("[^A-Za-z0-9._-]+", "_").replaceAll("^[._]+", "");
+
+        if (name.length() > 100) {
+            name = name.substring(name.length() - 100);
+        }
+
+        return name.isBlank() ? "file" : name;
     }
 
     private record Recipient(Organization organization, String mailboxHash) {

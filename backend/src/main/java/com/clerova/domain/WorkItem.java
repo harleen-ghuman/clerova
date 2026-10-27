@@ -9,6 +9,9 @@ import java.util.UUID;
 @Table(name = "work_items")
 public class WorkItem {
 
+    /** New suggestions or drafts a person can ask for per email. */
+    public static final int MAX_SUGGESTIONS = 5;
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -51,6 +54,13 @@ public class WorkItem {
     /** That new email looks urgent (safety or active damage). */
     @Column(nullable = false)
     private boolean unreadReplyUrgent;
+
+    /**
+     * New suggestions and drafts asked for since the last email in either
+     * direction. Changed only by WorkItemRepository's atomic updates.
+     */
+    @Column(insertable = false, updatable = false)
+    private short suggestionsUsed;
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -168,6 +178,11 @@ public class WorkItem {
 
     public void setUnreadReplyUrgent(boolean unreadReplyUrgent) {
         this.unreadReplyUrgent = unreadReplyUrgent;
+    }
+
+    /** How many more times a person can ask Clerova for a new suggestion or draft. */
+    public int getSuggestionsLeft() {
+        return Math.max(0, MAX_SUGGESTIONS - suggestionsUsed);
     }
 
     public Instant getCreatedAt() {

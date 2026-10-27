@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { errorMessage } from "../api/client";
 import { getInbox, reprocessEmail } from "../api/email";
+import { FileList } from "../components/FileList";
 import type { InboundMessage, InboundMessageStatus } from "../types/Email";
 
 interface InboxPageProps {
@@ -188,10 +189,14 @@ export function InboxPage({
                 <p className="inbox-preview">{message.preview}</p>
               )}
 
-              {message.attachments.length > 0 && (
-                <p className="inbox-attachments">
-                  Attachments: {message.attachments.join(", ")}
-                </p>
+              {message.files && message.files.length > 0 ? (
+                <FileList files={message.files} />
+              ) : (
+                message.attachments.length > 0 && (
+                  <p className="inbox-attachments">
+                    Attachments: {message.attachments.join(", ")}
+                  </p>
+                )
               )}
 
               <div className="inbox-item-footer">

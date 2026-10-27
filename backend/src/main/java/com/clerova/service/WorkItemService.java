@@ -51,6 +51,10 @@ public class WorkItemService {
     /** Limit on a follow-up's text sent to the AI for the urgency check. */
     private static final int MAX_URGENCY_CHARS = 4_000;
 
+    static final String SUGGESTIONS_USED_UP =
+            "You've used all " + WorkItem.MAX_SUGGESTIONS + " new suggestions for this email. "
+                    + "Edit the reply yourself. You get " + WorkItem.MAX_SUGGESTIONS + " more with the next email.";
+
     /** Limit on email text sent to the AI for extraction. */
     private static final int MAX_EXTRACTION_CHARS = 8_000;
 
@@ -251,6 +255,33 @@ public class WorkItemService {
     }
 
     /**
+     * A person asked Clerova for a new suggestion. Each email in the
+     * conversation allows {@link WorkItem#MAX_SUGGESTIONS} of these, shared
+     * with drafts; a call that fails gives its turn back.
+     */
+    public ProposedAction requestProposedAction(
+            UUID organizationId,
+            UUID workItemId,
+            UUID actorUserId
+    ) {
+        getWorkItem(organizationId, workItemId);
+        useSuggestion(workItemId);
+
+        try {
+            return generateProposedAction(organizationId, workItemId, actorUserId);
+        } catch (RuntimeException e) {
+            workItemRepository.refundSuggestion(workItemId);
+            throw e;
+        }
+    }
+
+    private void useSuggestion(UUID workItemId) {
+        if (workItemRepository.useSuggestion(workItemId, WorkItem.MAX_SUGGESTIONS) == 0) {
+            throw new ConflictException(SUGGESTIONS_USED_UP);
+        }
+    }
+
+    /**
      * The AI call takes several seconds, so it runs outside a transaction.
      * The work item's optimistic-lock version guards against two concurrent
      * generations both saving a pending proposal.
@@ -353,6 +384,8 @@ public class WorkItemService {
 
         WorkItem workItem = getWorkItem(organizationId, workItemId);
 
+        workItemRepository.resetSuggestions(workItemId);
+
         workItemEventService.record(
                 organizationId,
                 workItemId,
@@ -423,14 +456,21 @@ public class WorkItemService {
 
         requireCanWrite(workItem);
 
-        aiUsageService.requireAccess(organizationId);
+        useSuggestion(workItemId);
 
-        String conversation = conversationService.conversationForAi(workItem);
+        try {
+            aiUsageService.requireAccess(organizationId);
 
-        return aiService.draftReply(
-                workItem,
-                conversation != null ? conversation : "Message from the resident:\n" + workItem.getOriginalMessage()
-        );
+            String conversation = conversationService.conversationForAi(workItem);
+
+            return aiService.draftReply(
+                    workItem,
+                    conversation != null ? conversation : "Message from the resident:\n" + workItem.getOriginalMessage()
+            );
+        } catch (RuntimeException e) {
+            workItemRepository.refundSuggestion(workItemId);
+            throw e;
+        }
     }
 
     /**
@@ -579,6 +619,8 @@ public class WorkItemService {
                 proposedActionRepository.save(proposedAction);
 
         WorkItem workItem = savedAction.getWorkItem();
+
+        workItemRepository.resetSuggestions(workItem.getId());
 
         WorkItemStatus nextStatus = switch (savedAction.getActionType()) {
 

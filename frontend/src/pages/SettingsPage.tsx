@@ -3,6 +3,15 @@ import { useEffect, useState, type FormEvent } from "react";
 import { updateAccount } from "../api/account";
 import { cancelPlan, keepPlan } from "../api/billing";
 import { errorMessage } from "../api/client";
+import {
+  COMPANY_INFO_FIELDS,
+  MAX_FIELD_LENGTH,
+  MAX_TOTAL_LENGTH,
+  getCompanyInfo,
+  saveCompanyInfo,
+  type CompanyInfo,
+  type CompanyInfoKey,
+} from "../api/companyInfo";
 import { friendlyError } from "../auth/friendlyError";
 import { supabase } from "../auth/supabase";
 import { isDemo } from "../demo/mode";
@@ -24,6 +33,116 @@ interface SettingsPageProps {
 
 const MIN_PASSWORD_LENGTH = 8;
 
+/** The company's standard answers, used in suggested replies. */
+function CompanyInfoSection() {
+  const [saved, setSaved] = useState<CompanyInfo | null>(null);
+  const [draft, setDraft] = useState<CompanyInfo>({});
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getCompanyInfo()
+      .then((info) => {
+        if (!cancelled) {
+          setSaved(info);
+          setDraft(info);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setLoadError(errorMessage(err, "Couldn't load your company info. Refresh to try again."));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const value = (key: CompanyInfoKey) => draft[key] ?? "";
+  const total = COMPANY_INFO_FIELDS.reduce((sum, field) => sum + value(field.key).trim().length, 0);
+  const changed =
+    saved !== null &&
+    COMPANY_INFO_FIELDS.some((field) => value(field.key).trim() !== (saved[field.key] ?? "").trim());
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    setDone(false);
+
+    try {
+      const info = await saveCompanyInfo(draft);
+      setSaved(info);
+      setDraft(info);
+      setDone(true);
+    } catch (err) {
+      setError(errorMessage(err, "Couldn't save your company info. Please try again."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="settings-section" id="company-info" aria-labelledby="company-info-title">
+      <h2 id="company-info-title">Company info</h2>
+      <p>
+        Clerova uses these answers in suggested replies, so residents get a
+        real answer to common questions. Fill in what applies and leave the
+        rest blank. Questions about one resident's own lease or balance still
+        go to your team.
+      </p>
+
+      {loadError ? (
+        <p className="action-error">{loadError}</p>
+      ) : saved === null ? (
+        <p>Loading...</p>
+      ) : (
+        <form className="auth-form settings-form company-info-form" onSubmit={save}>
+          {COMPANY_INFO_FIELDS.map((field) => (
+            <label key={field.key}>
+              {field.label}
+              <textarea
+                rows={2}
+                maxLength={MAX_FIELD_LENGTH}
+                placeholder={field.example}
+                value={value(field.key)}
+                onChange={(event) => {
+                  setDraft((current) => ({ ...current, [field.key]: event.target.value }));
+                  setDone(false);
+                }}
+                disabled={saving}
+              />
+            </label>
+          ))}
+
+          <p className={`auth-hint ${total > MAX_TOTAL_LENGTH ? "company-info-over" : ""}`}>
+            {total.toLocaleString()} of {MAX_TOTAL_LENGTH.toLocaleString()} characters
+            {total > MAX_TOTAL_LENGTH ? ". Shorten a few answers to save." : ""}
+          </p>
+
+          {error && <p className="action-error">{error}</p>}
+
+          <div className="settings-actions">
+            <button
+              type="submit"
+              className="primary-button"
+              disabled={saving || !changed || total > MAX_TOTAL_LENGTH}
+            >
+              {saving ? "Saving..." : "Save company info"}
+            </button>
+            {done && <span className="request-success">Saved.</span>}
+          </div>
+        </form>
+      )}
+    </section>
+  );
+}
+
 export function SettingsPage({
   email,
   fullName,
@@ -41,7 +160,7 @@ export function SettingsPage({
     <div className="settings">
       <header className="page-header">
         <h1>Settings</h1>
-        <p>Your details, sign-in and billing.</p>
+        <p>Your details, company info, sign-in and billing.</p>
       </header>
 
       <DetailsSection
@@ -49,6 +168,7 @@ export function SettingsPage({
         organizationName={organization.name}
         onSaved={onSaved}
       />
+      <CompanyInfoSection />
       {isDemo() ? (
         <section className="settings-section">
           <h2>Sign-in</h2>

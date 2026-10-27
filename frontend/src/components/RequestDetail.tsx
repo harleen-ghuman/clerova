@@ -16,9 +16,9 @@ import {
   getProposedActions,
   rejectProposedAction,
 } from "../api/workItems";
-import type { ConversationEntry, WorkItemEvent } from "../types/Email";
+import type { AttachmentFile, ConversationEntry, WorkItemEvent } from "../types/Email";
 import type { ProposedAction } from "../types/ProposedAction";
-import type { WorkItem } from "../types/WorkItem";
+import { MAX_SUGGESTIONS, type WorkItem } from "../types/WorkItem";
 import { decisionCopy, hasResponseToSend } from "../utils/actionCopy";
 import {
   capitalize,
@@ -32,6 +32,7 @@ import {
   suggestionTitle,
 } from "../utils/requestStatus";
 import { ApprovedResponse } from "./ApprovedResponse";
+import { FileList } from "./FileList";
 
 interface RequestDetailProps {
   workItem: WorkItem;
@@ -50,6 +51,7 @@ interface ThreadMessage {
   when: string;
   text: string;
   mine: boolean;
+  files: AttachmentFile[];
 }
 
 function latest(actions: ProposedAction[]): ProposedAction | null {
@@ -185,6 +187,7 @@ export function RequestDetail({
           when: longTime(entry.at),
           text: entry.text ?? "",
           mine: entry.direction === "OUTBOUND",
+          files: entry.files ?? [],
         }))
       : [
           {
@@ -193,6 +196,7 @@ export function RequestDetail({
             when: longTime(workItem.createdAt),
             text: workItem.originalMessage,
             mine: false,
+            files: [],
           },
         ];
 
@@ -267,6 +271,7 @@ export function RequestDetail({
               <span>{message.when}</span>
             </div>
             <p>{message.text}</p>
+            <FileList files={message.files} />
           </article>
         ))}
       </div>
@@ -311,6 +316,7 @@ export function RequestDetail({
           startOpen={newReply || (startReminder && situation === "waiting")}
           autoDraft={startReminder && situation === "waiting"}
           situation={situation}
+          suggestionsLeft={workItem.suggestionsLeft ?? MAX_SUGGESTIONS}
           disabled={busy !== null}
           onSent={() => {
             setReloadKey((key) => key + 1);
@@ -327,6 +333,7 @@ export function RequestDetail({
           action={pending}
           recipient={workItem.senderName || workItem.senderEmail}
           canEmail={Boolean(replyTo)}
+          suggestionsLeft={workItem.suggestionsLeft ?? MAX_SUGGESTIONS}
           busy={busy}
           onApprove={(response) => approve(pending, response)}
           onSuggestAgain={() => suggestAgain(pending)}
@@ -452,6 +459,7 @@ interface SuggestionCardProps {
   action: ProposedAction;
   recipient: string | null;
   canEmail: boolean;
+  suggestionsLeft: number;
   busy: string | null;
   onApprove: (response: string) => void;
   onSuggestAgain: () => void;
@@ -462,6 +470,7 @@ function SuggestionCard({
   action,
   recipient,
   canEmail,
+  suggestionsLeft,
   busy,
   onApprove,
   onSuggestAgain,
@@ -502,14 +511,17 @@ function SuggestionCard({
         >
           {busy ?? (sends ? "Approve & send" : "Approve")}
         </button>
-        <button
-          type="button"
-          className="rq-button"
-          onClick={onSuggestAgain}
-          disabled={busy !== null}
-        >
-          Suggest something else
-        </button>
+        {suggestionsLeft > 0 && (
+          <button
+            type="button"
+            className="rq-button"
+            onClick={onSuggestAgain}
+            disabled={busy !== null}
+          >
+            Suggest something else
+            {suggestionsLeft < MAX_SUGGESTIONS && ` (${suggestionsLeft} left)`}
+          </button>
+        )}
         <button
           type="button"
           className="rq-button rq-button-quiet"
@@ -518,6 +530,12 @@ function SuggestionCard({
         >
           Close without replying
         </button>
+        {suggestionsLeft === 0 && (
+          <span className="rq-hint">
+            That's all {MAX_SUGGESTIONS} new suggestions for this email. Edit the
+            reply above if it needs changes.
+          </span>
+        )}
         {hasReply && !canEmail && (
           <span className="rq-hint">
             This request didn't come by email, so you'll copy the reply after
@@ -539,6 +557,8 @@ interface ReplyComposerProps {
   /** Start with a draft from Clerova (a reminder opened from Today). */
   autoDraft: boolean;
   situation: ComposerSituation;
+  /** Drafts left for the latest email; shared with new suggestions. */
+  suggestionsLeft: number;
   disabled: boolean;
   onSent: () => void;
 }
@@ -551,6 +571,7 @@ function ReplyComposer({
   startOpen,
   autoDraft,
   situation,
+  suggestionsLeft,
   disabled,
   onSent,
 }: ReplyComposerProps) {
@@ -559,6 +580,9 @@ function ReplyComposer({
   const [busy, setBusy] = useState<string | null>(autoDraft ? "Drafting..." : null);
   const [error, setError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
+  // From the last draft until the request reloads after sending
+  const [draftsLeft, setDraftsLeft] = useState<number | null>(null);
+  const left = draftsLeft ?? suggestionsLeft;
   const reminder = situation === "waiting";
 
   useEffect(() => {
@@ -572,6 +596,7 @@ function ReplyComposer({
       .then((result) => {
         if (!cancelled) {
           setMessage((current) => (current.trim() === "" ? result.reply : current));
+          setDraftsLeft(result.suggestionsLeft);
         }
       })
       .catch((err) => {
@@ -601,7 +626,7 @@ function ReplyComposer({
             setOpen(true);
             setSentTo(null);
 
-            if (reminder && message.trim() === "") {
+            if (reminder && message.trim() === "" && left > 0) {
               void draft();
             }
           }}
@@ -619,6 +644,7 @@ function ReplyComposer({
       setError(null);
       const result = await draftReply(workItemId);
       setMessage(result.reply);
+      setDraftsLeft(result.suggestionsLeft);
     } catch (err) {
       setError(errorMessage(err, "Couldn't draft a message. Write your own or try again."));
     } finally {
@@ -632,6 +658,7 @@ function ReplyComposer({
       setError(null);
       await sendMessage(workItemId, message.trim());
       setMessage("");
+      setDraftsLeft(null);
       setSentTo(sendTo);
       setOpen(false);
       onSent();
@@ -656,7 +683,9 @@ function ReplyComposer({
           placeholder={
             busy === "Drafting..."
               ? "Clerova is drafting..."
-              : `Write a ${reminder ? "reminder" : "reply"}, or let Clerova draft one.`
+              : left > 0
+                ? `Write a ${reminder ? "reminder" : "reply"}, or let Clerova draft one.`
+                : `Write a ${reminder ? "reminder" : "reply"}. You've used all ${MAX_SUGGESTIONS} drafts for this email.`
           }
           onChange={(event) => setMessage(event.target.value)}
         />
@@ -673,18 +702,20 @@ function ReplyComposer({
         >
           {busy === "Sending..." ? busy : "Send"}
         </button>
-        <button
-          type="button"
-          className="rq-button"
-          onClick={draft}
-          disabled={locked}
-        >
-          {busy === "Drafting..."
-            ? busy
-            : message.trim() === ""
-              ? "Draft with Clerova"
-              : "Replace with a draft"}
-        </button>
+        {left > 0 && (
+          <button
+            type="button"
+            className="rq-button"
+            onClick={draft}
+            disabled={locked}
+          >
+            {busy === "Drafting..."
+              ? busy
+              : message.trim() === ""
+                ? `Draft with Clerova${left < MAX_SUGGESTIONS ? ` (${left} left)` : ""}`
+                : `New draft (replaces your text${left < MAX_SUGGESTIONS ? `, ${left} left` : ""})`}
+          </button>
+        )}
         <button
           type="button"
           className="rq-button rq-button-quiet"

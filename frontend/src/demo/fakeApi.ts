@@ -1,6 +1,13 @@
 import { ApiRequestError } from "../api/client";
 import type { Me, Organization } from "../types/Account";
+import {
+  COMPANY_INFO_FIELDS,
+  MAX_FIELD_LENGTH,
+  MAX_TOTAL_LENGTH,
+  type CompanyInfo,
+} from "../api/companyInfo";
 import type {
+  AttachmentFile,
   ConversationEntry,
   EmailSettings,
   InboundMessage,
@@ -8,7 +15,7 @@ import type {
 } from "../types/Email";
 import type { MaintenanceRequest } from "../types/MaintenanceRequest";
 import type { ProposedAction } from "../types/ProposedAction";
-import type { WorkItem } from "../types/WorkItem";
+import { MAX_SUGGESTIONS, type WorkItem } from "../types/WorkItem";
 import type { WeekSummary } from "../api/summary";
 import { REFRESH_EVENT } from "./mode";
 
@@ -43,6 +50,7 @@ interface DemoState {
   events: Record<string, WorkItemEvent[]>;
   summary: WeekSummary;
   settings: EmailSettings;
+  companyInfo: CompanyInfo;
   nextEmail: number;
 }
 
@@ -92,6 +100,8 @@ interface Seed {
   summary: string;
   address: string | null;
   minutesAgo: number;
+  /** Sample files that came with the email. */
+  files?: { name: string; type: string; size: number }[];
 }
 
 const SEEDS: Seed[] = [
@@ -107,6 +117,7 @@ const SEEDS: Seed[] = [
     summary: "Water leaking under the kitchen sink; the floor is getting wet.",
     address: "12 Oak St, Unit 4B",
     minutesAgo: 18,
+    files: [{ name: "under-the-sink.jpg", type: "image/jpeg", size: 245_760 }],
   },
   {
     key: "fee",
@@ -214,7 +225,8 @@ function seedState(): DemoState {
     currentPeriodEnd: new Date(loadedAt + 19 * 24 * 60 * 60_000).toISOString(),
     cancelAtPeriodEnd: false,
     foundingCustomer: true,
-    billingEnabled: true,
+    // Plans and billing aren't part of the demo
+    billingEnabled: false,
     subscriptionRequired: false,
   };
 
@@ -247,6 +259,16 @@ function seedState(): DemoState {
       sendingEnabled: true,
       forwardingAddress: "maple-property-k3j9x2@in.clerova-ai.com",
       gmailConfirmation: null,
+      replyCopyEmail: null,
+    },
+    companyInfo: {
+      rentAndPayments:
+        "Rent is due on the 1st. Pay in the resident portal at pay.mapleproperty.com. There is a 5-day grace period, then a $50 late fee.",
+      officeAndContact: "Monday to Friday, 9am to 5pm. Call (555) 201-3300.",
+      emergencies:
+        "After hours, call (555) 201-3399. Emergencies are fire, gas, flooding, no heat in winter and lockouts.",
+      pets: "Cats and dogs under 40 lb, two at most, with a $300 pet deposit.",
+      parking: "One assigned spot per unit. Guests park on the street.",
     },
     nextEmail: 0,
   };
@@ -310,6 +332,13 @@ function seedState(): DemoState {
 /** An email arrives and becomes a request, as the server does. */
 function receiveEmail(state: DemoState, seed: Omit<Seed, "key" | "minutesAgo">, minutesAgo: number): WorkItem {
   const at = ago(minutesAgo);
+  const files: AttachmentFile[] = (seed.files ?? []).map((file) => ({
+    id: id("file"),
+    fileName: file.name,
+    contentType: file.type,
+    sizeBytes: file.size,
+    available: true,
+  }));
   const item: WorkItem = {
     id: id("request"),
     organizationId: ORG_ID,
@@ -327,6 +356,7 @@ function receiveEmail(state: DemoState, seed: Omit<Seed, "key" | "minutesAgo">, 
     updatedAt: at,
     unreadReplyAt: null,
     unreadReplyUrgent: false,
+    suggestionsLeft: MAX_SUGGESTIONS,
   };
 
   state.items.push(item);
@@ -339,7 +369,8 @@ function receiveEmail(state: DemoState, seed: Omit<Seed, "key" | "minutesAgo">, 
       subject: seed.subject,
       text: seed.message,
       at,
-      attachments: [],
+      attachments: files.map((file) => file.fileName ?? ""),
+      files,
     },
   ];
   state.events[item.id] = [];
@@ -355,7 +386,8 @@ function receiveEmail(state: DemoState, seed: Omit<Seed, "key" | "minutesAgo">, 
     status: "PROCESSED",
     statusReason: null,
     workItemId: item.id,
-    attachments: [],
+    attachments: files.map((file) => file.fileName ?? ""),
+    files,
   });
 
   return item;
@@ -533,6 +565,7 @@ function suggest(state: DemoState, item: WorkItem, minutesAgo?: number): Propose
 
 function approve(state: DemoState, action: ProposedAction, finalResponse: string | undefined, minutesAgo?: number) {
   const item = findItem(state, action.workItemId);
+  item.suggestionsLeft = MAX_SUGGESTIONS;
   const at = minutesAgo === undefined ? now() : ago(minutesAgo);
 
   action.status = "APPROVED";
@@ -589,6 +622,7 @@ function approveAndSend(state: DemoState, item: WorkItem, minutesAgo: number) {
 }
 
 function outbound(state: DemoState, item: WorkItem, text: string, at: string) {
+  item.suggestionsLeft = MAX_SUGGESTIONS;
   state.conversations[item.id].push({
     id: id("message"),
     direction: "OUTBOUND",
@@ -617,6 +651,7 @@ function setStatus(item: WorkItem, status: string) {
 
 /** The sender writes again on an existing request. */
 function followUp(state: DemoState, item: WorkItem, text: string, minutesAgo: number, urgentReason?: string) {
+  item.suggestionsLeft = MAX_SUGGESTIONS;
   const at = ago(minutesAgo);
 
   state.conversations[item.id].push({
@@ -673,6 +708,15 @@ function findAction(state: DemoState, actionId: string): ProposedAction {
   }
 
   return action;
+}
+
+/** Like the server: 5 new suggestions or drafts per email, either way. */
+function takeSuggestion(item: WorkItem) {
+  const left = item.suggestionsLeft ?? MAX_SUGGESTIONS;
+  if (left <= 0) {
+    conflict(`You've used all ${MAX_SUGGESTIONS} new suggestions for this email. Edit the reply yourself. You get ${MAX_SUGGESTIONS} more with the next email.`);
+  }
+  item.suggestionsLeft = left - 1;
 }
 
 function conflict(message: string): never {
@@ -789,6 +833,54 @@ export function resetDemo() {
   refreshApp();
 }
 
+/** A sample photo for any file in the demo, drawn in the browser. */
+export async function demoAttachment(fileId: string): Promise<Blob> {
+  const known = Object.values(state.conversations)
+    .flat()
+    .some((entry) => entry.files?.some((file) => file.id === fileId));
+
+  if (!known) {
+    throw new ApiRequestError("This file isn't available.", 404);
+  }
+
+  await wait(300);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 800;
+  canvas.height = 600;
+  const context = canvas.getContext("2d");
+
+  if (context) {
+    // Cabinet, pipe and a puddle on the floor
+    context.fillStyle = "#e9e4dc";
+    context.fillRect(0, 0, 800, 600);
+    context.fillStyle = "#8a6f52";
+    context.fillRect(80, 60, 640, 330);
+    context.fillStyle = "#6e573f";
+    context.fillRect(100, 80, 600, 290);
+    context.fillStyle = "#b8bcc4";
+    context.fillRect(380, 80, 40, 200);
+    context.fillRect(380, 260, 160, 36);
+    context.fillStyle = "#c9b79c";
+    context.fillRect(0, 390, 800, 210);
+    context.fillStyle = "rgba(43, 74, 203, 0.35)";
+    context.beginPath();
+    context.ellipse(420, 470, 260, 70, 0, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = "#16181d";
+    context.font = "600 28px system-ui, sans-serif";
+    context.fillText("Sample photo (demo)", 24, 572);
+  }
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new ApiRequestError("Couldn't open this file.", 500))),
+      "image/jpeg",
+      0.85
+    );
+  });
+}
+
 function bumpUsage() {
   const organization = state.me.organization!;
   organization.aiRequestsUsedThisMonth += 1;
@@ -862,6 +954,7 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
       updatedAt: at,
       unreadReplyAt: null,
       unreadReplyUrgent: false,
+      suggestionsLeft: MAX_SUGGESTIONS,
     };
     state.items.push(item);
     state.conversations[item.id] = [];
@@ -934,6 +1027,7 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
     if (CLOSED.includes(item.status)) conflict("This request is already closed.");
     const latest = latestAction(state, item.id);
     if (latest?.status === "PENDING_APPROVAL") conflict("This request already has a suggestion waiting for review.");
+    takeSuggestion(item);
     return suggest(state, item);
   }
 
@@ -956,7 +1050,8 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
     const item = findItem(state, match[1]);
     if (item.source !== "EMAIL" || !item.senderEmail) conflict("This request didn't come in by email, so there's no one to reply to.");
     requireCanWrite(item);
-    return { reply: draftFor(item) };
+    takeSuggestion(item);
+    return { reply: draftFor(item), suggestionsLeft: item.suggestionsLeft };
   }
 
   if ((match = route.match(/^POST \/api\/work-items\/([^/]+)\/reply$/))) {
@@ -1063,29 +1158,33 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
   }
 
   if (route === "GET /api/email-settings") return state.settings;
+  if (route === "PUT /api/email-settings/reply-copy") {
+    const email = String(body.email ?? "").trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ApiRequestError("Enter a valid email address.", 400);
+    if (email.toLowerCase().endsWith("@in.clerova-ai.com")) conflict("Use your own email here, not your Clerova address.");
+    state.settings.replyCopyEmail = email || null;
+    return state.settings;
+  }
   if (route === "GET /api/summary") return state.summary;
 
-  // Billing
-  if (route === "GET /api/billing/offer") return { enabled: true, foundingSpotsLeft: 14 };
-  if (route === "POST /api/billing/portal" || route === "POST /api/billing/checkout") {
-    conflict("Card and invoices aren't part of the demo. Start a free trial to see the real thing.");
+  if (route === "GET /api/company-info") return { ...state.companyInfo };
+  if (route === "PUT /api/company-info") {
+    const info: CompanyInfo = {};
+    let total = 0;
+    for (const field of COMPANY_INFO_FIELDS) {
+      const value = typeof body[field.key] === "string" ? String(body[field.key]).trim() : "";
+      if (value.length > MAX_FIELD_LENGTH) throw new ApiRequestError("Keep each answer under 1,500 characters.", 400);
+      total += value.length;
+      info[field.key] = value || null;
+    }
+    if (total > MAX_TOTAL_LENGTH) {
+      throw new ApiRequestError("That's more than Clerova can use. Keep all answers together under 8,000 characters.", 400);
+    }
+    state.companyInfo = info;
+    return { ...info };
   }
-  if (route === "POST /api/billing/cancel") {
-    state.me.organization!.cancelAtPeriodEnd = true;
-    return { ok: true };
-  }
-  if (route === "POST /api/billing/keep") {
-    state.me.organization!.cancelAtPeriodEnd = false;
-    return { ok: true };
-  }
-  if (route === "POST /api/billing/upgrade") {
-    const organization = state.me.organization!;
-    if (organization.plan !== "STARTER") conflict("Only an active Starter plan can be upgraded.");
-    organization.plan = "GROWTH";
-    organization.aiMonthlyLimit = 1500;
-    organization.cancelAtPeriodEnd = false;
-    return { ok: true };
-  }
+
+  if (route === "GET /api/billing/offer") return { enabled: false, foundingSpotsLeft: 0 };
 
   throw new ApiRequestError("That isn't part of the demo.", 404);
 }
