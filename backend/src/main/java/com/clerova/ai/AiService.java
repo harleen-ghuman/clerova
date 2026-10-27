@@ -1,6 +1,7 @@
 package com.clerova.ai;
 
 import com.clerova.domain.WorkItem;
+import com.clerova.domain.WorkItemStatus;
 import com.clerova.dto.DraftReplyResult;
 import com.clerova.dto.ExtractionResult;
 import com.clerova.dto.ProposedActionResult;
@@ -341,6 +342,7 @@ public class AiService {
 
         String context = """
             Sender name: %s
+            Request status: %s
             Category: %s
             Address: %s
             Summary: %s
@@ -349,6 +351,9 @@ public class AiService {
             %s
             """.formatted(
                 workItem.getSenderName() != null ? workItem.getSenderName() : "unknown",
+                workItem.getStatus() == WorkItemStatus.ESCALATED
+                        ? "passed to a person on the team, who is handling it"
+                        : "a repair job is open and in progress",
                 workItem.getCategory(),
                 workItem.getAddress(),
                 workItem.getSummary(),
@@ -363,11 +368,14 @@ public class AiService {
                             .instructions("""
                                 You draft email replies for a property management company.
 
-                                The resident's request is already open and a job for it
-                                is in progress. The resident has written again. Draft the
-                                company's reply to the resident's latest message, taking
-                                the earlier messages and replies already sent into
-                                account. Do not repeat what was already said.
+                                The resident's request is already open; the request
+                                status says how it is being handled. Draft the company's
+                                next email to the resident, taking the whole conversation
+                                into account:
+                                - If the resident wrote last, answer their latest message.
+                                - If the company wrote last, write a short update that
+                                  does not repeat what was already sent.
+                                Do not repeat what was already said.
 
                                 A property manager reads the draft, may edit it, and sends
                                 it. Write it as the company's own reply:

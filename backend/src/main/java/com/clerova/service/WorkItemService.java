@@ -410,9 +410,7 @@ public class WorkItemService {
             throw new ConflictException("This request didn't come in by email, so there's no one to reply to.");
         }
 
-        if (CLOSED_STATUSES.contains(workItem.getStatus())) {
-            throw new ConflictException("This request is already closed.");
-        }
+        requireCanWrite(workItem);
 
         aiUsageService.requireAccess(organizationId);
 
@@ -420,8 +418,24 @@ public class WorkItemService {
 
         return aiService.draftReply(
                 workItem,
-                conversation != null ? conversation : workItem.getOriginalMessage()
+                conversation != null ? conversation : "Message from the resident:\n" + workItem.getOriginalMessage()
         );
+    }
+
+    /**
+     * People write to the sender directly only while a job or escalation is
+     * underway. Otherwise replies go through Clerova's suggestion, so a
+     * pending suggestion never goes stale.
+     */
+    public static void requireCanWrite(WorkItem workItem) {
+        switch (workItem.getStatus()) {
+            case IN_PROGRESS, ESCALATED -> {
+            }
+            case COMPLETED, CANCELLED -> throw new ConflictException("This request is already closed.");
+            default -> throw new ConflictException(
+                    "Reply using Clerova's suggestion for this request."
+            );
+        }
     }
 
     /** The sender's new email needs no answer, so the alert goes away. */

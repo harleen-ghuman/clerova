@@ -259,6 +259,8 @@ export function RequestDetail({
             <span>
               They wrote again while the job is in progress. The job hasn't
               changed.
+              {!replyTo &&
+                " Reply from your own email, then mark it as handled."}
             </span>
           </div>
           <button

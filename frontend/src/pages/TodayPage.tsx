@@ -231,7 +231,8 @@ export function TodayPage({
         <div className="today-tiles">
           <button type="button" className="today-tile" onClick={() => onOpenRequests("review")}>
             <span>Needs review</span>
-            <strong>{review.length}</strong>
+            {/* Matches the Needs review list, which includes new replies */}
+            <strong>{review.length + newReplies.length}</strong>
           </button>
           <button type="button" className="today-tile" onClick={() => onOpenRequests("waiting")}>
             <span>Waiting on customer</span>

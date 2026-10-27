@@ -553,6 +553,55 @@ class EmailIntakeTest {
     }
 
     @Test
+    void writingToTheSenderNeedsAJobOrEscalationAndAnActivePlan() throws Exception {
+        String workItemId = deliverNew("<write1@x>", "My sink is leaking.");
+        String message = """
+                {"message":"Hello"}
+                """;
+
+        // A suggestion is waiting, so replies go through it
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user).contentType(MediaType.APPLICATION_JSON).content(message))
+                .andExpect(status().isConflict());
+        mockMvc.perform(post("/api/work-items/{id}/draft-reply", workItemId).with(user))
+                .andExpect(status().isConflict());
+
+        proposeAction(ActionType.ESCALATE_TO_HUMAN);
+        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/reject",
+                        latestAction(workItemId).get("id").asText()).with(user))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/work-items/{id}/proposed-actions", workItemId).with(user))
+                .andExpect(status().isCreated());
+        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/approve",
+                        latestAction(workItemId).get("id").asText()).with(user))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.status").value("ESCALATED"));
+
+        // Escalated: the team can write, and nothing about the request changes
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user).contentType(MediaType.APPLICATION_JSON).content(message))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ESCALATED"));
+
+        // An ended trial can't send
+        String organizationId = json(mockMvc.perform(get("/api/me").with(user)))
+                .get("organization").get("id").asText();
+        jdbcTemplate.update(
+                "update organizations set trial_ends_at = ? where id = ?",
+                java.sql.Timestamp.from(java.time.Instant.now().minusSeconds(60)),
+                UUID.fromString(organizationId)
+        );
+
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user).contentType(MediaType.APPLICATION_JSON).content(message))
+                .andExpect(status().isForbidden());
+
+        verify(emailSender, org.mockito.Mockito.times(1)).send(any());
+    }
+
+    @Test
     void approvedResponseIsSentAsThreadedReplyOnce() throws Exception {
         proposeAction(ActionType.RESPOND_TO_CUSTOMER);
         String workItemId = deliverNew("<send1@x>", "When is rent due?");
