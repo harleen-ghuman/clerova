@@ -2,7 +2,7 @@ import "./App.css";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
-import { SIGN_IN_URL, signUpUrl } from "./appLinks";
+import { DEMO_URL, SIGN_IN_URL, signUpUrl } from "./appLinks";
 import { HeroDemo } from "./HeroDemo";
 
 const steps = [
@@ -137,6 +137,7 @@ function App() {
           <a href="#setup">Getting started</a>
           <a href="#pricing">Pricing</a>
           <a href="#faq">FAQ</a>
+          <a href={DEMO_URL}>Try the demo</a>
         </nav>
 
         <div className="nav-actions">
@@ -176,6 +177,12 @@ function App() {
               </button>
             </form>
             <p className="note">14 days free. Set up in about five minutes.</p>
+            <div className="hero-demo">
+              <a className="button button-plain button-small" href={DEMO_URL}>
+                Try the demo
+              </a>
+              <span>No sign-up. Click around a sample workspace.</span>
+            </div>
             <ul className="trust">
               {TRUST.map((item) => (
                 <li key={item}>{item}</li>
@@ -327,9 +334,14 @@ function App() {
         <section className="cta">
           <h2>See your inbox organized today.</h2>
           <p>Start your 14-day free trial. Cancel anytime before it ends and you won't be charged.</p>
-          <a className="button button-light" href={signUpUrl()}>
-            Start free trial
-          </a>
+          <div className="cta-actions">
+            <a className="button button-light" href={signUpUrl()}>
+              Start free trial
+            </a>
+            <a className="button button-outline-light" href={DEMO_URL}>
+              Try the demo
+            </a>
+          </div>
         </section>
       </main>
 

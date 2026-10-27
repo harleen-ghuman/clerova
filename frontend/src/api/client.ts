@@ -1,5 +1,6 @@
 import { API_BASE_URL } from "../config";
 import { supabase } from "../auth/supabase";
+import { isDemo } from "../demo/mode";
 
 export class ApiRequestError extends Error {
   readonly status: number;
@@ -19,6 +20,12 @@ export async function apiRequest<T>(
   path: string,
   options: { method?: string; body?: unknown } = {}
 ): Promise<T> {
+  if (isDemo()) {
+    // Loaded only in the demo, so the app bundle doesn't carry it
+    const { handleDemoRequest } = await import("../demo/fakeApi");
+    return handleDemoRequest<T>(path, options);
+  }
+
   const { data } = await supabase.auth.getSession();
   const headers: Record<string, string> = {};
 

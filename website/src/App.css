@@ -138,6 +138,15 @@ p {
   background: var(--surface);
 }
 
+.button-outline-light {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  color: var(--white);
+}
+
+.button-outline-light:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .button-light {
   background: var(--white);
   color: var(--ink);
@@ -1022,4 +1031,23 @@ p {
   .demo .preview {
     min-height: 495px;
   }
+}
+
+/* Try the demo */
+
+.hero-demo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
 }

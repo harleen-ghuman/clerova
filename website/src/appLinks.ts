@@ -39,3 +39,6 @@ export function signUpUrl(plan?: "starter" | "growth", email?: string): string {
 }
 
 export const SIGN_IN_URL = `${APP_URL}?mode=sign-in`;
+
+/** The no-sign-up demo: the real app on sample data. */
+export const DEMO_URL = "https://app.clerova-ai.com/demo";
