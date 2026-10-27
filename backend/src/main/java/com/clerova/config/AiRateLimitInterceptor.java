@@ -79,7 +79,7 @@ public class AiRateLimitInterceptor implements HandlerInterceptor {
 
         if (!tryAcquireDaily()) {
             log.warn("Global daily AI request cap of {} reached", globalPerDay);
-            reject(response, "Daily AI processing limit reached. Please try again tomorrow.");
+            reject(response, "Clerova is very busy right now. Please try again later, or email hello@clerova-ai.com.");
             return false;
         }
 

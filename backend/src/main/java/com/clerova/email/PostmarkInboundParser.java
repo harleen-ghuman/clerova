@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Parses Postmark's inbound webhook JSON.
@@ -56,14 +57,30 @@ public class PostmarkInboundParser {
             textBody = htmlToText(text(payload, "HtmlBody"));
         }
 
+        String fromEmail = firstNonBlank(text(from, "Email"), text(payload, "From"));
+        String fromName = text(from, "Name");
+        String subject = text(payload, "Subject");
+        String replyText = text(payload, "StrippedTextReply");
+
+        // Forwarded by hand: the resident is the sender, and the reply-only
+        // text would be just the forwarder's note, so keep the whole body
+        Optional<ForwardedEmail> forwarded = ForwardedEmail.detect(subject, textBody, fromEmail);
+
+        if (forwarded.isPresent()) {
+            fromEmail = forwarded.get().fromEmail();
+            fromName = forwarded.get().fromName();
+            subject = forwarded.get().subject() != null ? forwarded.get().subject() : subject;
+            replyText = null;
+        }
+
         return new ParsedInboundEmail(
                 text(payload, "MessageID"),
                 recipients,
-                firstNonBlank(text(from, "Email"), text(payload, "From")),
-                text(from, "Name"),
-                text(payload, "Subject"),
+                fromEmail,
+                fromName,
+                subject,
                 textBody,
-                text(payload, "StrippedTextReply"),
+                replyText,
                 headers.get("message-id"),
                 headers.get("in-reply-to"),
                 headers.get("references"),

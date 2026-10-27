@@ -233,6 +233,36 @@ class EmailIntakeTest {
     }
 
     @Test
+    void emailForwardedByHandUsesTheResidentAsSender() throws Exception {
+        var root = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(
+                payload(forwardingAddress, "<fwd@x>", null, null, "pm@maple.com", """
+                        Please handle
+
+                        ---------- Forwarded message ---------
+                        From: Tina Alvarez <tina.alvarez@gmail.com>
+                        Subject: Kitchen sink leaking
+
+                        Water is leaking under the sink.
+                        """));
+        root.put("Subject", "Fwd: Kitchen sink leaking");
+        root.put("StrippedTextReply", "Please handle");
+
+        deliver(root.toString()).andExpect(jsonPath("$.status").value("STORED"));
+
+        processor.processDue();
+
+        JsonNode item = json(mockMvc.perform(get("/api/work-items").with(user))).get(0);
+        assertThat(item.get("senderEmail").asText()).isEqualTo("tina.alvarez@gmail.com");
+        assertThat(item.get("senderName").asText()).isEqualTo("Tina Alvarez");
+        assertThat(item.get("subject").asText()).isEqualTo("Kitchen sink leaking");
+
+        // The AI read the resident's message, not just the forwarder's note
+        ArgumentCaptor<String> extractionInput = ArgumentCaptor.forClass(String.class);
+        verify(aiService).extract(extractionInput.capture());
+        assertThat(extractionInput.getValue()).contains("Water is leaking under the sink.");
+    }
+
+    @Test
     void clerovaOwnEmailsAndBouncesDontBecomeRequests() throws Exception {
         deliver(payload(forwardingAddress, "<own@x>", null, null, "notifications@in.test.clerova", "Usage"))
                 .andExpect(jsonPath("$.status").value("STORED"));

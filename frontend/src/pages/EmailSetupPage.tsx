@@ -225,6 +225,11 @@ export function EmailSetupPage({ settings, error }: EmailSetupPageProps) {
           filter (for example, mail sent to maintenance@ or from your tenant
           portal) and choose "Forward it to" your Clerova address.
         </p>
+        <p className="setup-tip">
+          Just one email? Click Forward and send it to your Clerova address.
+          Clerova uses the original sender, so your reply goes to the resident,
+          not back to you.
+        </p>
       </section>
 
       <section className="setup-section">
