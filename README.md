@@ -560,7 +560,13 @@ cd website && npm run build && npm run lint
 ```
 
 AI evaluation tests are kept separate so normal builds don't make live model
-calls.
+calls. They need `OPENAI_API_KEY` and cover extraction, suggestions, and the
+drafts written in a request (answers during a job, reminders, escalations,
+the resident's language, and instructions hidden in emails):
+
+```bash
+cd backend && ./mvnw test -Pai-evaluation
+```
 
 ---
 

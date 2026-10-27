@@ -64,7 +64,8 @@ public class AiService {
                                   expires, office-hour questions, or minor maintenance that can
                                   reasonably wait.
 
-                                Create a concise factual summary.
+                                Create a concise factual summary, in English even when the
+                                message is in another language (staff read it).
 
                                 Extract the address when one is explicitly provided.
 
@@ -207,6 +208,11 @@ public class AiService {
                                 - Plain, warm and professional. Short paragraphs. No
                                   placeholders like [Name] and no signature; the company
                                   name is added by the email.
+                                - Write in the language the resident wrote in.
+                                - Never suggest repairs, maintenance or troubleshooting
+                                  for the resident to do themselves (such as changing
+                                  filters or adjusting equipment), beyond brief safety
+                                  steps for something urgent or unsafe.
 
                                 Do not invent actions that nobody has taken. Do not say a
                                 technician, vendor or appointment has been scheduled,
@@ -380,8 +386,10 @@ public class AiService {
                                   does not repeat what was already sent.
                                 - If the company is waiting for the resident's answer,
                                   write a short, friendly reminder that asks again only
-                                  what is still unanswered.
-                                Do not repeat what was already said.
+                                  what is still unanswered. Do not add new questions.
+                                Do not repeat what was already said, and say each thing
+                                once. Keep it short: two or three short paragraphs at most.
+                                Write in the language the resident wrote in.
 
                                 A property manager reads the draft, may edit it, and sends
                                 it. Write it as the company's own reply:
@@ -402,6 +410,10 @@ public class AiService {
                                 If the latest message reports something urgent or unsafe,
                                 include brief safety steps the resident can take now and,
                                 for fire, gas or other danger, to call emergency services.
+                                Otherwise give no tips. Never suggest repairs, maintenance
+                                or troubleshooting for the resident to do themselves (such
+                                as changing filters or adjusting equipment); that is the
+                                company's job.
 
                                 Do not ask the resident for information that would
                                 normally already exist in the company's records.
