@@ -1,5 +1,6 @@
 const STORAGE_KEY = "clerova.referralSource";
 const PLAN_KEY = "clerova.chosenPlan";
+const EMAIL_KEY = "clerova.prefillEmail";
 
 /**
  * Remembers where a visitor came from (utm_source or ref in the URL, e.g.
@@ -21,8 +22,40 @@ export function captureReferralSource() {
     if (plan === "STARTER" || plan === "GROWTH") {
       localStorage.setItem(PLAN_KEY, plan);
     }
+
+    const email = params.get("email");
+
+    if (email) {
+      sessionStorage.setItem(EMAIL_KEY, email.slice(0, 200));
+    }
   } catch {
     // Storage can be unavailable (private mode); referral is optional.
+  }
+
+  stripWebsiteParams();
+}
+
+/**
+ * Removes the website's parameters from the address bar once read, so the
+ * email isn't kept in history or sent on to other sites the page loads.
+ */
+function stripWebsiteParams() {
+  try {
+    const url = new URL(window.location.href);
+    let changed = false;
+
+    for (const name of ["email", "plan", "utm_source", "ref"]) {
+      if (url.searchParams.has(name)) {
+        url.searchParams.delete(name);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+  } catch {
+    // Leave the address as it is
   }
 }
 
@@ -56,7 +89,11 @@ export function wantsSignIn(): boolean {
 /** Email typed on the website's sign-up box (?email=), to prefill sign-up. */
 export function prefilledEmail(): string {
   try {
-    return new URLSearchParams(window.location.search).get("email")?.slice(0, 200) ?? "";
+    return (
+      sessionStorage.getItem(EMAIL_KEY) ??
+      new URLSearchParams(window.location.search).get("email")?.slice(0, 200) ??
+      ""
+    );
   } catch {
     return "";
   }

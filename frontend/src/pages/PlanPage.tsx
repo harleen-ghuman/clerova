@@ -110,6 +110,8 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
           </p>
         )}
 
+        {error && <p className="action-error">{error}</p>}
+
         <div className="plan-options">
           {PLANS.map((item) => {
             const price = planPrice(founding ? item.foundingMonthly : item.monthly, interval);
@@ -152,8 +154,6 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
           </a>
           .
         </p>
-
-        {error && <p className="action-error">{error}</p>}
 
         <div className="auth-links">
           <button type="button" onClick={onSignOut}>
