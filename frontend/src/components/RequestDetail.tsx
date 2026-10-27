@@ -577,8 +577,6 @@ function ReplyComposer({
   const [sentTo, setSentTo] = useState<string | null>(null);
   // From the last draft until the request reloads after sending
   const [draftsLeft, setDraftsLeft] = useState<number | null>(null);
-  // Clerova's last draft, to tell whether the box holds someone's own words
-  const [lastDraft, setLastDraft] = useState("");
   const left = draftsLeft ?? suggestionsLeft;
   const reminder = situation === "waiting";
 
@@ -593,7 +591,6 @@ function ReplyComposer({
       .then((result) => {
         if (!cancelled) {
           setMessage((current) => (current.trim() === "" ? result.reply : current));
-          setLastDraft(result.reply);
           setDraftsLeft(result.suggestionsLeft);
         }
       })
@@ -637,20 +634,11 @@ function ReplyComposer({
   }
 
   async function draft() {
-    if (
-      message.trim() !== "" &&
-      message !== lastDraft &&
-      !window.confirm("Replace what you wrote with a new suggestion from Clerova?")
-    ) {
-      return;
-    }
-
     try {
       setBusy("Drafting...");
       setError(null);
       const result = await draftReply(workItemId);
       setMessage(result.reply);
-      setLastDraft(result.reply);
       setDraftsLeft(result.suggestionsLeft);
     } catch (err) {
       setError(errorMessage(err, "Couldn't draft a message. Write your own or try again."));
@@ -719,9 +707,8 @@ function ReplyComposer({
             {busy === "Drafting..."
               ? busy
               : message.trim() === ""
-                ? "Draft with Clerova"
-                : "Suggest something else"}
-            {busy !== "Drafting..." && left < MAX_SUGGESTIONS && ` (${left} left)`}
+                ? `Draft with Clerova${left < MAX_SUGGESTIONS ? ` (${left} left)` : ""}`
+                : `New draft (replaces your text${left < MAX_SUGGESTIONS ? `, ${left} left` : ""})`}
           </button>
         )}
         <button
