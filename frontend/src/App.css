@@ -429,6 +429,15 @@ h3 {
   background: var(--brand-soft);
 }
 
+.rq-new-reply-banner.urgent {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+}
+
+.rq-new-reply-banner.urgent strong {
+  color: var(--danger);
+}
+
 .rq-new-reply-banner div {
   display: grid;
   gap: 2px;

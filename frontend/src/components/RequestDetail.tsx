@@ -23,6 +23,7 @@ import { decisionCopy, hasResponseToSend } from "../utils/actionCopy";
 import {
   capitalize,
   hasNewReply,
+  hasUrgentReply,
   longTime,
   requestBucket,
   requestSender,
@@ -205,6 +206,14 @@ export function RequestDetail({
     workItem.status === "WAITING_FOR_INFORMATION" ||
     (workItem.status === "NEW" && !pending);
   const newReply = hasNewReply(workItem);
+  const urgentReply = hasUrgentReply(workItem);
+  // Why Clerova marked it urgent, from the latest activity entry
+  const urgentReason = urgentReply
+    ? [...events]
+        .reverse()
+        .find((event) => event.type === "REPLY_URGENT")
+        ?.detail?.replace(/^Marked urgent:\s*/, "")
+    : undefined;
   // While a job or escalation is underway there's no suggestion to approve,
   // so people can write to the sender directly, or remind a sender who
   // hasn't answered
@@ -263,12 +272,19 @@ export function RequestDetail({
       </div>
 
       {newReply && (
-        <section className="rq-new-reply-banner" aria-label="New reply">
+        <section
+          className={`rq-new-reply-banner ${urgentReply ? "urgent" : ""}`}
+          aria-label={urgentReply ? "Urgent reply" : "New reply"}
+          role={urgentReply ? "alert" : undefined}
+        >
           <div>
-            <strong>New reply from {requestSender(workItem)}</strong>
+            <strong>
+              {urgentReply ? "Urgent reply" : "New reply"} from {requestSender(workItem)}
+            </strong>
             <span>
-              They wrote again while the job is in progress. The job hasn't
-              changed.
+              {urgentReply
+                ? `This looks urgent${urgentReason ? `: ${urgentReason}` : "."} Read it and act now.`
+                : "They wrote again while the job is in progress. The job hasn't changed."}
               {!replyTo &&
                 " Reply from your own email, then mark it as handled."}
             </span>

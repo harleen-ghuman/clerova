@@ -85,6 +85,10 @@ Email forwarded              Request typed in the app
   in progress, the request gets a "New reply" tag (Today, Requests, Jobs).
   Answer it from the request, with a draft from Clerova if you like, or mark
   it handled. The job doesn't change.
+- Urgent replies: a new email during a job is checked by the AI (not counted
+  as a request). If it reports something urgent (gas, fire, flooding, no
+  heat, a broken lock...) it shows as "Urgent reply" in red, first on Today,
+  and the workspace owners get an email.
 - Reminders: customers who haven't answered in 3+ days show on Today with
   "Remind". It opens the request with a reminder drafted by Clerova; sending
   it keeps the request waiting and restarts the 3 days.

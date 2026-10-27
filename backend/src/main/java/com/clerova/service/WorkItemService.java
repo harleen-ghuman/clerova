@@ -12,6 +12,7 @@ import com.clerova.domain.WorkItemSource;
 import com.clerova.domain.WorkItemStatus;
 import com.clerova.dto.ExtractionResult;
 import com.clerova.dto.ProposedActionResult;
+import com.clerova.dto.UrgencyResult;
 import com.clerova.exception.NotFoundException;
 import com.clerova.repository.MaintenanceRequestRepository;
 import com.clerova.repository.ProposedActionRepository;
@@ -19,6 +20,7 @@ import com.clerova.repository.WorkItemRepository;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -58,6 +60,7 @@ public class WorkItemService {
     private final WorkItemEventService workItemEventService;
     private final ConversationService conversationService;
     private final TransactionTemplate transactionTemplate;
+    private final ApplicationEventPublisher events;
 
     public WorkItemService(
             AiService aiService,
@@ -68,7 +71,8 @@ public class WorkItemService {
             AiUsageService aiUsageService,
             WorkItemEventService workItemEventService,
             ConversationService conversationService,
-            TransactionTemplate transactionTemplate
+            TransactionTemplate transactionTemplate,
+            ApplicationEventPublisher events
     ) {
         this.aiService = aiService;
         this.workItemRepository = workItemRepository;
@@ -79,6 +83,7 @@ public class WorkItemService {
         this.workItemEventService = workItemEventService;
         this.conversationService = conversationService;
         this.transactionTemplate = transactionTemplate;
+        this.events = events;
     }
 
     public WorkItem createWorkItem(
@@ -440,6 +445,72 @@ public class WorkItemService {
                     "Reply using Clerova's suggestion for this request."
             );
         }
+    }
+
+    /**
+     * Checks whether a new email that arrived during a job is urgent, and if
+     * so marks the request and tells the owners. Best effort: if the AI or
+     * the plan stops it, the request keeps its plain "New reply" flag.
+     */
+    public void checkFollowUpUrgency(UUID organizationId, UUID workItemId, String message) {
+
+        WorkItem workItem = getWorkItem(organizationId, workItemId);
+
+        if (workItem.getUnreadReplyAt() == null
+                || workItem.isUnreadReplyUrgent()
+                || message == null
+                || message.isBlank()) {
+            return;
+        }
+
+        UrgencyResult result;
+
+        try {
+            aiUsageService.requireAccess(organizationId);
+            result = aiService.checkUrgency(workItem, message);
+        } catch (RuntimeException e) {
+            log.warn("Could not check the urgency of a follow-up for work item {}", workItemId, e);
+            return;
+        }
+
+        if (result == null || !result.urgent) {
+            return;
+        }
+
+        String reason = result.reason != null && !result.reason.isBlank()
+                ? result.reason.trim()
+                : "The new email looks urgent.";
+
+        transactionTemplate.executeWithoutResult(status -> {
+            WorkItem current = getWorkItem(organizationId, workItemId);
+
+            // Answered or closed while the check ran
+            if (current.getUnreadReplyAt() == null) {
+                return;
+            }
+
+            current.setUnreadReplyUrgent(true);
+            workItemRepository.save(current);
+
+            workItemEventService.record(
+                    organizationId,
+                    workItemId,
+                    WorkItemEventType.REPLY_URGENT,
+                    "Marked urgent: " + reason,
+                    null
+            );
+
+            events.publishEvent(new UrgentReplyReceived(
+                    organizationId,
+                    workItemId,
+                    current.getSenderName() != null ? current.getSenderName() : current.getSenderEmail(),
+                    current.getSubject() != null && !current.getSubject().isBlank()
+                            ? current.getSubject()
+                            : current.getSummary(),
+                    reason,
+                    message
+            ));
+        });
     }
 
     /** The sender's new email needs no answer, so the alert goes away. */

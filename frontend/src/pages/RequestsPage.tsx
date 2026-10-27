@@ -6,6 +6,7 @@ import type { WorkItem } from "../types/WorkItem";
 import {
   BUCKET_LABELS,
   hasNewReply,
+  hasUrgentReply,
   requestBucket,
   requestSender,
   requestStatusLabel,
@@ -84,7 +85,12 @@ export function RequestsPage({
   const visible = matching.filter((item) => inFilter(item, filter));
 
   if (filter !== "all") {
-    visible.sort((a, b) => activityAt(b).localeCompare(activityAt(a)));
+    // Urgent replies first, then newest activity
+    visible.sort(
+      (a, b) =>
+        Number(hasUrgentReply(b)) - Number(hasUrgentReply(a)) ||
+        activityAt(b).localeCompare(activityAt(a))
+    );
   }
 
   function countFor(key: RequestFilter) {
@@ -232,11 +238,17 @@ export function RequestsPage({
                 <span className="rq-row-top">
                   <span className={`rq-dot rq-dot-${bucket}`} aria-hidden="true" />
                   <strong>{requestSender(item)}</strong>
-                  {item.priority === "HIGH" && bucket !== "done" && (
-                    <span className="rq-urgent">Urgent</span>
-                  )}
-                  {hasNewReply(item) && (
-                    <span className="rq-new-reply">New reply</span>
+                  {hasUrgentReply(item) ? (
+                    <span className="rq-urgent">Urgent reply</span>
+                  ) : (
+                    <>
+                      {item.priority === "HIGH" && bucket !== "done" && (
+                        <span className="rq-urgent">Urgent</span>
+                      )}
+                      {hasNewReply(item) && (
+                        <span className="rq-new-reply">New reply</span>
+                      )}
+                    </>
                   )}
                   <time>{shortTime(activityAt(item))}</time>
                 </span>

@@ -10,5 +10,6 @@ public enum WorkItemEventType {
     MAINTENANCE_UPDATED,
     CLOSED,
     REOPENED,
-    REPLY_HANDLED
+    REPLY_HANDLED,
+    REPLY_URGENT
 }

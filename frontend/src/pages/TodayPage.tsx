@@ -6,6 +6,7 @@ import type { MaintenanceRequest } from "../types/MaintenanceRequest";
 import type { WorkItem } from "../types/WorkItem";
 import {
   hasNewReply,
+  hasUrgentReply,
   requestBucket,
   requestSender,
   requestTitle,
@@ -176,9 +177,14 @@ export function TodayPage({
       requestBucket(item) === "waiting" &&
       now - new Date(item.updatedAt).getTime() > WAITING_DAYS * DAY_MS
   );
+  // Urgent ones first, then newest
   const newReplies = open
     .filter(hasNewReply)
-    .sort((a, b) => (b.unreadReplyAt ?? "").localeCompare(a.unreadReplyAt ?? ""));
+    .sort(
+      (a, b) =>
+        Number(hasUrgentReply(b)) - Number(hasUrgentReply(a)) ||
+        (b.unreadReplyAt ?? "").localeCompare(a.unreadReplyAt ?? "")
+    );
   const openJobs = jobs.filter(
     (job) => job.status === "OPEN" || job.status === "IN_PROGRESS"
   );
@@ -263,7 +269,11 @@ export function TodayPage({
                 className="today-row"
                 onClick={() => onOpenRequest(item.id)}
               >
-                <span className="rq-new-reply">New reply</span>
+                {hasUrgentReply(item) ? (
+                  <span className="rq-urgent">Urgent reply</span>
+                ) : (
+                  <span className="rq-new-reply">New reply</span>
+                )}
                 <strong>{requestTitle(item)}</strong>
                 <span>{requestSender(item)}</span>
                 <time>{shortTime(item.unreadReplyAt ?? item.updatedAt)}</time>

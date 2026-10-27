@@ -206,6 +206,13 @@ public class InboundEmailProcessor {
 
         if (needsProposal) {
             generateProposal(workItem);
+        } else {
+            // During a job: the request is flagged; check whether it's urgent
+            workItemService.checkFollowUpUrgency(
+                    workItem.getOrganizationId(),
+                    workItem.getId(),
+                    message.getContentText()
+            );
         }
     }
 

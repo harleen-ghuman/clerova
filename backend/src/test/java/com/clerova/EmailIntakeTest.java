@@ -606,6 +606,86 @@ class EmailIntakeTest {
         verify(emailSender, org.mockito.Mockito.times(2)).send(any());
     }
 
+    private String inProgressRequest(String firstMessageId) throws Exception {
+        proposeAction(ActionType.CREATE_MAINTENANCE_REQUEST);
+        String workItemId = deliverNew(firstMessageId, "The AC is not cooling.");
+
+        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/approve",
+                        latestAction(workItemId).get("id").asText()).with(user))
+                .andExpect(status().isOk());
+
+        return workItemId;
+    }
+
+    @Test
+    void urgentEmailDuringAJobIsMarkedAndOwnersAreEmailed() throws Exception {
+        String workItemId = inProgressRequest("<urgent1@x>");
+
+        com.clerova.dto.UrgencyResult urgent = new com.clerova.dto.UrgencyResult();
+        urgent.urgent = true;
+        urgent.reason = "Resident smells gas near the stove.";
+        when(aiService.checkUrgency(any(), anyString())).thenReturn(urgent);
+
+        deliver(payload(forwardingAddress, "<urgent2@x>", "<urgent1@x>", null,
+                "tina@example.com", "I smell gas near the stove."))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.unreadReplyAt").isNotEmpty())
+                .andExpect(jsonPath("$.unreadReplyUrgent").value(true));
+
+        ArgumentCaptor<OutgoingEmail> sent = ArgumentCaptor.forClass(OutgoingEmail.class);
+        verify(emailSender).send(sent.capture());
+        assertThat(sent.getValue().subject()).isEqualTo("Urgent: Tenant Tina wrote again about Sink leaking");
+        assertThat(sent.getValue().textBody())
+                .contains("Resident smells gas near the stove.")
+                .contains("I smell gas near the stove.");
+
+        JsonNode events = json(mockMvc.perform(get("/api/work-items/{id}/events", workItemId).with(user)));
+        assertThat(events.findValuesAsText("detail")).contains("Marked urgent: Resident smells gas near the stove.");
+
+        // Handled: the urgency goes with the flag
+        mockMvc.perform(post("/api/work-items/{id}/reply-handled", workItemId).with(user))
+                .andExpect(jsonPath("$.unreadReplyAt").isEmpty())
+                .andExpect(jsonPath("$.unreadReplyUrgent").value(false));
+    }
+
+    @Test
+    void ordinaryOrUncheckedEmailDuringAJobIsJustANewReply() throws Exception {
+        String workItemId = inProgressRequest("<calm1@x>");
+
+        com.clerova.dto.UrgencyResult calm = new com.clerova.dto.UrgencyResult();
+        calm.urgent = false;
+        when(aiService.checkUrgency(any(), anyString())).thenReturn(calm);
+
+        deliver(payload(forwardingAddress, "<calm2@x>", "<calm1@x>", null,
+                "tina@example.com", "Any update on when the technician comes?"))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.unreadReplyAt").isNotEmpty())
+                .andExpect(jsonPath("$.unreadReplyUrgent").value(false));
+
+        // The AI failing doesn't stop the email from being attached and flagged
+        when(aiService.checkUrgency(any(), anyString()))
+                .thenThrow(new AiServiceException("down", null));
+
+        deliver(payload(forwardingAddress, "<calm3@x>", "<calm2@x>", null,
+                "tina@example.com", "Still waiting."))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/inbox").with(user))
+                .andExpect(jsonPath("$[0].status").value("ATTACHED"));
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.unreadReplyUrgent").value(false));
+
+        verify(emailSender, never()).send(any());
+    }
+
     @Test
     void customerWhoHasNotAnsweredCanBeReminded() throws Exception {
         String workItemId = deliverNew("<nudge1@x>", "My sink is leaking.");
