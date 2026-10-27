@@ -25,15 +25,16 @@ export function GetStarted({
   onOpenRequests,
   onHide,
 }: GetStartedProps) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"idle" | "done" | "failed">("idle");
 
   async function copy(address: string) {
     try {
       await navigator.clipboard.writeText(address);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
+      setCopied("done");
+      window.setTimeout(() => setCopied("idle"), 2000);
     } catch {
-      setCopied(false);
+      // Some browsers block the clipboard; the address is selectable
+      setCopied("failed");
     }
   }
 
@@ -69,7 +70,7 @@ export function GetStarted({
                     className="rq-button rq-button-small"
                     onClick={() => copy(forwardingAddress)}
                   >
-                    {copied ? "Copied" : "Copy"}
+                    {copied === "done" ? "Copied" : copied === "failed" ? "Select it to copy" : "Copy"}
                   </button>
                 </div>
               </div>

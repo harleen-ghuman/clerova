@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 public class StripeClient {
 
     private static final Logger log = LoggerFactory.getLogger(StripeClient.class);
+    private static final String UNAVAILABLE = "Couldn't reach Stripe. Please try again in a minute.";
 
     private final BillingProperties properties;
     private final ObjectMapper objectMapper;
@@ -63,19 +64,27 @@ public class StripeClient {
         try {
             response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         } catch (IOException e) {
-            throw unavailable("Could not reach Stripe", e);
+            throw unavailable(UNAVAILABLE, e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw unavailable("Couldn't reach Stripe. Please try again.", e);
+            throw unavailable(UNAVAILABLE, e);
         }
 
-        JsonNode result = objectMapper.readTree(response.body());
+        JsonNode result;
+
+        try {
+            result = objectMapper.readTree(response.body());
+        } catch (RuntimeException e) {
+            throw unavailable(UNAVAILABLE, e);
+        }
 
         if (response.statusCode() >= 300) {
             String message = result.path("error").path("message").asString("unknown error");
             log.warn("Stripe {} {} failed: {}", request.method(), request.uri().getPath(), message);
 
-            throw new ApiException(HttpStatus.BAD_GATEWAY, "BILLING_ERROR", "Stripe: " + message);
+            // Stripe's own wording stays in the log
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "BILLING_ERROR",
+                    "Billing isn't responding right now. Please try again in a minute.");
         }
 
         return result;

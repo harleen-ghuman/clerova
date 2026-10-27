@@ -87,7 +87,7 @@ export function HeroDemo() {
           </div>
         </div>
 
-        <div className="preview-detail">
+        <div className={`preview-detail ${drafted ? "drafted" : ""}`}>
           <div className="preview-title">
             <strong>Kitchen sink leaking</strong>
             <span className={`preview-meta ${sorted ? "shown" : ""}`}>
@@ -104,9 +104,9 @@ export function HeroDemo() {
               <span className="kicker">Clerova suggests</span>
               <strong>Create a maintenance job and reply</strong>
               <p>
-                Hi Tina, thanks for letting us know. Please turn off the valve
-                under the sink if you can. We are arranging a plumber and will
-                confirm a time shortly.
+                Hi Tina, thanks for letting us know. If you can, turn off the
+                valve under the sink. We've logged a repair and will follow up
+                to arrange a time.
               </p>
               <div className="preview-buttons">
                 <span className="btn-approve">Approve &amp; send</span>

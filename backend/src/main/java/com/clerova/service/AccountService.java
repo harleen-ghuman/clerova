@@ -1,5 +1,6 @@
 package com.clerova.service;
 
+import com.clerova.exception.ConflictException;
 import com.clerova.billing.BillingService;
 import com.clerova.domain.AppUser;
 import com.clerova.domain.Organization;
@@ -70,7 +71,7 @@ public class AccountService {
     public MeResponse completeOnboarding(OnboardingRequest request) {
 
         if (currentUserService.findCurrentUser().isPresent()) {
-            throw new IllegalStateException(
+            throw new ConflictException(
                     "Your workspace is already set up."
             );
         }

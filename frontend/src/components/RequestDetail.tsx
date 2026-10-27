@@ -82,7 +82,7 @@ export function RequestDetail({
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(errorMessage(err, "Unable to load the suggestion."));
+          setError(errorMessage(err, "Couldn't load Clerova's suggestion. Refresh to try again."));
           setActionLoaded(true);
         }
       });
@@ -154,6 +154,14 @@ export function RequestDetail({
     return run("Updating...", () => closeWorkItem(workItem.id, status));
   }
 
+  /** For spam or anything that needs no reply. */
+  function closeWithoutReplying(current: ProposedAction) {
+    return run("Closing...", async () => {
+      setAction(await rejectProposedAction(current.id));
+      await closeWorkItem(workItem.id, "CANCELLED");
+    });
+  }
+
   const thread: ThreadMessage[] =
     conversation.length > 0
       ? conversation.map((entry) => ({
@@ -177,15 +185,18 @@ export function RequestDetail({
         ];
 
   const bucket = requestBucket(workItem);
+  const closed = workItem.status === "COMPLETED" || workItem.status === "CANCELLED";
   const pending = action?.status === "PENDING_APPROVAL" ? action : null;
   const reviewed = action && !pending ? action : null;
+  // Waiting on a suggestion decision or an active job, closing isn't allowed
   const canClose =
     workItem.status === "ESCALATED" ||
-    workItem.status === "WAITING_FOR_INFORMATION";
+    workItem.status === "WAITING_FOR_INFORMATION" ||
+    (workItem.status === "NEW" && !pending);
   const meta = [
     workItem.address,
     capitalize(workItem.category),
-    `${capitalize(workItem.priority)} priority`,
+    workItem.priority ? `${capitalize(workItem.priority)} priority` : null,
   ].filter(Boolean);
 
   return (
@@ -238,6 +249,7 @@ export function RequestDetail({
           busy={busy}
           onApprove={(response) => approve(pending, response)}
           onSuggestAgain={() => suggestAgain(pending)}
+          onCloseWithoutReplying={() => closeWithoutReplying(pending)}
         />
       )}
 
@@ -257,11 +269,20 @@ export function RequestDetail({
 
       {reviewed && (
         <section className={`rq-result rq-result-${reviewed.status.toLowerCase()}`}>
-          <strong>{decisionCopy(reviewed, Boolean(replyTo)).title}</strong>
-          <span>{decisionCopy(reviewed, Boolean(replyTo)).description}</span>
+          {closed && reviewed.status === "REJECTED" ? (
+            <>
+              <strong>Closed without replying</strong>
+              <span>Nothing was sent. If the sender writes again, it comes back for review.</span>
+            </>
+          ) : (
+            <>
+              <strong>{decisionCopy(reviewed, Boolean(replyTo)).title}</strong>
+              <span>{decisionCopy(reviewed, Boolean(replyTo)).description}</span>
+            </>
+          )}
 
           <div className="rq-result-actions">
-            {reviewed.status === "REJECTED" && (
+            {reviewed.status === "REJECTED" && !closed && (
               <button
                 type="button"
                 className="rq-button rq-button-primary"
@@ -306,7 +327,7 @@ export function RequestDetail({
             onClick={() => close("COMPLETED")}
             disabled={busy !== null}
           >
-            Mark resolved
+            Mark done
           </button>
           <button
             type="button"
@@ -345,6 +366,7 @@ interface SuggestionCardProps {
   busy: string | null;
   onApprove: (response: string) => void;
   onSuggestAgain: () => void;
+  onCloseWithoutReplying: () => void;
 }
 
 function SuggestionCard({
@@ -354,6 +376,7 @@ function SuggestionCard({
   busy,
   onApprove,
   onSuggestAgain,
+  onCloseWithoutReplying,
 }: SuggestionCardProps) {
   const [response, setResponse] = useState(action.draftedResponse);
   const hasReply = action.actionType !== "NO_ACTION";
@@ -396,6 +419,14 @@ function SuggestionCard({
           disabled={busy !== null}
         >
           Suggest something else
+        </button>
+        <button
+          type="button"
+          className="rq-button rq-button-quiet"
+          onClick={onCloseWithoutReplying}
+          disabled={busy !== null}
+        >
+          Close without replying
         </button>
         {hasReply && !canEmail && (
           <span className="rq-hint">

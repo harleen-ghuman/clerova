@@ -1,5 +1,6 @@
 package com.clerova.service;
 
+import com.clerova.exception.ConflictException;
 import com.clerova.ai.AiService;
 import com.clerova.domain.InboundMessage;
 import com.clerova.domain.MaintenanceRequestStatus;
@@ -86,10 +87,13 @@ public class WorkItemService {
             UUID actorUserId
     ) {
 
-        aiUsageService.consumeRequest(organizationId);
+        aiUsageService.requireQuota(organizationId);
 
         ExtractionResult extraction =
                 aiService.extract(message);
+
+        // Counted only once the AI has read it
+        aiUsageService.consumeRequest(organizationId);
 
         WorkItem workItem = new WorkItem();
 
@@ -106,7 +110,7 @@ public class WorkItemService {
                     organizationId,
                     saved.getId(),
                     WorkItemEventType.CREATED,
-                    "Entered manually",
+                    "Added with New request",
                     actorUserId
             );
 
@@ -143,7 +147,7 @@ public class WorkItemService {
 
         UUID organizationId = email.getOrganizationId();
 
-        aiUsageService.consumeRequest(organizationId);
+        aiUsageService.requireQuota(organizationId);
 
         String content = email.getContentText() != null ? email.getContentText() : "";
 
@@ -163,6 +167,9 @@ public class WorkItemService {
         );
 
         ExtractionResult extraction = aiService.extract(extractionInput);
+
+        // Counted only once the AI has read it, so retries don't add up
+        aiUsageService.consumeRequest(organizationId);
 
         WorkItem workItem = new WorkItem();
 
@@ -275,7 +282,7 @@ public class WorkItemService {
                     organizationId,
                     workItemId,
                     WorkItemEventType.PROPOSAL_GENERATED,
-                    "Recommended " + humanize(result.actionType.name()),
+                    "Clerova suggested " + describe(result.actionType),
                     actorUserId
             );
 
@@ -286,7 +293,7 @@ public class WorkItemService {
     private void ensureCanGenerateProposal(WorkItem workItem) {
 
         if (CLOSED_STATUSES.contains(workItem.getStatus())) {
-            throw new IllegalStateException(
+            throw new ConflictException(
                     "This request is already closed."
             );
         }
@@ -298,7 +305,7 @@ public class WorkItemService {
                     if (latestAction.getStatus()
                             == ProposedActionStatus.PENDING_APPROVAL) {
 
-                        throw new IllegalStateException(
+                        throw new ConflictException(
                                 "This request already has a suggestion waiting for review."
                         );
                     }
@@ -308,7 +315,7 @@ public class WorkItemService {
                     if (latestAction.getStatus() != ProposedActionStatus.REJECTED
                             && workItem.getStatus() != WorkItemStatus.NEW) {
 
-                        throw new IllegalStateException(
+                        throw new ConflictException(
                                 "A suggestion for this request was already approved."
                         );
                     }
@@ -350,7 +357,7 @@ public class WorkItemService {
                                     organizationId,
                                     workItemId,
                                     WorkItemEventType.PROPOSAL_REJECTED,
-                                    "Superseded by a new email",
+                                    "Suggestion replaced because a new email arrived",
                                     null
                             );
                         });
@@ -434,7 +441,7 @@ public class WorkItemService {
                 organizationId,
                 workItem.getId(),
                 WorkItemEventType.PROPOSAL_APPROVED,
-                "Approved " + humanize(savedAction.getActionType().name()),
+                "Approved " + describe(savedAction.getActionType()),
                 actorUserId
         );
 
@@ -467,7 +474,7 @@ public class WorkItemService {
                 organizationId,
                 workItem.getId(),
                 WorkItemEventType.PROPOSAL_REJECTED,
-                "Rejected " + humanize(proposedAction.getActionType().name()),
+                "Dismissed the suggestion",
                 actorUserId
         );
 
@@ -492,8 +499,8 @@ public class WorkItemService {
         if (proposedAction.getStatus()
                 != ProposedActionStatus.PENDING_APPROVAL) {
 
-            throw new IllegalStateException(
-                    "Only pending proposed actions can be " + verb
+            throw new ConflictException(
+                    "This suggestion was already handled. Refresh to see the latest."
             );
         }
 
@@ -513,22 +520,22 @@ public class WorkItemService {
     ) {
 
         if (!CLOSED_STATUSES.contains(status)) {
-            throw new IllegalStateException(
-                    "Work items can only be closed as COMPLETED or CANCELLED"
+            throw new ConflictException(
+                    "Choose whether the request is done or cancelled."
             );
         }
 
         WorkItem workItem = getWorkItem(organizationId, workItemId);
 
         if (CLOSED_STATUSES.contains(workItem.getStatus())) {
-            throw new IllegalStateException(
+            throw new ConflictException(
                     "This request is already closed."
             );
         }
 
         if (workItem.getStatus() == WorkItemStatus.WAITING_FOR_APPROVAL) {
-            throw new IllegalStateException(
-                    "Approve or reject the pending proposed action first"
+            throw new ConflictException(
+                    "Approve or dismiss Clerova's suggestion first."
             );
         }
 
@@ -536,8 +543,8 @@ public class WorkItemService {
                 workItemId,
                 ACTIVE_MAINTENANCE_STATUSES
         )) {
-            throw new IllegalStateException(
-                    "Complete or cancel the maintenance request to close this work item"
+            throw new ConflictException(
+                    "Finish or cancel the job for this request first."
             );
         }
 
@@ -547,7 +554,7 @@ public class WorkItemService {
                 organizationId,
                 workItemId,
                 WorkItemEventType.CLOSED,
-                status == WorkItemStatus.COMPLETED ? "Marked resolved" : "Cancelled",
+                status == WorkItemStatus.COMPLETED ? "Marked done" : "Request cancelled",
                 actorUserId
         );
 
@@ -581,7 +588,14 @@ public class WorkItemService {
         return new ArrayList<>(latestByWorkItem.values());
     }
 
-    static String humanize(String enumName) {
-        return enumName.toLowerCase().replace('_', ' ');
+    /** How a suggestion reads in a request's activity. */
+    static String describe(com.clerova.domain.ActionType actionType) {
+        return switch (actionType) {
+            case CREATE_MAINTENANCE_REQUEST -> "a maintenance job and a reply";
+            case RESPOND_TO_CUSTOMER -> "a reply";
+            case REQUEST_MORE_INFORMATION -> "asking for more details";
+            case ESCALATE_TO_HUMAN -> "escalating to your team";
+            case NO_ACTION -> "closing with no action";
+        };
     }
 }

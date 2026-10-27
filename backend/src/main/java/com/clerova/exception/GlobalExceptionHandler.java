@@ -1,20 +1,27 @@
 package com.clerova.exception;
 
 import com.clerova.dto.ApiError;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.ErrorResponseException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ApiError> handleApiException(
@@ -38,7 +45,7 @@ public class GlobalExceptionHandler {
 
         ApiError error = new ApiError(
                 "AI_SERVICE_ERROR",
-                "Unable to process the AI request at this time."
+                "Clerova couldn't create a suggestion right now. Please try again in a minute."
         );
 
         return ResponseEntity
@@ -46,9 +53,9 @@ public class GlobalExceptionHandler {
                 .body(error);
     }
 
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ApiError> handleIllegalStateException(
-            IllegalStateException e
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ApiError> handleConflictException(
+            ConflictException e
     ) {
 
         ApiError error = new ApiError(
@@ -96,9 +103,10 @@ public class GlobalExceptionHandler {
             NotFoundException e
     ) {
 
+        // The exception names internal ids; keep those out of the app
         ApiError error = new ApiError(
                 "NOT_FOUND",
-                e.getMessage()
+                "We couldn't find that. It may have been removed. Refresh and try again."
         );
 
         return ResponseEntity
@@ -115,7 +123,8 @@ public class GlobalExceptionHandler {
                 .getFieldErrors()
                 .stream()
                 .map(FieldError::getDefaultMessage)
-                .collect(Collectors.joining("; "));
+                .distinct()
+                .collect(Collectors.joining(" "));
 
         ApiError error = new ApiError(
                 "VALIDATION_ERROR",
@@ -134,11 +143,57 @@ public class GlobalExceptionHandler {
 
         ApiError error = new ApiError(
                 "INVALID_REQUEST",
-                "The request body is missing or malformed."
+                "Something in that request wasn't right. Refresh and try again."
         );
 
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(error);
+    }
+
+    @ExceptionHandler({
+            MethodArgumentTypeMismatchException.class,
+            MissingServletRequestParameterException.class
+    })
+    public ResponseEntity<ApiError> handleBadParameter(Exception e) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ApiError(
+                        "INVALID_REQUEST",
+                        "Something in that request wasn't right. Refresh and try again."
+                ));
+    }
+
+    /** Spring's own errors (unknown route, wrong method) keep their status. */
+    @ExceptionHandler(ErrorResponseException.class)
+    public ResponseEntity<ApiError> handleSpringError(ErrorResponseException e) {
+        return ResponseEntity
+                .status(e.getStatusCode())
+                .body(new ApiError("REQUEST_FAILED", "That didn't work. Refresh and try again."));
+    }
+
+    /** Anything unexpected: logged in full, shown in plain words. */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiError> handleUnexpected(Exception e) throws Exception {
+        if (e instanceof org.springframework.web.ErrorResponse errorResponse) {
+            return ResponseEntity
+                    .status(errorResponse.getStatusCode())
+                    .body(new ApiError("REQUEST_FAILED", "That didn't work. Refresh and try again."));
+        }
+
+        if (e instanceof org.springframework.security.access.AccessDeniedException
+                || e instanceof org.springframework.security.core.AuthenticationException) {
+            // Let Spring Security answer with 401/403
+            throw e;
+        }
+
+        log.error("Unexpected error", e);
+
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiError(
+                        "SERVER_ERROR",
+                        "Something went wrong on our side. Please try again in a minute."
+                ));
     }
 }

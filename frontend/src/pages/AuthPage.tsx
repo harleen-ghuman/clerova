@@ -111,6 +111,14 @@ export function AuthPage({
           throw signUpError;
         }
 
+        // Supabase answers an existing email with a user that has no
+        // identities, and sends nothing; say so instead of "check your email"
+        if (data.user && data.user.identities?.length === 0) {
+          setMode("sign-in");
+          setError("There's already an account with this email. Sign in, or reset your password.");
+          return;
+        }
+
         // With email confirmation on, the user signs in by clicking the link
         if (!data.session) {
           setMode("check-email");

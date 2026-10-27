@@ -61,7 +61,7 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
       const { url } = await startCheckout(plan, interval);
       window.location.assign(url);
     } catch (err) {
-      setError(errorMessage(err, "Unable to open checkout. Please try again."));
+      setError(errorMessage(err, "Couldn't open checkout. Please try again."));
       setSubmitting(null);
     }
   }
@@ -110,6 +110,8 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
           </p>
         )}
 
+        {error && <p className="action-error">{error}</p>}
+
         <div className="plan-options">
           {PLANS.map((item) => {
             const price = planPrice(founding ? item.foundingMonthly : item.monthly, interval);
@@ -152,8 +154,6 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
           </a>
           .
         </p>
-
-        {error && <p className="action-error">{error}</p>}
 
         <div className="auth-links">
           <button type="button" onClick={onSignOut}>

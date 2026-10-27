@@ -233,6 +233,52 @@ class EmailIntakeTest {
     }
 
     @Test
+    void emailForwardedByHandUsesTheResidentAsSender() throws Exception {
+        var root = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(
+                payload(forwardingAddress, "<fwd@x>", null, null, "pm@maple.com", """
+                        Please handle
+
+                        ---------- Forwarded message ---------
+                        From: Tina Alvarez <tina.alvarez@gmail.com>
+                        Subject: Kitchen sink leaking
+
+                        Water is leaking under the sink.
+                        """));
+        root.put("Subject", "Fwd: Kitchen sink leaking");
+        root.put("StrippedTextReply", "Please handle");
+
+        deliver(root.toString()).andExpect(jsonPath("$.status").value("STORED"));
+
+        processor.processDue();
+
+        JsonNode item = json(mockMvc.perform(get("/api/work-items").with(user))).get(0);
+        assertThat(item.get("senderEmail").asText()).isEqualTo("tina.alvarez@gmail.com");
+        assertThat(item.get("senderName").asText()).isEqualTo("Tina Alvarez");
+        assertThat(item.get("subject").asText()).isEqualTo("Kitchen sink leaking");
+
+        // The AI read the resident's message, not just the forwarder's note
+        ArgumentCaptor<String> extractionInput = ArgumentCaptor.forClass(String.class);
+        verify(aiService).extract(extractionInput.capture());
+        assertThat(extractionInput.getValue()).contains("Water is leaking under the sink.");
+    }
+
+    @Test
+    void clerovaOwnEmailsAndBouncesDontBecomeRequests() throws Exception {
+        deliver(payload(forwardingAddress, "<own@x>", null, null, "notifications@in.test.clerova", "Usage"))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        deliver(payload(forwardingAddress, "<bounce@x>", null, null, "MAILER-DAEMON@gmail.com", "Undeliverable"))
+                .andExpect(jsonPath("$.status").value("STORED"));
+
+        processor.processDue();
+
+        JsonNode inbox = json(mockMvc.perform(get("/api/inbox").with(user)));
+
+        assertThat(inbox).hasSize(2);
+        inbox.forEach(message -> assertThat(message.get("status").asText()).isEqualTo("IGNORED"));
+        verify(aiService, never()).extract(anyString());
+    }
+
+    @Test
     void automatedEmailIsIgnoredUntilRestored() throws Exception {
         deliver(payload(forwardingAddress, "<news@x>", null, "List-Unsubscribe", "news@vendor.com", "Sale!"))
                 .andExpect(jsonPath("$.status").value("STORED"));
@@ -438,7 +484,7 @@ class EmailIntakeTest {
     }
 
     @Test
-    void failureReasonIsShownInTheInbox() throws Exception {
+    void failureReasonInTheInboxIsPlainAndHidesProviderErrors() throws Exception {
         when(aiService.extract(anyString())).thenThrow(new AiServiceException(
                 "Failed to process AI request",
                 new RuntimeException("401: Incorrect API key provided")
@@ -452,7 +498,11 @@ class EmailIntakeTest {
         mockMvc.perform(get("/api/inbox").with(user))
                 .andExpect(jsonPath("$[0].status").value("RECEIVED"))
                 .andExpect(jsonPath("$[0].statusReason").value(
-                        "Will retry. AI processing failed: 401: Incorrect API key provided"));
+                        "Couldn't read this email yet. Clerova will try again in a few minutes."));
+
+        // A failed attempt doesn't use up the plan
+        mockMvc.perform(get("/api/me").with(user))
+                .andExpect(jsonPath("$.organization.aiRequestsUsedThisMonth").value(0));
     }
 
     @Test

@@ -49,8 +49,8 @@ export function requestSender(item: WorkItem): string {
   return "Entered in Clerova";
 }
 
-export function capitalize(value: string): string {
-  const lower = value.toLowerCase().replaceAll("_", " ");
+export function capitalize(value: string | null | undefined): string {
+  const lower = (value ?? "").toLowerCase().replaceAll("_", " ");
   return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
 

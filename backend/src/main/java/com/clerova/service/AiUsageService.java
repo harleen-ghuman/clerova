@@ -49,11 +49,7 @@ public class AiUsageService {
         String period = YearMonth.now(clock.withZone(ZoneOffset.UTC)).toString();
 
         if (organizationRepository.tryConsumeAiRequest(organizationId, period) == 0) {
-            throw new ApiException(
-                    HttpStatus.TOO_MANY_REQUESTS,
-                    "AI_QUOTA_EXCEEDED",
-                    "You have used all requests included in your plan this month."
-            );
+            throw quotaExceeded();
         }
 
         // Each count is reached by exactly one request, so this fires once per month
@@ -65,6 +61,36 @@ public class AiUsageService {
         if (used == limit || used == warningThreshold(limit)) {
             events.publishEvent(new UsageThresholdReached(organizationId, used, limit));
         }
+    }
+
+    /**
+     * Throws unless the organization may use AI and has a request left this
+     * month, without counting one. Call before the AI reads a new request and
+     * {@link #consumeRequest} once it has, so a failed AI call (and its
+     * retries) doesn't use up the plan.
+     */
+    @Transactional(readOnly = true)
+    public void requireQuota(UUID organizationId) {
+        requireAccess(organizationId);
+
+        Organization organization = organizationRepository.findById(organizationId).orElseThrow();
+        String period = YearMonth.now(clock.withZone(ZoneOffset.UTC)).toString();
+        int limit = organization.getAiMonthlyLimit() != null ? organization.getAiMonthlyLimit() : 0;
+        int used = period.equals(organization.getAiUsagePeriod()) && organization.getAiUsageCount() != null
+                ? organization.getAiUsageCount()
+                : 0;
+
+        if (limit <= 0 || used >= limit) {
+            throw quotaExceeded();
+        }
+    }
+
+    private static ApiException quotaExceeded() {
+        return new ApiException(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "AI_QUOTA_EXCEEDED",
+                "You have used all requests included in your plan this month."
+        );
     }
 
     /** Usage at which to warn that the monthly limit is close. */

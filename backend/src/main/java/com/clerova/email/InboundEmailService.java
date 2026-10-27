@@ -77,7 +77,7 @@ public class InboundEmailService {
         message.setSubject(truncate(email.subject(), 1000));
         message.setTextBody(truncate(email.textBody(), MAX_BODY_LENGTH));
         message.setReplyText(truncate(email.replyText(), MAX_BODY_LENGTH));
-        message.setAutomated(email.automated());
+        message.setAutomated(email.automated() || isFromClerovaOrBounce(email.fromEmail()));
         // Our own receive time: the sender's Date header can be wrong or
         // spoofed, and ordering must match when Clerova saw each message.
         message.setReceivedAt(Instant.now());
@@ -129,6 +129,33 @@ public class InboundEmailService {
         }
 
         return Optional.empty();
+    }
+
+    /**
+     * Clerova's own emails (replies, usage warnings) and bounce notices. A
+     * customer who forwards their whole inbox would otherwise loop them back
+     * in as new requests. Marked automated, so "Process anyway" still works.
+     */
+    boolean isFromClerovaOrBounce(String fromEmail) {
+        String from = fromEmail == null ? "" : fromEmail.trim().toLowerCase(Locale.ROOT);
+        int at = from.lastIndexOf('@');
+
+        if (at < 0) {
+            return false;
+        }
+
+        String local = from.substring(0, at);
+        String domain = from.substring(at + 1);
+        String inboundDomain = emailProperties.getInboundDomain().toLowerCase(Locale.ROOT);
+
+        boolean ownNoReply = inboundDomain.endsWith("." + domain)
+                && (local.startsWith("noreply") || local.startsWith("no-reply")
+                        || local.startsWith("notifications"));
+
+        return domain.equals(inboundDomain)
+                || ownNoReply
+                || local.equals("mailer-daemon")
+                || local.equals("postmaster");
     }
 
     private static String trimToNull(String value) {

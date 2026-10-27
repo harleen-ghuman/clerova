@@ -85,6 +85,40 @@ class AccountAndTenancyTest {
     }
 
     @Test
+    void errorsAreWrittenForPeopleNotDevelopers() throws Exception {
+        RequestPostProcessor user = onboardNewUser(mockMvc);
+        UUID missing = UUID.randomUUID();
+
+        // No internal ids in the message
+        mockMvc.perform(get("/api/work-items/{id}", missing).with(user))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value(
+                        "We couldn't find that. It may have been removed. Refresh and try again."));
+
+        // A malformed id is a bad request, not a server error
+        mockMvc.perform(get("/api/work-items/not-an-id").with(user))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("INVALID_REQUEST"));
+
+        // A broken body says so in plain words
+        mockMvc.perform(post("/api/work-items")
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{not json"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "Something in that request wasn't right. Refresh and try again."));
+
+        // Validation uses the words on the screen
+        mockMvc.perform(post("/api/work-items")
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Paste or type the request first."));
+    }
+
+    @Test
     void apiRequiresAuthentication() throws Exception {
         mockMvc.perform(get("/api/work-items"))
                 .andExpect(status().isUnauthorized())

@@ -1001,6 +1001,25 @@ p {
   }
 
   .demo .preview {
-    min-height: 0;
+    min-height: 425px;
+  }
+
+  /* On phones the reply takes the message's place, so the demo keeps one
+     height instead of pushing the page down and back every few seconds */
+  .demo .preview-detail.drafted .preview-message,
+  .demo .btn-other {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .demo .preview {
+    min-height: 462px;
+  }
+}
+
+@media (max-width: 340px) {
+  .demo .preview {
+    min-height: 495px;
   }
 }

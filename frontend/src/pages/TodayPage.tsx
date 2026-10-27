@@ -131,6 +131,7 @@ export function TodayPage({
   onOpenJobs,
 }: TodayPageProps) {
   const [summary, setSummary] = useState<WeekSummary | null>(null);
+  const [summaryFailed, setSummaryFailed] = useState(false);
   const [checklistHidden, setChecklistHidden] = useState(readHidden);
   // Fixed per refresh so "waiting 3+ days" doesn't change between renders
   const [now, setNow] = useState(() => Date.now());
@@ -142,10 +143,17 @@ export function TodayPage({
       .then((result) => {
         if (!cancelled) {
           setSummary(result);
+          setSummaryFailed(false);
           setNow(Date.now());
         }
       })
-      .catch((err) => console.error("Failed to load the summary:", err));
+      .catch((err) => {
+        console.error("Failed to load the summary:", err);
+
+        if (!cancelled) {
+          setSummaryFailed(true);
+        }
+      });
 
     return () => {
       cancelled = true;
@@ -180,10 +188,12 @@ export function TodayPage({
         // All-time totals, so established workspaces never see it again
         const hasRequest = hasAnyRequest || (summary?.allTimeRequests ?? 0) > 0;
         const hasReply = (summary?.allTimeApprovals ?? 0) > 0;
-        const finished = hasRequest && hasReply;
+        // Without stats, an account with requests is treated as set up
+        const finished = hasRequest && (hasReply || summaryFailed);
 
         return (
-          summary !== null &&
+          // Without the summary, the request lists decide
+          (summary !== null || summaryFailed) &&
           !checklistHidden &&
           !finished && (
             <GetStarted
@@ -305,7 +315,9 @@ export function TodayPage({
             </p>
           </>
         ) : (
-          <p className="today-footnote">Loading...</p>
+          <p className="today-footnote">
+            {summaryFailed ? "Couldn't load your stats. They'll refresh shortly." : "Loading..."}
+          </p>
         )}
       </section>
       </>

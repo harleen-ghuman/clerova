@@ -134,15 +134,16 @@ function gmailSteps(address: string): Step[] {
 }
 
 export function EmailSetupPage({ settings, error }: EmailSetupPageProps) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"idle" | "done" | "failed">("idle");
 
   async function handleCopy(address: string) {
     try {
       await navigator.clipboard.writeText(address);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
+      setCopied("done");
+      window.setTimeout(() => setCopied("idle"), 2000);
     } catch {
-      setCopied(false);
+      // Some browsers block the clipboard; the address is selectable
+      setCopied("failed");
     }
   }
 
@@ -189,7 +190,7 @@ export function EmailSetupPage({ settings, error }: EmailSetupPageProps) {
           className="rq-button rq-button-primary"
           onClick={() => handleCopy(address)}
         >
-          {copied ? "Copied" : "Copy address"}
+          {copied === "done" ? "Copied" : copied === "failed" ? "Select it to copy" : "Copy address"}
         </button>
       </div>
 
@@ -223,6 +224,11 @@ export function EmailSetupPage({ settings, error }: EmailSetupPageProps) {
           Only want some emails? Instead of forwarding everything, create a
           filter (for example, mail sent to maintenance@ or from your tenant
           portal) and choose "Forward it to" your Clerova address.
+        </p>
+        <p className="setup-tip">
+          Just one email? Click Forward and send it to your Clerova address.
+          Clerova uses the original sender, so your reply goes to the resident,
+          not back to you.
         </p>
       </section>
 
