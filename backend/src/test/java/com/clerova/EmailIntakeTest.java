@@ -687,6 +687,39 @@ class EmailIntakeTest {
     }
 
     @Test
+    void aBurstOfFollowUpsStopsRunningTheAi() throws Exception {
+        String workItemId = inProgressRequest("<burst0@x>");
+
+        com.clerova.dto.UrgencyResult calm = new com.clerova.dto.UrgencyResult();
+        when(aiService.checkUrgency(any(), anyString())).thenReturn(calm);
+
+        for (int i = 1; i <= 14; i++) {
+            deliver(payload(forwardingAddress, "<burst" + i + "@x>", "<burst0@x>", null,
+                    "tina@example.com", "Follow-up number " + i))
+                    .andExpect(jsonPath("$.status").value("STORED"));
+        }
+
+        processor.processDue();
+        processor.processDue();
+
+        // Every email is still attached to the request
+        JsonNode inbox = json(mockMvc.perform(get("/api/inbox").with(user)));
+        long attached = 0;
+        for (JsonNode message : inbox) {
+            if ("ATTACHED".equals(message.get("status").asText())) {
+                attached++;
+            }
+        }
+        assertThat(attached).isEqualTo(14);
+
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.unreadReplyAt").isNotEmpty());
+
+        // The original plus 9 follow-ups ran the check; the rest were skipped
+        verify(aiService, org.mockito.Mockito.times(9)).checkUrgency(any(), anyString());
+    }
+
+    @Test
     void customerWhoHasNotAnsweredCanBeReminded() throws Exception {
         String workItemId = deliverNew("<nudge1@x>", "My sink is leaking.");
 

@@ -143,7 +143,7 @@ export function Root() {
 
   if (!isAuthConfigured) {
     return (
-      <div className="auth-shell">
+      <div className="auth-shell" role="main">
         <div className="auth-card">
           <h1>Sign-in is not configured</h1>
           <p className="auth-description">
@@ -156,7 +156,7 @@ export function Root() {
   }
 
   if (session === undefined) {
-    return <div className="auth-shell" aria-busy="true" />;
+    return <div className="auth-shell" role="main" aria-busy="true" />;
   }
 
   if (!session || recoveringPassword) {
@@ -173,7 +173,7 @@ export function Root() {
 
   if (!currentMe) {
     return (
-      <div className="auth-shell">
+      <div className="auth-shell" role="main">
         <div className="auth-card">
           {meError ? (
             <>

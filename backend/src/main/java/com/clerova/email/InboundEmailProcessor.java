@@ -1,6 +1,7 @@
 package com.clerova.email;
 
 import com.clerova.billing.BillingService;
+import com.clerova.config.AiRateLimitInterceptor;
 import com.clerova.domain.InboundMessage;
 import com.clerova.domain.InboundMessageStatus;
 import com.clerova.domain.WorkItem;
@@ -53,6 +54,10 @@ public class InboundEmailProcessor {
     public static final String FAILED_REASON = "Couldn't read this email. Click Retry to try again.";
 
     static final int MAX_ATTEMPTS = 3;
+
+    /** More follow-ups than this on one request within the window skip the AI. */
+    static final int FOLLOW_UP_BURST_LIMIT = 10;
+    static final Duration FOLLOW_UP_BURST_WINDOW = Duration.ofHours(1);
     private static final int BATCH_SIZE = 10;
     private static final Duration STALE_PROCESSING = Duration.ofMinutes(10);
 
@@ -72,6 +77,7 @@ public class InboundEmailProcessor {
     private final WorkItemRepository workItemRepository;
     private final WorkItemService workItemService;
     private final AiUsageService aiUsageService;
+    private final AiRateLimitInterceptor aiRateLimiter;
     private final TransactionTemplate transactionTemplate;
 
     public InboundEmailProcessor(
@@ -80,6 +86,7 @@ public class InboundEmailProcessor {
             WorkItemRepository workItemRepository,
             WorkItemService workItemService,
             AiUsageService aiUsageService,
+            AiRateLimitInterceptor aiRateLimiter,
             TransactionTemplate transactionTemplate
     ) {
         this.enabled = enabled;
@@ -87,6 +94,7 @@ public class InboundEmailProcessor {
         this.workItemRepository = workItemRepository;
         this.workItemService = workItemService;
         this.aiUsageService = aiUsageService;
+        this.aiRateLimiter = aiRateLimiter;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -203,6 +211,18 @@ public class InboundEmailProcessor {
                 workItem.getId(),
                 message.getFromEmail()
         );
+
+        // Follow-ups don't count against the plan, so a burst of them (a
+        // loop, or someone replying over and over) must not run the AI
+        // each time; the request is still updated and flagged.
+        long recent = inboundMessageRepository.countByWorkItemIdAndReceivedAtAfter(
+                workItem.getId(), Instant.now().minus(FOLLOW_UP_BURST_WINDOW));
+
+        if (recent > FOLLOW_UP_BURST_LIMIT || !aiRateLimiter.tryAcquireBackground()) {
+            log.warn("Skipping automatic AI for follow-up on work item {} ({} emails in the last hour)",
+                    workItem.getId(), recent);
+            return;
+        }
 
         if (needsProposal) {
             generateProposal(workItem);

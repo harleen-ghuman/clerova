@@ -48,6 +48,9 @@ public class WorkItemService {
             MaintenanceRequestStatus.IN_PROGRESS
     );
 
+    /** Limit on a follow-up's text sent to the AI for the urgency check. */
+    private static final int MAX_URGENCY_CHARS = 4_000;
+
     /** Limit on email text sent to the AI for extraction. */
     private static final int MAX_EXTRACTION_CHARS = 8_000;
 
@@ -467,7 +470,11 @@ public class WorkItemService {
 
         try {
             aiUsageService.requireAccess(organizationId);
-            result = aiService.checkUrgency(workItem, message);
+            // The start says what is happening; a long quoted tail adds cost only
+            result = aiService.checkUrgency(
+                    workItem,
+                    message.length() > MAX_URGENCY_CHARS ? message.substring(0, MAX_URGENCY_CHARS) : message
+            );
         } catch (RuntimeException e) {
             log.warn("Could not check the urgency of a follow-up for work item {}", workItemId, e);
             return;
@@ -481,6 +488,16 @@ public class WorkItemService {
                 ? result.reason.trim()
                 : "The new email looks urgent.";
 
+        try {
+            markUrgent(organizationId, workItemId, reason, message);
+        } catch (RuntimeException e) {
+            // E.g. the request changed at the same moment; the email itself
+            // is already attached, so don't fail its processing
+            log.warn("Could not mark work item {} urgent", workItemId, e);
+        }
+    }
+
+    private void markUrgent(UUID organizationId, UUID workItemId, String reason, String message) {
         transactionTemplate.executeWithoutResult(status -> {
             WorkItem current = getWorkItem(organizationId, workItemId);
 

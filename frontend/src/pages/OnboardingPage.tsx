@@ -81,7 +81,7 @@ export function OnboardingPage({
   }
 
   return (
-    <div className="auth-shell">
+    <div className="auth-shell" role="main">
       <div className="auth-card auth-card-wide">
         <div className="auth-brand">
           <div className="brand-mark">C</div>

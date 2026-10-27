@@ -212,7 +212,7 @@ export function AuthPage({
 
   if (mode === "check-email") {
     return (
-      <div className="auth-shell">
+      <div className="auth-shell" role="main">
         <div className="auth-card">
           <div className="auth-brand">
             <div className="brand-mark">C</div>
@@ -278,7 +278,7 @@ export function AuthPage({
   const offersGoogle = googleEnabled && (mode === "sign-up" || mode === "sign-in");
 
   return (
-    <div className="auth-shell">
+    <div className="auth-shell" role="main">
       <div className="auth-card">
         <div className="auth-brand">
           <div className="brand-mark">C</div>

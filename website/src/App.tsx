@@ -132,7 +132,7 @@ function App() {
           <span className="brand-name">Clerova</span>
         </a>
 
-        <nav className="nav-links">
+        <nav className="nav-links" aria-label="Main">
           <a href="#how-it-works">How it works</a>
           <a href="#setup">Getting started</a>
           <a href="#pricing">Pricing</a>
@@ -345,7 +345,7 @@ function App() {
           <span className="brand-mark">C</span>
           <span className="brand-name">Clerova</span>
         </a>
-        <nav className="footer-links">
+        <nav className="footer-links" aria-label="Footer">
           <a href="/terms">Terms</a>
           <a href="/privacy">Privacy</a>
           <a href="mailto:hello@clerova-ai.com">hello@clerova-ai.com</a>

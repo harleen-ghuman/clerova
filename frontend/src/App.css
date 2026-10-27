@@ -1582,9 +1582,24 @@ h3 {
 
   .rq-page.rq-has-selection .rq-list,
   .rq-page:not(.rq-has-selection) .rq-detail,
-  .rq-page.rq-has-selection .rq-header,
+  .rq-page.rq-has-selection .rq-header > :not(h1),
   .rq-page.rq-has-selection .rq-compose {
     display: none;
+  }
+
+  /* The page heading stays for screen readers while a request is open */
+  .rq-page.rq-has-selection .rq-header {
+    padding: 0;
+    border: 0;
+  }
+
+  .rq-page.rq-has-selection .rq-header h1 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 
   .rq-back {
@@ -1979,7 +1994,8 @@ h3 {
 }
 
 .plan-interval span {
-  color: var(--success);
+  /* Darker than --success so it stays readable on the grey toggle */
+  color: #0b6b4c;
   font-size: 12px;
 }
 

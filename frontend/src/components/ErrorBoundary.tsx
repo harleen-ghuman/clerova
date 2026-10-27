@@ -22,7 +22,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBound
     }
 
     return (
-      <div className="auth-shell">
+      <div className="auth-shell" role="main">
         <div className="auth-card">
           <div className="auth-brand">
             <div className="brand-mark">C</div>

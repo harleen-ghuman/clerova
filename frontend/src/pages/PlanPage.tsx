@@ -77,7 +77,7 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
   }
 
   return (
-    <div className="auth-shell">
+    <div className="auth-shell" role="main">
       <div className="auth-card plan-card">
         <div className="auth-brand">
           <span className="brand-mark">C</span>
