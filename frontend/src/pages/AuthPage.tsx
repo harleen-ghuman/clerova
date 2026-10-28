@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { prefilledEmail, wantsSignIn } from "../auth/referral";
 import { friendlyError } from "../auth/friendlyError";
+import { MIN_PASSWORD_LENGTH, PASSWORD_HINT, passwordProblem } from "../auth/passwordRules";
 import { fetchGoogleSignInEnabled, supabase } from "../auth/supabase";
 import { GoogleSignInButton } from "../components/GoogleSignInButton";
 
@@ -18,7 +19,6 @@ interface AuthPageProps {
   onPasswordReset: () => void;
 }
 
-const MIN_PASSWORD_LENGTH = 8;
 
 const GOOGLE_KEY = "clerova.googleSignIn";
 
@@ -115,6 +115,15 @@ export function AuthPage({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    // A new password must meet Supabase's rules; say so before sending
+    const weak = mode === "sign-up" || mode === "reset-password" ? passwordProblem(password) : null;
+
+    if (weak) {
+      setError(weak);
+      setNotice(null);
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
@@ -343,9 +352,7 @@ export function AuthPage({
                 disabled={submitting}
               />
               {mode !== "sign-in" && (
-                <span className="auth-hint">
-                  At least {MIN_PASSWORD_LENGTH} characters
-                </span>
+                <span className="auth-hint">{PASSWORD_HINT}</span>
               )}
             </label>
           )}

@@ -13,6 +13,7 @@ import {
   type CompanyInfoKey,
 } from "../api/companyInfo";
 import { friendlyError } from "../auth/friendlyError";
+import { MIN_PASSWORD_LENGTH, PASSWORD_HINT, passwordProblem } from "../auth/passwordRules";
 import { supabase } from "../auth/supabase";
 import { isDemo } from "../demo/mode";
 import type { Me, Organization } from "../types/Account";
@@ -34,7 +35,6 @@ interface SettingsPageProps {
   onSignOut: () => void;
 }
 
-const MIN_PASSWORD_LENGTH = 8;
 
 /** The company's standard answers, used in suggested replies. */
 function CompanyInfoSection({
@@ -413,6 +413,15 @@ function PasswordSection() {
 
   async function changePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    const weak = passwordProblem(password);
+
+    if (weak) {
+      setError(weak);
+      setSaved(false);
+      return;
+    }
+
     setSaving(true);
     setError(null);
     setSaved(false);
@@ -460,7 +469,7 @@ function PasswordSection() {
             }}
             disabled={saving}
           />
-          <span className="auth-hint">At least {MIN_PASSWORD_LENGTH} characters</span>
+          <span className="auth-hint">{PASSWORD_HINT}</span>
         </label>
 
         {error && <p className="action-error">{error}</p>}
