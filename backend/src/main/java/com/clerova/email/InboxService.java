@@ -64,6 +64,11 @@ public class InboxService {
             throw new ConflictException("This email was already processed.");
         }
 
+        // It would come back as a "new reply" from yourself
+        if (InboundEmailProcessor.OWN_COPY_REASON.equals(message.getStatusReason())) {
+            throw new ConflictException("This is your copy of an email sent through Clerova. There's nothing to process.");
+        }
+
         message.setAutomated(false);
         message.setStatus(InboundMessageStatus.RECEIVED);
         message.setStatusReason(null);

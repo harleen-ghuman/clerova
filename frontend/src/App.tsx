@@ -69,6 +69,8 @@ function App({
   const [requestFilter, setRequestFilter] = useState<RequestFilter>("review");
   // Opened from Today to send a reminder: the request starts with a draft
   const [remindFor, setRemindFor] = useState<string | null>(null);
+  // Opened from the get-started step: Settings starts at Company info
+  const [focusCompanyInfo, setFocusCompanyInfo] = useState(false);
 
   const [openRequests, setOpenRequests] = useState<WorkItem[]>([]);
   const [closedRequests, setClosedRequests] = useState<WorkItem[]>([]);
@@ -495,12 +497,8 @@ function App({
             hasAnyRequest={openRequests.length + closedRequests.length > 0}
             onOpenEmailSetup={() => navigate("email-setup")}
             onOpenCompanyInfo={() => {
+              setFocusCompanyInfo(true);
               navigate("settings");
-              window.setTimeout(() => {
-                const section = document.getElementById("company-info");
-                section?.scrollIntoView({ block: "start" });
-                section?.querySelector<HTMLElement>("textarea, h2")?.focus({ preventScroll: true });
-              }, 50);
             }}
             requests={openRequests}
             jobs={jobs}
@@ -598,6 +596,8 @@ function App({
               onBillingChanged={loadOrganization}
               onUpgrade={upgrade}
               upgrading={upgrading}
+              focusCompanyInfo={focusCompanyInfo}
+              onCompanyInfoFocused={() => setFocusCompanyInfo(false)}
               onSignOut={onSignOut}
             />
           </div>

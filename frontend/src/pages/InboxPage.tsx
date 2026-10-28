@@ -30,6 +30,14 @@ const STATUS_CLASSES: Record<InboundMessageStatus, string> = {
   FAILED: "status-rejected",
 };
 
+/** Matches InboundEmailProcessor.OWN_COPY_REASON on the server. */
+const OWN_COPY_REASON = "Your copy of an email sent through Clerova";
+
+/** A copy of an email sent through Clerova that came back via forwarding. */
+function isOwnCopy(message: InboundMessage): boolean {
+  return message.status === "IGNORED" && message.statusReason === OWN_COPY_REASON;
+}
+
 export function InboxPage({
   refreshKey,
   onOpenWorkItem,
@@ -92,7 +100,9 @@ export function InboxPage({
   }
 
   const needsAttention = messages.filter(
-    (message) => message.status === "FAILED" || message.status === "IGNORED"
+    (message) =>
+      message.status === "FAILED" ||
+      (message.status === "IGNORED" && !isOwnCopy(message))
   );
 
   const visible = filter === "all" ? messages : needsAttention;
@@ -177,7 +187,7 @@ export function InboxPage({
                 </div>
 
                 <span className={`status-badge ${STATUS_CLASSES[message.status]}`}>
-                  {STATUS_LABELS[message.status]}
+                  {isOwnCopy(message) ? "Your copy" : STATUS_LABELS[message.status]}
                 </span>
               </div>
 
@@ -220,7 +230,8 @@ export function InboxPage({
                   </button>
                 )}
 
-                {(message.status === "IGNORED" || message.status === "FAILED") && (
+                {(message.status === "FAILED" ||
+                  (message.status === "IGNORED" && !isOwnCopy(message))) && (
                   <button
                     type="button"
                     className="secondary-action-button"

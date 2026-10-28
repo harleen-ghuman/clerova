@@ -206,6 +206,19 @@ class AttachmentTest {
     }
 
     @Test
+    void theLargestEmailPostmarkAcceptsStillArrives() throws Exception {
+        // Postmark allows up to 35 MB per email; base64 makes it about 47 MB of JSON
+        byte[] video = new byte[30 * 1024 * 1024];
+
+        JsonNode message = deliver("<files5@x>",
+                file("walkthrough.mov", "video/quicktime", video),
+                file("sink.jpg", "image/jpeg", PHOTO));
+
+        assertThat(message.get("files").get(0).get("available").asBoolean()).isFalse();
+        assertThat(message.get("files").get(1).get("available").asBoolean()).isTrue();
+    }
+
+    @Test
     void withoutStorageOnlyNamesAreKept() throws Exception {
         when(fileStorage.isEnabled()).thenReturn(false);
 

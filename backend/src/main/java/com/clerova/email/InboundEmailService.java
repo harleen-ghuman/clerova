@@ -97,7 +97,12 @@ public class InboundEmailService {
 
         for (ParsedInboundEmail.Attachment parsed : email.attachments()) {
             InboundAttachment attachment = new InboundAttachment();
-            byte[] content = decode(parsed.content());
+            // Clearly too-large files aren't decoded at all (base64 is 4 characters
+            // per 3 bytes, plus line breaks); the exact size is checked below
+            byte[] content = parsed.content() != null
+                    && (long) parsed.content().length() * 3 / 4 <= MAX_FILE_BYTES + MAX_FILE_BYTES / 20
+                    ? decode(parsed.content())
+                    : null;
 
             attachment.setFileName(truncate(parsed.fileName(), 500));
             attachment.setContentType(truncate(parsed.contentType(), 255));

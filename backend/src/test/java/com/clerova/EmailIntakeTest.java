@@ -740,9 +740,16 @@ class EmailIntakeTest {
                 .andExpect(jsonPath("$.status").value("STORED"));
         processor.processDue();
 
-        mockMvc.perform(get("/api/inbox").with(user))
+        JsonNode ownCopy = json(mockMvc.perform(get("/api/inbox").with(user))
                 .andExpect(jsonPath("$[0].status").value("IGNORED"))
-                .andExpect(jsonPath("$[0].statusReason").value(InboundEmailProcessor.OWN_COPY_REASON));
+                .andExpect(jsonPath("$[0].statusReason").value(InboundEmailProcessor.OWN_COPY_REASON)))
+                .get(0);
+
+        // "Process anyway" would make it a new reply from yourself
+        mockMvc.perform(post("/api/inbox/{id}/reprocess", ownCopy.get("id").asText()).with(user))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(
+                        "This is your copy of an email sent through Clerova. There's nothing to process."));
         mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
                 .andExpect(jsonPath("$.unreadReplyAt").isEmpty());
 
