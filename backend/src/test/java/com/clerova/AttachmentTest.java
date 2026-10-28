@@ -175,9 +175,13 @@ class AttachmentTest {
                 .andExpect(jsonPath("$[0].files[0].fileName").value("sink.jpg"))
                 .andExpect(jsonPath("$[0].files[0].available").value(true));
 
-        // Another workspace can't open it
+        // Another workspace can't open it, and nobody signed out can
         mockMvc.perform(get("/api/attachments/{id}", photo.get("id").asText()).with(onboardNewUser(mockMvc)))
                 .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/attachments/{id}", photo.get("id").asText()))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/company-info"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
