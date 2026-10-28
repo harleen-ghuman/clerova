@@ -257,6 +257,11 @@ function App({
       setHighlightJobFor(null);
     }
 
+    // Only the get-started step opens Settings at Company info
+    if (view !== "settings") {
+      setFocusCompanyInfo(false);
+    }
+
     show(view, view === "requests" ? selectedId : null);
   }
 

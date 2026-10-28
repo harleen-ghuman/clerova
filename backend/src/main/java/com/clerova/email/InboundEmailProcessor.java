@@ -130,7 +130,7 @@ public class InboundEmailProcessor {
 
         for (UUID id : dueIds) {
             Integer claimed = transactionTemplate.execute(status ->
-                    inboundMessageRepository.claim(id)
+                    inboundMessageRepository.claim(id, Instant.now())
             );
 
             if (claimed != null && claimed == 1) {

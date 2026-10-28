@@ -22,6 +22,7 @@ import java.util.List;
 public class ConversationService {
 
     private static final int MAX_AI_CONTEXT_CHARS = 12_000;
+    private static final int MAX_AI_MESSAGE_CHARS = 4_000;
 
     private final InboundMessageRepository inboundMessageRepository;
     private final OutboundMessageRepository outboundMessageRepository;
@@ -75,10 +76,15 @@ public class ConversationService {
         for (int i = entries.size() - 1; i >= 0; i--) {
             ConversationEntryResponse entry = entries.get(i);
 
+            // One very long email mustn't crowd out the rest of the thread
+            String text = entry.text() != null && entry.text().length() > MAX_AI_MESSAGE_CHARS
+                    ? entry.text().substring(0, MAX_AI_MESSAGE_CHARS) + "\n[...]"
+                    : entry.text();
+
             String part = (entry.direction() == ConversationEntryResponse.Direction.INBOUND
                     ? "Message from " + entry.from()
                     : "Reply sent to " + entry.to())
-                    + " at " + entry.at() + ":\n" + entry.text();
+                    + " at " + entry.at() + ":\n" + text;
 
             if (length + part.length() > MAX_AI_CONTEXT_CHARS && !parts.isEmpty()) {
                 break;

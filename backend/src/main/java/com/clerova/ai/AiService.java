@@ -24,6 +24,24 @@ public class AiService {
 
     private final CompanyInfoService companyInfoService;
 
+    /**
+     * Emails can be up to 100,000 characters (long quoted threads, pasted
+     * documents). The start of a message says what it's about, and the end
+     * of a conversation is the latest; anything more only adds cost.
+     */
+    static final int MAX_MESSAGE_CHARS = 8_000;
+    static final int MAX_CONVERSATION_CHARS = 16_000;
+
+    /** The first characters of a long text. */
+    static String clip(String text, int max) {
+        return text == null || text.length() <= max ? text : text.substring(0, max) + "\n[...]";
+    }
+
+    /** The last characters of a long conversation, where the latest messages are. */
+    static String clipStart(String text, int max) {
+        return text == null || text.length() <= max ? text : "[...]\n" + text.substring(text.length() - max);
+    }
+
     public AiService(OpenAIClient openAIClient, CompanyInfoService companyInfoService) {
         this.openAIClient = openAIClient;
         this.companyInfoService = companyInfoService;
@@ -193,7 +211,7 @@ public class AiService {
                 workItem.getPriority(),
                 workItem.getAddress(),
                 workItem.getSummary(),
-                workItem.getOriginalMessage()
+                clip(workItem.getOriginalMessage(), MAX_MESSAGE_CHARS)
         );
 
         if (conversation != null && !conversation.isBlank()) {
@@ -201,7 +219,7 @@ public class AiService {
 
             Conversation so far (oldest first):
             %s
-            """.formatted(conversation);
+            """.formatted(clipStart(conversation, MAX_CONVERSATION_CHARS));
         }
 
         workItemContext += companyInfoSection(companyInfo);
@@ -432,7 +450,7 @@ public class AiService {
                 workItem.getCategory(),
                 workItem.getAddress(),
                 workItem.getSummary(),
-                conversation
+                clipStart(conversation, MAX_CONVERSATION_CHARS)
         );
 
         try {

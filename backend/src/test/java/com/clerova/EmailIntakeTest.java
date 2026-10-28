@@ -63,6 +63,9 @@ class EmailIntakeTest {
     @Autowired
     private com.clerova.repository.InboundMessageRepository inboundMessageRepository;
 
+    @Autowired
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
     @MockitoBean
     private AiService aiService;
 
@@ -786,6 +789,31 @@ class EmailIntakeTest {
                 """).andExpect(jsonPath("$.replyCopyEmail").isEmpty());
         mockMvc.perform(get("/api/email-settings").with(onboardNewUser(mockMvc)))
                 .andExpect(jsonPath("$.replyCopyEmail").isEmpty());
+    }
+
+    @Test
+    void anEmailThatWaitedIsNotTakenForAStaleClaimWhileItRuns() throws Exception {
+        deliver(payload(forwardingAddress, "<waited@x>", null, null, "tina@example.com", "Heater is broken."))
+                .andExpect(jsonPath("$.status").value("STORED"));
+
+        UUID id = jdbcTemplate.queryForObject(
+                "select id from inbound_messages where message_id_header = '<waited@x>'", UUID.class);
+
+        // It waited a day, e.g. for next month's requests
+        jdbcTemplate.update("update inbound_messages set updated_at = ? where id = ?",
+                java.sql.Timestamp.from(java.time.Instant.now().minus(java.time.Duration.ofDays(1))), id);
+
+        org.springframework.transaction.support.TransactionTemplate tx =
+                new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        java.time.Instant now = java.time.Instant.now();
+
+        Integer claimed = tx.execute(status -> inboundMessageRepository.claim(id, now));
+        assertThat(claimed).isEqualTo(1);
+
+        // Another server copy (e.g. during a deploy) must not release it
+        Integer released = tx.execute(status ->
+                inboundMessageRepository.releaseStale(now.minus(java.time.Duration.ofMinutes(10))));
+        assertThat(released).isZero();
     }
 
     @Test
