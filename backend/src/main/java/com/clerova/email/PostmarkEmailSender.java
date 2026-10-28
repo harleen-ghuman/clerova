@@ -113,7 +113,7 @@ public class PostmarkEmailSender implements EmailSender {
                 case 300 -> "That email address doesn't look valid, so the reply wasn't sent.";
                 case 406 -> "This address bounced or blocked an earlier email, so the reply wasn't sent. Copy it and send it from your own email.";
                 default -> "The email service couldn't send this reply. Please try again in a minute.";
-            }, null);
+            }, null, true);
         }
 
         return result.path("MessageID").asString(null);

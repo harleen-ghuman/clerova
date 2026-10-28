@@ -85,9 +85,11 @@ class AiCompanyInfoEvaluationTest {
 
         String reply = result.draftedResponse.toLowerCase();
         assertThat(reply).containsAnyOf("check", "confirm", "follow up", "get back");
-        assertThat(reply).doesNotContain(
-                "smoking is allowed", "smoking is not allowed", "smoking is prohibited",
-                "avoid smoking", "please don't smoke", "please do not smoke");
+        // "whether smoking is allowed" is fine; stating the rule isn't
+        assertThat(reply).doesNotContainPattern("(?<!whether )smoking is (not )?(allowed|permitted|prohibited)");
+        assertThat(reply).doesNotContain("avoid smoking", "please don't smoke", "please do not smoke");
+        // The resident shouldn't hear about Clerova's setup
+        assertThat(reply).doesNotContain("provided", "information we have", "company information");
     }
 
     @Test

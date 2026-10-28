@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -24,6 +25,7 @@ public class ReplyCopyService {
     private static final Logger log = LoggerFactory.getLogger(ReplyCopyService.class);
 
     private static final int MAX_MESSAGE_CHARS = 20_000;
+    private static final int MAX_REFERENCES = 10;
 
     private final OrganizationRepository organizationRepository;
     private final InboundMessageRepository inboundMessageRepository;
@@ -67,10 +69,8 @@ public class ReplyCopyService {
             }
 
             String token = inboundAddressService.getOrCreateToken(organization);
-            String messageId = message.getMessageIdHeader();
-            String references = message.getReferences() == null || message.getReferences().isBlank()
-                    ? messageId
-                    : messageId == null ? message.getReferences() : message.getReferences() + " " + messageId;
+            String messageId = oneLine(message.getMessageIdHeader());
+            String references = threadReferences(message.getReferences(), messageId);
 
             emailSender.send(new OutgoingEmail(
                     "\"" + displayName(sender(message)) + " via Clerova\" <"
@@ -112,6 +112,32 @@ public class ReplyCopyService {
         return subject == null || subject.isBlank()
                 ? "New email from " + sender(message)
                 : subject.replaceAll("[\\r\\n]+", " ");
+    }
+
+    /** Header values must be one line; folded headers arrive with line breaks. */
+    private static String oneLine(String value) {
+        return value == null || value.isBlank() ? null : value.replaceAll("\\s+", " ").trim();
+    }
+
+    /** The thread's last few message ids plus this one, enough for mail apps to thread. */
+    public static String threadReferences(String references, String messageId) {
+        List<String> ids = new ArrayList<>();
+
+        if (references != null) {
+            for (String id : references.trim().split("\\s+")) {
+                if (!id.isBlank()) {
+                    ids.add(id);
+                }
+            }
+        }
+
+        if (messageId != null) {
+            ids.add(messageId);
+        }
+
+        List<String> last = ids.subList(Math.max(0, ids.size() - MAX_REFERENCES), ids.size());
+
+        return last.isEmpty() ? null : String.join(" ", last);
     }
 
     private static String sender(InboundMessage message) {

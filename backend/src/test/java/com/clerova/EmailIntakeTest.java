@@ -788,6 +788,54 @@ class EmailIntakeTest {
                 .andExpect(jsonPath("$.replyCopyEmail").isEmpty());
     }
 
+    @Test
+    void aRefusedCopyAddressNeverStopsTheReply() throws Exception {
+        String workItemId = inProgressRequest("<copyfail1@x>");
+        setReplyCopy("""
+                {"email":"bounced@maple.example"}
+                """).andExpect(status().isOk());
+
+        // Postmark refuses anything with the copy, e.g. after it bounced
+        when(emailSender.send(org.mockito.ArgumentMatchers.argThat(email -> email != null && email.bcc() != null)))
+                .thenThrow(new com.clerova.email.EmailSendException("refused", null, true));
+
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user).contentType(MediaType.APPLICATION_JSON).content("""
+                                {"message":"The plumber comes Friday."}
+                                """))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<OutgoingEmail> sent = ArgumentCaptor.forClass(OutgoingEmail.class);
+        verify(emailSender, org.mockito.Mockito.times(2)).send(sent.capture());
+        assertThat(sent.getAllValues().get(0).bcc()).isEqualTo("bounced@maple.example");
+        assertThat(sent.getAllValues().get(1).bcc()).isNull();
+        assertThat(sent.getAllValues().get(1).to()).isEqualTo("tina@example.com");
+
+        // A timeout isn't retried: the first email may already have gone out
+        when(emailSender.send(org.mockito.ArgumentMatchers.argThat(email -> email != null && email.bcc() != null)))
+                .thenThrow(new com.clerova.email.EmailSendException("timeout", null));
+
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user).contentType(MediaType.APPLICATION_JSON).content("""
+                                {"message":"Any update?"}
+                                """))
+                .andExpect(status().isBadGateway());
+        verify(emailSender, org.mockito.Mockito.times(3)).send(any());
+    }
+
+    @Test
+    void copiesKeepThreadingHeadersShortAndOnOneLine() {
+        String many = java.util.stream.IntStream.range(0, 30)
+                .mapToObj(i -> "<m" + i + "@x>")
+                .collect(java.util.stream.Collectors.joining("\r\n "));
+
+        String references = com.clerova.email.ReplyCopyService.threadReferences(many, "<latest@x>");
+
+        assertThat(references).doesNotContain("\r", "\n");
+        assertThat(references.split(" ")).hasSize(10).endsWith("<latest@x>");
+        assertThat(com.clerova.email.ReplyCopyService.threadReferences(null, null)).isNull();
+    }
+
     private String inProgressRequest(String firstMessageId) throws Exception {
         proposeAction(ActionType.CREATE_MAINTENANCE_REQUEST);
         String workItemId = deliverNew(firstMessageId, "The AC is not cooling.");
