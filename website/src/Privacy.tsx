@@ -2,7 +2,7 @@ import { LegalPage } from "./LegalPage";
 
 export function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" updated="October 26, 2026">
+    <LegalPage title="Privacy Policy" updated="October 28, 2026">
       <div className="legal-summary">
         <p>
           <strong>The short version:</strong> We collect what we need to run
@@ -38,8 +38,13 @@ export function Privacy() {
         </li>
         <li>
           <strong>Emails and requests you send to Clerova:</strong> sender
-          names and email addresses, subjects, message text, attachment names,
-          and the replies you approve and send.
+          names and email addresses, subjects, message text, attachments (such
+          as photos and documents), and the replies you approve and send.
+        </li>
+        <li>
+          <strong>Company information you add:</strong> your standard answers
+          to residents' questions, such as rent due dates, fees and office
+          hours, and the email address you choose for copies of your replies.
         </li>
         <li>
           <strong>Billing details:</strong> your plan and payment status.
@@ -69,7 +74,9 @@ export function Privacy() {
       <h2>4. AI processing</h2>
       <p>
         To organize requests and draft replies, we send the content of each
-        request to our AI provider, OpenAI, through its business API. Under
+        request, and the company information you add, to our AI provider,
+        OpenAI, through its business API. Attachments themselves aren't sent,
+        only their names. Under
         OpenAI's API terms, this data is not used to train its models by
         default. We don't use your data to train AI models either.
       </p>
@@ -77,7 +84,7 @@ export function Privacy() {
       <h2>5. Service providers we use</h2>
       <p>We share information only with providers that help us run Clerova:</p>
       <ul>
-        <li><strong>Supabase:</strong> database and sign-in</li>
+        <li><strong>Supabase:</strong> database, file storage and sign-in</li>
         <li><strong>Google:</strong> sign-in with Google, if you choose it</li>
         <li><strong>Render:</strong> hosting for the app and website</li>
         <li><strong>Postmark:</strong> receiving forwarded emails and sending replies and account emails</li>

@@ -175,9 +175,13 @@ class AttachmentTest {
                 .andExpect(jsonPath("$[0].files[0].fileName").value("sink.jpg"))
                 .andExpect(jsonPath("$[0].files[0].available").value(true));
 
-        // Another workspace can't open it
+        // Another workspace can't open it, and nobody signed out can
         mockMvc.perform(get("/api/attachments/{id}", photo.get("id").asText()).with(onboardNewUser(mockMvc)))
                 .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/attachments/{id}", photo.get("id").asText()))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/company-info"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -203,6 +207,19 @@ class AttachmentTest {
         assertThat(failed.get("status").asText()).isEqualTo("PROCESSED");
         assertThat(failed.get("files").get(0).get("fileName").asText()).isEqualTo("sink2.jpg");
         assertThat(failed.get("files").get(0).get("available").asBoolean()).isFalse();
+    }
+
+    @Test
+    void theLargestEmailPostmarkAcceptsStillArrives() throws Exception {
+        // Postmark allows up to 35 MB per email; base64 makes it about 47 MB of JSON
+        byte[] video = new byte[30 * 1024 * 1024];
+
+        JsonNode message = deliver("<files5@x>",
+                file("walkthrough.mov", "video/quicktime", video),
+                file("sink.jpg", "image/jpeg", PHOTO));
+
+        assertThat(message.get("files").get(0).get("available").asBoolean()).isFalse();
+        assertThat(message.get("files").get(1).get("available").asBoolean()).isTrue();
     }
 
     @Test

@@ -30,6 +30,23 @@ export function friendlyError(message: string): string {
     return "Use at least 8 characters.";
   }
 
+  // Supabase lists each required group, e.g. "abc...XYZ, 0123456789" or,
+  // with stricter settings, lowercase, uppercase, digits and symbols apart
+  if (lower.includes("should contain at least one character")) {
+    const groups = message.slice(message.indexOf(":") + 1).split(", ").map((group) => group.trim());
+    const needs = [
+      groups.some((group) => /^[a-z]+$/.test(group)) && "a lowercase letter",
+      groups.some((group) => /^[A-Z]+$/.test(group)) && "an uppercase letter",
+      groups.some((group) => /^[a-zA-Z]+$/.test(group) && /[a-z]/.test(group) && /[A-Z]/.test(group)) && "a letter",
+      groups.some((group) => /^\d+$/.test(group)) && "a number",
+      groups.some((group) => group !== "" && /^[^a-zA-Z\d]+$/.test(group)) && "a symbol",
+    ].filter(Boolean) as string[];
+
+    return needs.length > 0
+      ? `Your password needs ${needs.length > 1 ? `${needs.slice(0, -1).join(", ")} and ${needs[needs.length - 1]}` : needs[0]}.`
+      : "Use both letters and numbers in your password.";
+  }
+
   if (lower.includes("invalid format") || (lower.includes("email address") && lower.includes("invalid"))) {
     return "Please enter a valid email.";
   }

@@ -63,6 +63,9 @@ class EmailIntakeTest {
     @Autowired
     private com.clerova.repository.InboundMessageRepository inboundMessageRepository;
 
+    @Autowired
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
     @MockitoBean
     private AiService aiService;
 
@@ -740,9 +743,16 @@ class EmailIntakeTest {
                 .andExpect(jsonPath("$.status").value("STORED"));
         processor.processDue();
 
-        mockMvc.perform(get("/api/inbox").with(user))
+        JsonNode ownCopy = json(mockMvc.perform(get("/api/inbox").with(user))
                 .andExpect(jsonPath("$[0].status").value("IGNORED"))
-                .andExpect(jsonPath("$[0].statusReason").value(InboundEmailProcessor.OWN_COPY_REASON));
+                .andExpect(jsonPath("$[0].statusReason").value(InboundEmailProcessor.OWN_COPY_REASON)))
+                .get(0);
+
+        // "Process anyway" would make it a new reply from yourself
+        mockMvc.perform(post("/api/inbox/{id}/reprocess", ownCopy.get("id").asText()).with(user))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(
+                        "This is your copy of an email sent through Clerova. There's nothing to process."));
         mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
                 .andExpect(jsonPath("$.unreadReplyAt").isEmpty());
 
@@ -779,6 +789,79 @@ class EmailIntakeTest {
                 """).andExpect(jsonPath("$.replyCopyEmail").isEmpty());
         mockMvc.perform(get("/api/email-settings").with(onboardNewUser(mockMvc)))
                 .andExpect(jsonPath("$.replyCopyEmail").isEmpty());
+    }
+
+    @Test
+    void anEmailThatWaitedIsNotTakenForAStaleClaimWhileItRuns() throws Exception {
+        deliver(payload(forwardingAddress, "<waited@x>", null, null, "tina@example.com", "Heater is broken."))
+                .andExpect(jsonPath("$.status").value("STORED"));
+
+        UUID id = jdbcTemplate.queryForObject(
+                "select id from inbound_messages where message_id_header = '<waited@x>'", UUID.class);
+
+        // It waited a day, e.g. for next month's requests
+        jdbcTemplate.update("update inbound_messages set updated_at = ? where id = ?",
+                java.sql.Timestamp.from(java.time.Instant.now().minus(java.time.Duration.ofDays(1))), id);
+
+        org.springframework.transaction.support.TransactionTemplate tx =
+                new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        java.time.Instant now = java.time.Instant.now();
+
+        Integer claimed = tx.execute(status -> inboundMessageRepository.claim(id, now));
+        assertThat(claimed).isEqualTo(1);
+
+        // Another server copy (e.g. during a deploy) must not release it
+        Integer released = tx.execute(status ->
+                inboundMessageRepository.releaseStale(now.minus(java.time.Duration.ofMinutes(10))));
+        assertThat(released).isZero();
+    }
+
+    @Test
+    void aRefusedCopyAddressNeverStopsTheReply() throws Exception {
+        String workItemId = inProgressRequest("<copyfail1@x>");
+        setReplyCopy("""
+                {"email":"bounced@maple.example"}
+                """).andExpect(status().isOk());
+
+        // Postmark refuses anything with the copy, e.g. after it bounced
+        when(emailSender.send(org.mockito.ArgumentMatchers.argThat(email -> email != null && email.bcc() != null)))
+                .thenThrow(new com.clerova.email.EmailSendException("refused", null, true));
+
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user).contentType(MediaType.APPLICATION_JSON).content("""
+                                {"message":"The plumber comes Friday."}
+                                """))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<OutgoingEmail> sent = ArgumentCaptor.forClass(OutgoingEmail.class);
+        verify(emailSender, org.mockito.Mockito.times(2)).send(sent.capture());
+        assertThat(sent.getAllValues().get(0).bcc()).isEqualTo("bounced@maple.example");
+        assertThat(sent.getAllValues().get(1).bcc()).isNull();
+        assertThat(sent.getAllValues().get(1).to()).isEqualTo("tina@example.com");
+
+        // A timeout isn't retried: the first email may already have gone out
+        when(emailSender.send(org.mockito.ArgumentMatchers.argThat(email -> email != null && email.bcc() != null)))
+                .thenThrow(new com.clerova.email.EmailSendException("timeout", null));
+
+        mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
+                        .with(user).contentType(MediaType.APPLICATION_JSON).content("""
+                                {"message":"Any update?"}
+                                """))
+                .andExpect(status().isBadGateway());
+        verify(emailSender, org.mockito.Mockito.times(3)).send(any());
+    }
+
+    @Test
+    void copiesKeepThreadingHeadersShortAndOnOneLine() {
+        String many = java.util.stream.IntStream.range(0, 30)
+                .mapToObj(i -> "<m" + i + "@x>")
+                .collect(java.util.stream.Collectors.joining("\r\n "));
+
+        String references = com.clerova.email.ReplyCopyService.threadReferences(many, "<latest@x>");
+
+        assertThat(references).doesNotContain("\r", "\n");
+        assertThat(references.split(" ")).hasSize(10).endsWith("<latest@x>");
+        assertThat(com.clerova.email.ReplyCopyService.threadReferences(null, null)).isNull();
     }
 
     private String inProgressRequest(String firstMessageId) throws Exception {

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { updateAccount } from "../api/account";
 import { cancelPlan, keepPlan } from "../api/billing";
@@ -13,6 +13,7 @@ import {
   type CompanyInfoKey,
 } from "../api/companyInfo";
 import { friendlyError } from "../auth/friendlyError";
+import { MIN_PASSWORD_LENGTH, PASSWORD_HINT, passwordProblem } from "../auth/passwordRules";
 import { supabase } from "../auth/supabase";
 import { isDemo } from "../demo/mode";
 import type { Me, Organization } from "../types/Account";
@@ -28,13 +29,22 @@ interface SettingsPageProps {
   onBillingChanged: () => Promise<unknown>;
   onUpgrade: () => void;
   upgrading: boolean;
+  /** Start at Company info with the cursor in the first answer. */
+  focusCompanyInfo?: boolean;
+  onCompanyInfoFocused?: () => void;
   onSignOut: () => void;
 }
 
-const MIN_PASSWORD_LENGTH = 8;
 
 /** The company's standard answers, used in suggested replies. */
-function CompanyInfoSection() {
+function CompanyInfoSection({
+  focus,
+  onFocused,
+}: {
+  focus: boolean;
+  onFocused?: () => void;
+}) {
+  const sectionRef = useRef<HTMLElement>(null);
   const [saved, setSaved] = useState<CompanyInfo | null>(null);
   const [draft, setDraft] = useState<CompanyInfo>({});
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -63,6 +73,19 @@ function CompanyInfoSection() {
     };
   }, []);
 
+  // Once the answers have loaded, so the first one can take the cursor
+  useEffect(() => {
+    const section = sectionRef.current;
+
+    if (!focus || !section || (saved === null && loadError === null)) {
+      return;
+    }
+
+    section.scrollIntoView({ block: "start" });
+    section.querySelector<HTMLElement>("textarea")?.focus({ preventScroll: true });
+    onFocused?.();
+  }, [focus, saved, loadError, onFocused]);
+
   const value = (key: CompanyInfoKey) => draft[key] ?? "";
   const total = COMPANY_INFO_FIELDS.reduce((sum, field) => sum + value(field.key).trim().length, 0);
   const changed =
@@ -88,7 +111,12 @@ function CompanyInfoSection() {
   }
 
   return (
-    <section className="settings-section" id="company-info" aria-labelledby="company-info-title">
+    <section
+      ref={sectionRef}
+      className="settings-section"
+      id="company-info"
+      aria-labelledby="company-info-title"
+    >
       <h2 id="company-info-title">Company info</h2>
       <p>
         Clerova uses these answers in suggested replies, so residents get a
@@ -152,6 +180,8 @@ export function SettingsPage({
   onBillingChanged,
   onUpgrade,
   upgrading,
+  focusCompanyInfo = false,
+  onCompanyInfoFocused,
   onSignOut,
 }: SettingsPageProps) {
   const hasBilling = organization.billingEnabled && Boolean(organization.subscriptionStatus);
@@ -168,7 +198,7 @@ export function SettingsPage({
         organizationName={organization.name}
         onSaved={onSaved}
       />
-      <CompanyInfoSection />
+      <CompanyInfoSection focus={focusCompanyInfo} onFocused={onCompanyInfoFocused} />
       {isDemo() ? (
         <section className="settings-section">
           <h2>Sign-in</h2>
@@ -383,6 +413,15 @@ function PasswordSection() {
 
   async function changePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    const weak = passwordProblem(password);
+
+    if (weak) {
+      setError(weak);
+      setSaved(false);
+      return;
+    }
+
     setSaving(true);
     setError(null);
     setSaved(false);
@@ -430,7 +469,7 @@ function PasswordSection() {
             }}
             disabled={saving}
           />
-          <span className="auth-hint">At least {MIN_PASSWORD_LENGTH} characters</span>
+          <span className="auth-hint">{PASSWORD_HINT}</span>
         </label>
 
         {error && <p className="action-error">{error}</p>}

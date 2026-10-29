@@ -58,18 +58,20 @@ public interface InboundMessageRepository
 
     /**
      * Claims a message for processing. Returns 0 if another worker
-     * already claimed it.
+     * already claimed it. Stamps the time, so a message that waited a long
+     * time isn't taken for a stale claim (releaseStale) while it runs.
      */
     @Modifying
     @Query("""
             update InboundMessage m
             set m.status = com.clerova.domain.InboundMessageStatus.PROCESSING,
                 m.attempts = m.attempts + 1,
+                m.updatedAt = :now,
                 m.version = m.version + 1
             where m.id = :id
               and m.status = com.clerova.domain.InboundMessageStatus.RECEIVED
             """)
-    int claim(@Param("id") UUID id);
+    int claim(@Param("id") UUID id, @Param("now") Instant now);
 
     /** Messages left in PROCESSING by a crashed worker. */
     @Modifying

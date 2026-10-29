@@ -19,6 +19,8 @@ import com.clerova.repository.ProposedActionRepository;
 import com.clerova.repository.WorkItemRepository;
 import com.clerova.service.WorkItemEventService;
 import com.clerova.service.WorkItemService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -36,6 +38,8 @@ import java.util.stream.Collectors;
  */
 @Service
 public class ReplyService {
+
+    private static final Logger log = LoggerFactory.getLogger(ReplyService.class);
 
     private final EmailProperties emailProperties;
     private final EmailSender emailSender;
@@ -92,7 +96,7 @@ public class ReplyService {
         String providerMessageId;
 
         try {
-            providerMessageId = emailSender.send(prepared.email());
+            providerMessageId = send(prepared.email());
         } catch (EmailSendException e) {
             transactionTemplate.executeWithoutResult(status -> {
                 ProposedAction action = proposedActionRepository.findById(proposedActionId).orElseThrow();
@@ -135,7 +139,7 @@ public class ReplyService {
         String providerMessageId;
 
         try {
-            providerMessageId = emailSender.send(email);
+            providerMessageId = send(email);
         } catch (EmailSendException e) {
             throw new ApiException(HttpStatus.BAD_GATEWAY, "EMAIL_SEND_FAILED", e.getMessage());
         }
@@ -162,6 +166,34 @@ public class ReplyService {
         } catch (OptimisticLockingFailureException e) {
             // Changed at the same moment; the alert stays and can be dismissed
             return workItemRepository.findById(workItemId).orElseThrow();
+        }
+    }
+
+    /**
+     * The company's copy must never stop the reply itself: if the email is
+     * refused with the copy (e.g. the copy address bounced before), it is
+     * sent again without it. Only a clear refusal is retried, since after a
+     * timeout the first email may already have gone out.
+     */
+    private String send(OutgoingEmail email) {
+        try {
+            return emailSender.send(email);
+        } catch (EmailSendException e) {
+            if (email.bcc() == null || !e.isRejected()) {
+                throw e;
+            }
+
+            log.warn("Reply refused with the company copy; sending it without the copy: {}", e.getMessage());
+
+            return emailSender.send(new OutgoingEmail(
+                    email.from(),
+                    email.replyTo(),
+                    email.to(),
+                    email.subject(),
+                    email.textBody(),
+                    email.inReplyTo(),
+                    email.references()
+            ));
         }
     }
 
