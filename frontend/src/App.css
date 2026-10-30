@@ -416,6 +416,11 @@ h3 {
   font-size: 14px;
 }
 
+.empty-view p + button,
+.empty-view p + a {
+  margin-top: 16px;
+}
+
 .rq-dot {
   width: 8px;
   height: 8px;
@@ -2755,6 +2760,20 @@ body.demo-mode .app-main {
   border-radius: var(--radius-md);
   background: var(--surface);
   box-shadow: 0 12px 32px rgba(16, 24, 40, 0.16);
+}
+
+/* Scroll the end of each pane clear of the open demo panel */
+body.demo-bar-open .page-padded,
+body.demo-bar-open .rq-list,
+body.demo-bar-open .rq-detail,
+body.demo-bar-open .jobs-page {
+  padding-bottom: 300px;
+}
+
+@media (max-width: 800px) {
+  body.demo-bar-open .app-main {
+    padding-bottom: 200px;
+  }
 }
 
 .demo-bar p {

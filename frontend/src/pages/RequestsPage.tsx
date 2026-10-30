@@ -230,7 +230,9 @@ export function RequestsPage({
 
           {!loading && !error && visible.length === 0 && (
             <p className="rq-empty">
-              {filter === "review" && !query
+              {requests.length === 0
+                ? "No requests yet. Forward an email to your Clerova address (see Email setup), or add one with New request."
+                : filter === "review" && !query
                 ? "Nothing to review. You're all caught up."
                 : query
                   ? "No requests match your search."

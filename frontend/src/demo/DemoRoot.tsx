@@ -47,6 +47,12 @@ function DemoBar() {
   const [busy, setBusy] = useState<"email" | "urgent" | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
+  // Room below the page so the panel never hides the end of it
+  useEffect(() => {
+    document.body.classList.toggle("demo-bar-open", open);
+    return () => document.body.classList.remove("demo-bar-open");
+  }, [open]);
+
   function simulate(kind: "email" | "urgent") {
     setBusy(kind);
     setNote(null);

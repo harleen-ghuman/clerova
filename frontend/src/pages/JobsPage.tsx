@@ -20,6 +20,11 @@ const COLUMNS: {
   { title: "Closed", dot: "done", statuses: ["COMPLETED", "CANCELLED"] },
 ];
 
+/** The job's summary as a title: "AC runs but doesn't cool." reads as a sentence. */
+function jobTitle(job: MaintenanceRequest): string {
+  return job.description?.trim().replace(/\.$/, "") || "Maintenance job";
+}
+
 // Keep the Closed column short
 const DONE_LIMIT = 20;
 
@@ -260,7 +265,7 @@ export function JobsPage({
                       }`}
                     >
                       <div className="jobs-card-top">
-                        <strong>{job.description || "Maintenance job"}</strong>
+                        <strong>{jobTitle(job)}</strong>
                         {job.priority === "HIGH" && !finished && (
                           <span className="rq-urgent">Urgent</span>
                         )}

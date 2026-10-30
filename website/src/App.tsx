@@ -72,7 +72,7 @@ const faqs = [
   },
   {
     q: "What counts as a request?",
-    a: "One email or message that Clerova organizes for you. Replies in the same conversation don't count as new requests. As a rough guide, most teams get one or two a month per unit.",
+    a: "One email or message that Clerova organizes for you. Replies in the same conversation don't count as new requests. As a rough guide, plan on one or two a month per unit.",
   },
   {
     q: "What happens if I use all my requests for the month?",
@@ -249,9 +249,10 @@ function App() {
               approve it. Edit any draft, or ask for a different suggestion.
             </p>
             <p>
-              Clerova doesn't have access to your rent records or leases, so
-              it won't make up balances or terms. Add the facts to the draft
-              before you send it.
+              Add your policies once, like rent due dates, pets and parking,
+              and drafts answer from them. Clerova doesn't see your rent
+              records or leases, so it won't make up balances or terms. Add
+              those facts to the draft before you send it.
             </p>
           </div>
           <ul className="checks">

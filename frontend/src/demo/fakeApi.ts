@@ -454,8 +454,16 @@ function meanwhile(text: string): string {
     return "In the meantime, if it's safe, move belongings away from the drip and put a bucket under it. We'll also check the unit above.";
   }
 
-  if (/sink|toilet|faucet|pipe|valve/.test(text)) {
-    return "In the meantime, if it's safe, turn off the water valve under the fixture (or the main valve) and keep towels down to limit damage.";
+  if (/sink|faucet/.test(text)) {
+    return "In the meantime, if it's safe, turn off the water valve under the sink (or the main valve) and keep towels down to limit damage.";
+  }
+
+  if (/toilet/.test(text)) {
+    return "In the meantime, if it's safe, turn off the water valve behind the toilet and keep towels down to limit damage.";
+  }
+
+  if (/pipe|valve/.test(text)) {
+    return "In the meantime, if it's safe, turn off the main water valve and keep towels down to limit damage.";
   }
 
   if (/water|leak|flood/.test(text)) {
