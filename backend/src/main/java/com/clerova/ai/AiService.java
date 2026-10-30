@@ -132,7 +132,12 @@ public class AiService {
                                   reasonably wait.
 
                                 Create a concise factual summary, in English even when the
-                                message is in another language (staff read it).
+                                message is in another language (staff read it). It is
+                                used as the title of the request and of any repair job,
+                                so write one short sentence about the issue itself, such
+                                as "Kitchen sink leaking under the cabinet". Don't start
+                                with "Resident reports" or similar, and don't mention
+                                attachments or how the message was sent.
 
                                 Extract the address when one is explicitly provided.
 

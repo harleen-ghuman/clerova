@@ -416,6 +416,16 @@ h3 {
   font-size: 14px;
 }
 
+.inbox-set-aside {
+  margin: 16px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.inbox-set-aside .jobs-link {
+  font-size: 13px;
+}
+
 .empty-view p + button,
 .empty-view p + a {
   margin-top: 16px;
@@ -1098,10 +1108,52 @@ h3 {
   gap: 8px;
 }
 
-.jobs-card-top strong {
+.jobs-title {
   flex: 1;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
   font-size: 14px;
+  font-weight: 600;
   line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.jobs-title:hover {
+  color: var(--brand);
+}
+
+.jobs-details {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--background);
+}
+
+.jobs-details p {
+  margin: 0;
+}
+
+.jobs-details-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.jobs-details-message {
+  margin-top: 4px !important;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.jobs-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
 }
 
 .jobs-address,

@@ -25,6 +25,17 @@ function jobTitle(job: MaintenanceRequest): string {
   return job.description?.trim().replace(/\.$/, "") || "Maintenance job";
 }
 
+/** The start of a long message, cut at a word. */
+function clip(text: string, max: number): string {
+  const trimmed = text.trim();
+
+  if (trimmed.length <= max) {
+    return trimmed;
+  }
+
+  return `${trimmed.slice(0, max).replace(/\s+\S*$/, "")}...`;
+}
+
 // Keep the Closed column short
 const DONE_LIMIT = 20;
 
@@ -56,6 +67,8 @@ export function JobsPage({
   const [savingNotesId, setSavingNotesId] = useState<string | null>(null);
   const [savedNotesId, setSavedNotesId] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // The job opened to show what the resident wrote, with its notes
+  const [openId, setOpenId] = useState<string | null>(null);
   // A job whose Cancel (or Mark done with an unanswered reply) waits for a yes
   const [confirming, setConfirming] = useState<{ jobId: string; status: MaintenanceRequestStatus } | null>(null);
   // Notes typed but not saved yet, by job
@@ -265,7 +278,14 @@ export function JobsPage({
                       }`}
                     >
                       <div className="jobs-card-top">
-                        <strong>{jobTitle(job)}</strong>
+                        <button
+                          type="button"
+                          className="jobs-title"
+                          aria-expanded={openId === job.id}
+                          onClick={() => setOpenId((current) => (current === job.id ? null : job.id))}
+                        >
+                          {jobTitle(job)}
+                        </button>
                         {job.priority === "HIGH" && !finished && (
                           <span className="rq-urgent">Urgent</span>
                         )}
@@ -286,19 +306,54 @@ export function JobsPage({
                             : `Created ${shortTime(job.createdAt)}`}
                       </p>
 
-                      <button
-                        type="button"
-                        className="jobs-link"
-                        onClick={() => onOpenRequest(job.workItemId)}
-                      >
-                        {request
-                          ? newReply
-                            ? `Read the ${urgentReply ? "urgent" : "new"} reply from ${requestSender(request)}`
-                            : `From request: ${requestSender(request)}`
-                          : "View request"}
-                      </button>
+                      {openId === job.id && (
+                        <div className="jobs-details">
+                          {request ? (
+                            <>
+                              <p className="jobs-details-label">
+                                What {requestSender(request)} wrote
+                                {request.subject ? ` · ${request.subject}` : ""}
+                              </p>
+                              <p className="jobs-details-message">
+                                {clip(request.originalMessage, 600)}
+                              </p>
+                            </>
+                          ) : (
+                            <p className="jobs-details-message">
+                              Open the request to see the full conversation.
+                            </p>
+                          )}
+                        </div>
+                      )}
 
-                      <details className="jobs-notes">
+                      <div className="jobs-links">
+                        <button
+                          type="button"
+                          className="jobs-link"
+                          onClick={() => setOpenId((current) => (current === job.id ? null : job.id))}
+                          aria-expanded={openId === job.id}
+                        >
+                          {openId === job.id ? "Hide details" : "Show details"}
+                        </button>
+                        <button
+                          type="button"
+                          className="jobs-link"
+                          onClick={() => onOpenRequest(job.workItemId)}
+                        >
+                          {request
+                            ? newReply
+                              ? `Read the ${urgentReply ? "urgent" : "new"} reply from ${requestSender(request)}`
+                              : `Open the request from ${requestSender(request)}`
+                            : "Open the request"}
+                        </button>
+                      </div>
+
+                      {/* Opening the details opens the notes too, ready to type */}
+                      <details
+                        className="jobs-notes"
+                        key={openId === job.id ? "open" : "closed"}
+                        open={openId === job.id || undefined}
+                      >
                         <summary>
                           {job.notes ? (
                             <>

@@ -16,7 +16,7 @@ const STATUS_LABELS: Record<InboundMessageStatus, string> = {
   RECEIVED: "Queued",
   PROCESSING: "Processing",
   PROCESSED: "New request",
-  ATTACHED: "Added to request",
+  ATTACHED: "Reply on a request",
   IGNORED: "Ignored",
   FAILED: "Failed",
 };
@@ -38,6 +38,20 @@ function isOwnCopy(message: InboundMessage): boolean {
   return message.status === "IGNORED" && message.statusReason === OWN_COPY_REASON;
 }
 
+/** Matches InboundEmailProcessor.GMAIL_CONFIRMATION_REASON on the server. */
+const GMAIL_CONFIRMATION_REASON = "Gmail forwarding confirmation";
+
+/**
+ * Emails from Clerova or Gmail's setup, not from residents: copies of your
+ * replies and alerts that your forwarding sent back, and Gmail's check.
+ */
+function isSetAside(message: InboundMessage): boolean {
+  return (
+    isOwnCopy(message) ||
+    (message.status === "IGNORED" && message.statusReason === GMAIL_CONFIRMATION_REASON)
+  );
+}
+
 export function InboxPage({
   refreshKey,
   onOpenWorkItem,
@@ -48,6 +62,7 @@ export function InboxPage({
   const [itemError, setItemError] = useState<{ id: string; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "attention">("all");
+  const [showSetAside, setShowSetAside] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [initialRefreshKey] = useState(refreshKey);
 
@@ -99,13 +114,18 @@ export function InboxPage({
     }
   }
 
-  const needsAttention = messages.filter(
-    (message) =>
-      message.status === "FAILED" ||
-      (message.status === "IGNORED" && !isOwnCopy(message))
+  const fromPeople = messages.filter((message) => !isSetAside(message));
+  const setAside = messages.length - fromPeople.length;
+  const needsAttention = fromPeople.filter(
+    (message) => message.status === "FAILED" || message.status === "IGNORED"
   );
 
-  const visible = filter === "all" ? messages : needsAttention;
+  const visible =
+    filter === "attention"
+      ? needsAttention
+      : showSetAside
+        ? messages
+        : fromPeople;
 
   return (
     <section className="inbox">
@@ -113,8 +133,8 @@ export function InboxPage({
         <div>
           <h1>Inbox</h1>
           <p>
-            Every email forwarded to Clerova. New requests get a suggested next
-            step automatically and appear in Requests.
+            Every email forwarded to Clerova. A new email becomes a request in
+            Requests; a reply is added to the request it belongs to.
           </p>
         </div>
 
@@ -131,7 +151,7 @@ export function InboxPage({
           onClick={() => setFilter("all")}
         >
           All
-          <span>{messages.length}</span>
+          <span>{fromPeople.length}</span>
         </button>
 
         <button
@@ -187,7 +207,11 @@ export function InboxPage({
                 </div>
 
                 <span className={`status-badge ${STATUS_CLASSES[message.status]}`}>
-                  {isOwnCopy(message) ? "Your copy" : STATUS_LABELS[message.status]}
+                  {isOwnCopy(message)
+                    ? "From Clerova"
+                    : isSetAside(message)
+                      ? "Gmail setup"
+                      : STATUS_LABELS[message.status]}
                 </span>
               </div>
 
@@ -231,7 +255,7 @@ export function InboxPage({
                 )}
 
                 {(message.status === "FAILED" ||
-                  (message.status === "IGNORED" && !isOwnCopy(message))) && (
+                  (message.status === "IGNORED" && !isSetAside(message))) && (
                   <button
                     type="button"
                     className="secondary-action-button"
@@ -255,6 +279,17 @@ export function InboxPage({
             </li>
           ))}
         </ul>
+      )}
+
+      {!loading && filter === "all" && setAside > 0 && (
+        <p className="inbox-set-aside">
+          {showSetAside
+            ? "Showing emails from Clerova and Gmail's setup too. They never become requests."
+            : `${setAside === 1 ? "1 email" : `${setAside} emails`} from Clerova or Gmail's setup ${setAside === 1 ? "is" : "are"} hidden, like copies of your replies and alerts that your forwarding sent back.`}{" "}
+          <button type="button" className="jobs-link" onClick={() => setShowSetAside((value) => !value)}>
+            {showSetAside ? "Hide them" : "Show them"}
+          </button>
+        </p>
       )}
     </section>
   );
