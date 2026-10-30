@@ -36,8 +36,11 @@ function Screen({ children }: { children: ReactNode }) {
 /** Gmail's check email, boiled down to the button and code a person needs. */
 function GmailConfirmationCard({
   confirmation,
+  address,
 }: {
   confirmation: NonNullable<EmailSettings["gmailConfirmation"]>;
+  /** The Clerova address to forward to. */
+  address: string;
 }) {
   const { from, code, confirmUrl } = parseGmailConfirmation(confirmation.subject, confirmation.text);
   const [copied, setCopied] = useState(false);
@@ -84,9 +87,10 @@ function GmailConfirmationCard({
       </div>
 
       <p className="gmail-confirmation-next">
-        Then in Gmail's Forwarding settings, refresh the page, pick your Clerova
-        address in the list and click <strong>Save Changes</strong> (step 5
-        below).
+        Then in Gmail's Forwarding settings, refresh the page and choose{" "}
+        <strong>Forward a copy of incoming mail to</strong>. In the box next to
+        it, pick or type <strong>{address}</strong> and click{" "}
+        <strong>Save Changes</strong>.
       </p>
 
       <details>
@@ -183,10 +187,12 @@ function gmailSteps(address: string): Step[] {
       text: (
         <>
           Back in Gmail's Forwarding settings (refresh the page), choose{" "}
-          <strong>Forward a copy of incoming mail to</strong>, pick your
-          Clerova address in the list and{" "}
-          <strong>keep Gmail's copy in the Inbox</strong>. Click{" "}
-          <strong>Save Changes</strong> at the bottom.
+          <strong>Forward a copy of incoming mail to</strong>. In the box
+          next to it, pick or type your Clerova address,{" "}
+          <strong>{address}</strong> (not your own email). Leave the next box on{" "}
+          <strong>keep Gmail's copy in the Inbox</strong> and click{" "}
+          <strong>Save Changes</strong> at the bottom. If Gmail says the
+          address is invalid, it isn't confirmed yet: do step 4 first.
         </>
       ),
       picture: (
@@ -196,7 +202,7 @@ function gmailSteps(address: string): Step[] {
           </div>
           <div className="sk-radio sk-highlight">
             <span className="sk-dot sk-dot-on" /> Forward a copy of incoming
-            mail to Clerova
+            mail to <span className="sk-input sk-input-inline">{address}</span>
           </div>
           <div className="sk-row">
             <span className="sk-button">Save Changes</span>
@@ -386,7 +392,7 @@ export function EmailSetupPage({
       </div>
 
       {settings.gmailConfirmation && (
-        <GmailConfirmationCard confirmation={settings.gmailConfirmation} />
+        <GmailConfirmationCard confirmation={settings.gmailConfirmation} address={address} />
       )}
 
       <section className="setup-section">

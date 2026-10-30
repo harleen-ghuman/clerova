@@ -1698,6 +1698,13 @@ button.file-chip:focus-visible {
   white-space: nowrap;
 }
 
+.sk-input-inline {
+  display: inline-block;
+  max-width: 62%;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .sk-input-short {
   flex: 1;
   letter-spacing: 0.1em;
