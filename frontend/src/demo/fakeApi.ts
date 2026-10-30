@@ -55,6 +55,8 @@ interface DemoState {
 }
 
 const ORG_ID = "demo-org";
+const DEFAULT_PARKING = "One assigned spot per unit. Guests park on the street.";
+const AC_JOB_NOTES = "CoolAir HVAC booked for Thursday, 10 to 12. Tenant home all day.";
 const CLOSED = ["COMPLETED", "CANCELLED"];
 const loadedAt = Date.now();
 let counter = 0;
@@ -268,7 +270,7 @@ function seedState(): DemoState {
       emergencies:
         "After hours, call (555) 201-3399. Emergencies are fire, gas, flooding, no heat in winter and lockouts.",
       pets: "Cats and dogs under 40 lb, two at most, with a $300 pet deposit.",
-      parking: "One assigned spot per unit. Guests park on the street.",
+      parking: DEFAULT_PARKING,
     },
     nextEmail: 0,
   };
@@ -292,7 +294,7 @@ function seedState(): DemoState {
   approveAndSend(state, byKey.ac, 2 * 24 * 60 - 10);
   const acJob = state.jobs.find((job) => job.workItemId === byKey.ac.id)!;
   acJob.status = "IN_PROGRESS";
-  acJob.notes = "CoolAir HVAC booked for Thursday, 10 to 12. Tenant home all day.";
+  acJob.notes = AC_JOB_NOTES;
   acJob.updatedAt = ago(30 * 60);
   record(state, byKey.ac.id, "MAINTENANCE_UPDATED", "Job started", "Alex Morgan", 30 * 60);
   followUp(state, byKey.ac, "Hi, any update on when the technician is coming? It's getting really hot in here.", 25);
@@ -446,7 +448,32 @@ function classify(text: string): { category: Category; priority: Priority; summa
   return { category, priority, summary, address };
 }
 
-function suggestionFor(item: WorkItem): Suggestion {
+/** What the resident can safely do before someone arrives, by problem. */
+function meanwhile(text: string): string {
+  if (/ceiling|unit above|upstairs/.test(text)) {
+    return "In the meantime, if it's safe, move belongings away from the drip and put a bucket under it. We'll also check the unit above.";
+  }
+
+  if (/sink|faucet/.test(text)) {
+    return "In the meantime, if it's safe, turn off the water valve under the sink (or the main valve) and keep towels down to limit damage.";
+  }
+
+  if (/toilet/.test(text)) {
+    return "In the meantime, if it's safe, turn off the water valve behind the toilet and keep towels down to limit damage.";
+  }
+
+  if (/pipe|valve/.test(text)) {
+    return "In the meantime, if it's safe, turn off the main water valve and keep towels down to limit damage.";
+  }
+
+  if (/water|leak|flood/.test(text)) {
+    return "In the meantime, if it's safe, keep towels or a bucket down to limit damage.";
+  }
+
+  return "In the meantime, please keep clear of the problem if it isn't safe.";
+}
+
+function suggestionFor(state: DemoState, item: WorkItem): Suggestion {
   const hi = greeting(item.senderName);
   const text = item.originalMessage.toLowerCase();
 
@@ -458,7 +485,7 @@ function suggestionFor(item: WorkItem): Suggestion {
         ? "Active problem that could cause damage or a safety risk. Needs a maintenance job right away."
         : "A repair is needed. Create a maintenance job so it can be scheduled and tracked.",
       draftedResponse: urgent
-        ? `${hi}\n\nThank you for letting us know. We've logged this as an urgent maintenance request, and our team will follow up shortly to arrange the repair.\n\nIn the meantime, if it's safe, please turn off the water valve under the sink (or the main valve) and keep towels down to limit damage. If there's ever a gas smell, fire or other danger, leave the unit and call 911.`
+        ? `${hi}\n\nThank you for letting us know. We've logged this as an urgent maintenance request, and our team will follow up shortly to arrange the repair.\n\n${meanwhile(text)} If there's ever a gas smell, fire or other danger, leave the unit and call 911.`
         : `${hi}\n\nThanks for reaching out. We've logged this as a maintenance request, and our team will follow up to arrange the repair.\n\nIf anything changes or gets worse, just reply to this email.`,
     };
   }
@@ -474,7 +501,7 @@ function suggestionFor(item: WorkItem): Suggestion {
   if (item.category === "LEASING") {
     return {
       actionType: "ESCALATE_TO_HUMAN",
-      reasoning: "Ending a lease early depends on the lease terms and local rules. A person should handle it.",
+      reasoning: "Ending a lease early depends on this resident's lease and local rules, so a person should decide. Check the lease for an early-termination clause, the notice period and any fee, then reply with the options.",
       draftedResponse: `${hi}\n\nThanks for letting us know, and congratulations on the new job. We've passed your question to the right person on our team, who will follow up with your options.`,
     };
   }
@@ -488,10 +515,23 @@ function suggestionFor(item: WorkItem): Suggestion {
   }
 
   if (/park/.test(text)) {
+    const parking = state.companyInfo.parking?.trim();
+
+    if (!parking) {
+      return {
+        actionType: "RESPOND_TO_CUSTOMER",
+        reasoning: "Parking question, but your company info has no parking rules, so the reply doesn't guess.",
+        draftedResponse: `${hi}\n\nThanks for checking. We'll confirm where your guests can park and follow up before the weekend.`,
+      };
+    }
+
     return {
       actionType: "RESPOND_TO_CUSTOMER",
-      reasoning: "General question that can be answered directly.",
-      draftedResponse: `${hi}\n\nThanks for checking. Guests can park in the visitor spaces by the main entrance. They'll need a guest pass, which you can pick up at the leasing office during business hours.\n\nEnjoy the visit!`,
+      reasoning: "Parking question, answered from the parking rules in your company info.",
+      draftedResponse:
+        parking === DEFAULT_PARKING
+          ? `${hi}\n\nThanks for checking. Your guests can park on the street, and they don't need a pass. Each unit's assigned spot is for residents only.\n\nEnjoy the visit!`
+          : `${hi}\n\nThanks for checking. Here's how parking works for guests: ${parking}\n\nEnjoy the visit!`,
     };
   }
 
@@ -510,7 +550,7 @@ function suggestionFor(item: WorkItem): Suggestion {
   };
 }
 
-function draftFor(item: WorkItem): string {
+function draftFor(state: DemoState, item: WorkItem): string {
   const hi = greeting(item.senderName);
 
   if (item.status === "WAITING_FOR_INFORMATION") {
@@ -525,7 +565,20 @@ function draftFor(item: WorkItem): string {
     return `${hi}\n\nThank you for telling us. If you smell gas, please leave the unit right away and call 911 and the gas company from outside. Don't use switches, the stove or any flames.\n\nWe're contacting our maintenance team now and will follow up as soon as we can.`;
   }
 
-  return `${hi}\n\nThanks for checking in. Your repair is in progress, and our maintenance team is arranging the visit. We'll follow up as soon as we have a confirmed time.`;
+  const job = state.jobs.find(
+    (candidate) => candidate.workItemId === item.id && (candidate.status === "OPEN" || candidate.status === "IN_PROGRESS")
+  );
+
+  // The visit in the sample job notes, in words for the resident
+  if (job?.notes === AC_JOB_NOTES) {
+    return `${hi}\n\nThanks for checking in, and sorry it's so hot. A technician from CoolAir HVAC is booked for Thursday between 10am and 12pm.\n\nIf that time no longer works, just reply and we'll find another one.`;
+  }
+
+  if (job?.status === "IN_PROGRESS") {
+    return `${hi}\n\nThanks for checking in. Your repair is underway, and we'll let you know as soon as it's done or if we need anything from you.`;
+  }
+
+  return `${hi}\n\nThanks for checking in. Your repair is logged, and our maintenance team is arranging the visit. We'll follow up as soon as we have a confirmed time.`;
 }
 
 const DESCRIBE: Record<ActionType, string> = {
@@ -541,7 +594,7 @@ const DESCRIBE: Record<ActionType, string> = {
 // ---------------------------------------------------------------------------
 
 function suggest(state: DemoState, item: WorkItem, minutesAgo?: number): ProposedAction {
-  const suggestion = suggestionFor(item);
+  const suggestion = suggestionFor(state, item);
   const at = minutesAgo === undefined ? now() : ago(minutesAgo);
   const action: ProposedAction = {
     id: id("suggestion"),
@@ -1051,7 +1104,7 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
     if (item.source !== "EMAIL" || !item.senderEmail) conflict("This request didn't come in by email, so there's no one to reply to.");
     requireCanWrite(item);
     takeSuggestion(item);
-    return { reply: draftFor(item), suggestionsLeft: item.suggestionsLeft };
+    return { reply: draftFor(state, item), suggestionsLeft: item.suggestionsLeft };
   }
 
   if ((match = route.match(/^POST \/api\/work-items\/([^/]+)\/reply$/))) {

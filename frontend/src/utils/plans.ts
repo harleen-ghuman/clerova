@@ -6,11 +6,13 @@ export const PLANS: {
   plan: PaidPlan;
   name: string;
   requests: number;
+  /** Rough size it suits, as the landing page says. */
+  units: number;
   monthly: number;
   foundingMonthly: number;
 }[] = [
-  { plan: "STARTER", name: "Starter", requests: 500, monthly: 99, foundingMonthly: 79 },
-  { plan: "GROWTH", name: "Growth", requests: 1500, monthly: 189, foundingMonthly: 149 },
+  { plan: "STARTER", name: "Starter", requests: 500, units: 250, monthly: 99, foundingMonthly: 79 },
+  { plan: "GROWTH", name: "Growth", requests: 1500, units: 750, monthly: 189, foundingMonthly: 149 },
 ];
 
 export function planPrice(

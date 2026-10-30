@@ -465,12 +465,26 @@ public class WorkItemService {
 
             return aiService.draftReply(
                     workItem,
-                    conversation != null ? conversation : "Message from the resident:\n" + workItem.getOriginalMessage()
+                    conversation != null ? conversation : "Message from the resident:\n" + workItem.getOriginalMessage(),
+                    openRepairJob(organizationId, workItemId)
             );
         } catch (RuntimeException e) {
             workItemRepository.refundSuggestion(workItemId);
             throw e;
         }
+    }
+
+    /** The request's open job and the team's notes, for drafting a reply. */
+    private AiService.RepairJob openRepairJob(UUID organizationId, UUID workItemId) {
+        return maintenanceRequestRepository
+                .findByWorkItemIdAndOrganizationIdOrderByCreatedAtDesc(workItemId, organizationId)
+                .stream()
+                .filter(job -> job.getStatus() == MaintenanceRequestStatus.OPEN
+                        || job.getStatus() == MaintenanceRequestStatus.IN_PROGRESS)
+                .findFirst()
+                .map(job -> new AiService.RepairJob(
+                        job.getStatus() == MaintenanceRequestStatus.IN_PROGRESS, job.getNotes()))
+                .orElse(null);
     }
 
     /**

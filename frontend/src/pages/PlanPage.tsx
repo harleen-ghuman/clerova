@@ -143,7 +143,8 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
                   {founding && <s>${regular.amount.toLocaleString()}</s>}
                 </p>
                 <p className="plan-requests">
-                  {item.requests.toLocaleString()} requests a month
+                  {item.requests.toLocaleString()} requests a month, usually enough
+                  for up to about {item.units.toLocaleString()} units
                 </p>
                 <button
                   type="button"

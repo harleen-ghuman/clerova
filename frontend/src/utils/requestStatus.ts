@@ -7,7 +7,7 @@ export const BUCKET_LABELS: Record<RequestBucket, string> = {
   review: "Needs review",
   waiting: "Waiting on customer",
   progress: "In progress",
-  done: "Done",
+  done: "Closed",
 };
 
 export function requestBucket(item: WorkItem): RequestBucket {
@@ -23,6 +23,15 @@ export function requestBucket(item: WorkItem): RequestBucket {
     default:
       return "done";
   }
+}
+
+/**
+ * Where a request is listed on the Requests page. Each request is in
+ * exactly one group, so the counts add up to All. A new email during a job
+ * needs a person, so that job is listed under review until it's handled.
+ */
+export function requestFilterBucket(item: WorkItem): RequestBucket {
+  return hasNewReply(item) ? "review" : requestBucket(item);
 }
 
 /** The sender wrote again while the job is in progress, unanswered. */
@@ -42,6 +51,8 @@ export function requestStatusLabel(item: WorkItem): string {
       return "Escalated";
     case "CANCELLED":
       return "Cancelled";
+    case "COMPLETED":
+      return "Done";
     default:
       return BUCKET_LABELS[requestBucket(item)];
   }

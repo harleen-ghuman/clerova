@@ -190,7 +190,11 @@ export function SettingsPage({
     <div className="settings">
       <header className="page-header">
         <h1>Settings</h1>
-        <p>Your details, company info, sign-in and billing.</p>
+        <p>
+          {hasBilling
+            ? "Your details, company info, sign-in and billing."
+            : "Your details, company info and sign-in."}
+        </p>
       </header>
 
       <DetailsSection

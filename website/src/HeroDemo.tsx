@@ -81,8 +81,8 @@ export function HeroDemo() {
           <div className="preview-row">
             <span className="dot dot-done" />
             <div>
-              <strong>Sam Rivera</strong>
-              <span>Guest parking</span>
+              <strong>Priya Shah</strong>
+              <span>Guest parking this weekend</span>
             </div>
           </div>
         </div>

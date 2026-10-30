@@ -34,11 +34,14 @@ import static com.clerova.WorkItemWorkflowTest.onboardNewUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.notNull;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -491,11 +494,25 @@ class EmailIntakeTest {
                 .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
                 .andExpect(jsonPath("$.unreadReplyAt").isNotEmpty());
 
-        when(aiService.draftReply(any(), anyString())).thenReturn("Hi Tina, the team is on it.");
+        // The team booked the visit in the job notes; the draft can say so
+        String jobId = json(mockMvc.perform(get("/api/maintenance-requests/work-item/{id}", workItemId).with(user)))
+                .get(0).get("id").asText();
+        mockMvc.perform(patch("/api/maintenance-requests/{id}", jobId)
+                        .with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"notes":"Plumber booked Friday 9 to 11."}
+                                """))
+                .andExpect(status().isOk());
+
+        when(aiService.draftReply(any(), anyString(), nullable(AiService.RepairJob.class))).thenReturn("Hi Tina, the team is on it.");
 
         mockMvc.perform(post("/api/work-items/{id}/draft-reply", workItemId).with(user))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reply").value("Hi Tina, the team is on it."));
+
+        verify(aiService).draftReply(any(), anyString(),
+                eq(new AiService.RepairJob(false, "Plumber booked Friday 9 to 11.")));
 
         mockMvc.perform(post("/api/work-items/{id}/reply", workItemId)
                         .with(user)
@@ -664,7 +681,7 @@ class EmailIntakeTest {
     @Test
     void draftsShareTheCapAndSendingStartsAFreshSet() throws Exception {
         String workItemId = inProgressRequest("<capjob1@x>");
-        when(aiService.draftReply(any(), anyString())).thenReturn("Hi Tina, the team is on it.");
+        when(aiService.draftReply(any(), anyString(), nullable(AiService.RepairJob.class))).thenReturn("Hi Tina, the team is on it.");
 
         for (int left = 4; left >= 0; left--) {
             mockMvc.perform(post("/api/work-items/{id}/draft-reply", workItemId).with(user))
@@ -992,7 +1009,7 @@ class EmailIntakeTest {
                 UUID.fromString(workItemId)
         );
 
-        when(aiService.draftReply(any(), anyString())).thenReturn("Hi Tina, just checking in: which unit are you in?");
+        when(aiService.draftReply(any(), anyString(), nullable(AiService.RepairJob.class))).thenReturn("Hi Tina, just checking in: which unit are you in?");
 
         mockMvc.perform(post("/api/work-items/{id}/draft-reply", workItemId).with(user))
                 .andExpect(status().isOk())

@@ -54,6 +54,28 @@ class AiProposedActionEvaluationTest {
         assertFalse(reply.contains("clerova"), "Should not mention Clerova");
     }
 
+    @Test
+    void ceilingLeakGetsSafetyStepsThatFitIt() {
+
+        WorkItem workItem = createWorkItem(
+                Category.MAINTENANCE,
+                Priority.HIGH,
+                "48 Elm St, Unit 3",
+                "Water dripping from the bathroom ceiling, getting faster; likely from the unit above.",
+                "Water is dripping from the bathroom ceiling and it's getting faster. "
+                        + "I think it's coming from the unit above. 48 Elm St, Unit 3."
+        );
+
+        ProposedActionResult result = aiService.proposeAction(workItem);
+
+        assertEquals(ActionType.CREATE_MAINTENANCE_REQUEST, result.actionType);
+
+        // Steps for a sink leak don't help with water from above
+        String reply = result.draftedResponse.toLowerCase();
+        assertFalse(reply.contains("under the sink"), "Should not give sink advice: " + reply);
+        assertFalse(reply.contains("valve"), "The resident can't shut off the unit above: " + reply);
+    }
+
     private WorkItem createWorkItem(
             Category category,
             Priority priority,

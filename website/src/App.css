@@ -510,6 +510,33 @@ p {
   background: var(--surface);
 }
 
+.types-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Founder */
+
+.founder {
+  align-items: start;
+}
+
+.founder-note p:first-child {
+  margin-top: 0;
+}
+
+.founder-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.founder-links a:not(.button) {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 /* Pricing */
 
 .pricing {
@@ -649,6 +676,10 @@ p {
   .steps,
   .types {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .types-3 {
+    grid-template-columns: 1fr;
   }
 }
 

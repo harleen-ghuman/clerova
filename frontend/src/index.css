@@ -18,6 +18,8 @@ body {
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
+  /* Inter otherwise draws the x in addresses like k3j9x2 as a times sign */
+  font-feature-settings: "calt" 0;
   background: #f6f7f9;
   color: #111827;
 }
