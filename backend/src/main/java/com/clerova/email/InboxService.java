@@ -13,8 +13,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -78,6 +81,23 @@ public class InboxService {
         return InboundMessageResponse.from(inboundMessageRepository.save(message));
     }
 
+    /**
+     * Whether an email forwarded from someone's own inbox arrived after the
+     * moment. A forwarded email is also addressed to that inbox, while an
+     * email sent straight to Clerova is addressed to Clerova only.
+     */
+    private boolean forwardingWorksSince(UUID organizationId, Instant since) {
+        String clerova = "@" + emailProperties.getInboundDomain();
+
+        return inboundMessageRepository
+                .findRecipientsReceivedAfter(organizationId, since, PageRequest.of(0, 50))
+                .stream()
+                .filter(Objects::nonNull)
+                .flatMap(recipients -> Arrays.stream(recipients.split(",")))
+                .map(address -> address.trim().toLowerCase(Locale.ROOT))
+                .anyMatch(address -> address.contains("@") && !address.endsWith(clerova));
+    }
+
     @Transactional
     public EmailSettingsResponse getSettings(UUID organizationId) {
         if (!emailProperties.isInboundEnabled()) {
@@ -92,6 +112,8 @@ public class InboxService {
                         organizationId,
                         InboundEmailProcessor.GMAIL_CONFIRMATION_REASON
                 )
+                // Once forwarded mail arrives, the confirmation is done with
+                .filter(message -> !forwardingWorksSince(organizationId, message.getReceivedAt()))
                 .map(message -> new EmailSettingsResponse.GmailConfirmation(
                         message.getReceivedAt(),
                         message.getSubject(),

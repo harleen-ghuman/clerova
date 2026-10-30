@@ -44,6 +44,18 @@ public interface InboundMessageRepository
             String statusReason
     );
 
+    /** Who the emails received after a moment were addressed to, oldest first. */
+    @Query("""
+            select m.toAddresses from InboundMessage m
+            where m.organizationId = :organizationId and m.receivedAt > :after
+            order by m.receivedAt
+            """)
+    List<String> findRecipientsReceivedAfter(
+            @Param("organizationId") UUID organizationId,
+            @Param("after") Instant after,
+            Pageable pageable
+    );
+
     @Query("""
             select m.id from InboundMessage m
             where m.status = :status

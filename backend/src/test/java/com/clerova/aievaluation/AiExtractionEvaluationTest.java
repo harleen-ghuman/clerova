@@ -65,6 +65,24 @@ public class AiExtractionEvaluationTest {
         );
     }
 
+    @org.junit.jupiter.api.Test
+    void summaryIsAShortTitleOfTheIssue() {
+        ExtractionResult result = aiService.extract(
+                "Subject: Testing clerova with picture\n\n"
+                        + "Hi, the kitchen sink at Sparrowhawk is leaking and water is all over the floor. "
+                        + "I attached a photo and a PDF.\n\nAttachments: IMG_8069.png, Tb_results_neg.pdf"
+        );
+
+        String summary = result.summary.toLowerCase();
+        org.junit.jupiter.api.Assertions.assertTrue(
+                summary.contains("sink") || summary.contains("leak"), "Summary: " + result.summary);
+        org.junit.jupiter.api.Assertions.assertFalse(
+                summary.startsWith("resident") || summary.startsWith("tenant"), "Summary: " + result.summary);
+        org.junit.jupiter.api.Assertions.assertFalse(
+                summary.contains("attach") || summary.contains("photo") || summary.contains("pdf"), "Summary: " + result.summary);
+        org.junit.jupiter.api.Assertions.assertTrue(result.summary.length() <= 100, "Summary: " + result.summary);
+    }
+
     static Stream<Arguments> extractionCases() {
         return Stream.of(
 

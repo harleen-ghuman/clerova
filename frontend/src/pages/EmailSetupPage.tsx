@@ -3,6 +3,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { errorMessage } from "../api/client";
 import { setReplyCopyEmail } from "../api/email";
 import type { EmailSettings } from "../types/Email";
+import { parseGmailConfirmation } from "../utils/gmailConfirmation";
 
 interface EmailSetupPageProps {
   settings: EmailSettings | null;
@@ -32,6 +33,74 @@ function Screen({ children }: { children: ReactNode }) {
   );
 }
 
+/** Gmail's check email, boiled down to the button and code a person needs. */
+function GmailConfirmationCard({
+  confirmation,
+  address,
+}: {
+  confirmation: NonNullable<EmailSettings["gmailConfirmation"]>;
+  /** The Clerova address to forward to. */
+  address: string;
+}) {
+  const { from, code, confirmUrl } = parseGmailConfirmation(confirmation.subject, confirmation.text);
+  const [copied, setCopied] = useState(false);
+
+  async function copyCode(value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div className="gmail-confirmation">
+      <h2>Gmail wants to confirm forwarding</h2>
+      <p>
+        {from ? <><strong>{from}</strong> asked</> : "Gmail asked"} to forward
+        email to Clerova.{" "}
+        {confirmUrl
+          ? "Click Confirm forwarding, then click Confirm on Google's page."
+          : "Use the code or the confirm link in Gmail's email below."}
+      </p>
+
+      <div className="gmail-confirmation-actions">
+        {confirmUrl && (
+          <a
+            className="rq-button rq-button-primary"
+            href={confirmUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            Confirm forwarding
+          </a>
+        )}
+        {code && (
+          <span className="gmail-confirmation-code">
+            Code <strong>{code}</strong>
+            <button type="button" className="rq-button rq-button-small" onClick={() => void copyCode(code)}>
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </span>
+        )}
+      </div>
+
+      <p className="gmail-confirmation-next">
+        Then in Gmail's Forwarding settings, refresh the page and choose{" "}
+        <strong>Forward a copy of incoming mail to</strong>. In the box next to
+        it, pick or type <strong>{address}</strong> and click{" "}
+        <strong>Save Changes</strong>.
+      </p>
+
+      <details>
+        <summary>Show Gmail's email</summary>
+        <pre>{confirmation.text}</pre>
+      </details>
+    </div>
+  );
+}
+
 function gmailSteps(address: string): Step[] {
   return [
     {
@@ -39,7 +108,9 @@ function gmailSteps(address: string): Step[] {
       text: (
         <>
           In Gmail on a computer, click the gear icon at the top right, then{" "}
-          <strong>See all settings</strong>.
+          <strong>See all settings</strong>. On a phone, open
+          mail.google.com in your browser and switch to the desktop site; the
+          Gmail app doesn't have these settings.
         </>
       ),
       picture: (
@@ -97,16 +168,16 @@ function gmailSteps(address: string): Step[] {
       title: "Confirm it",
       text: (
         <>
-          Gmail sends a confirmation code to Clerova. It shows up at the top of
-          this page within a minute. Enter it in Gmail and click{" "}
-          <strong>Verify</strong>.
+          Gmail emails Clerova to check the address. Within a minute, a{" "}
+          <strong>Confirm forwarding</strong> button shows up at the top of
+          this page. Click it, then click <strong>Confirm</strong> on Google's
+          page.
         </>
       ),
       picture: (
         <Screen>
           <div className="sk-row">
-            <span className="sk-input sk-input-short">123456789</span>
-            <span className="sk-button">Verify</span>
+            <span className="sk-button">Confirm forwarding</span>
           </div>
         </Screen>
       ),
@@ -115,9 +186,13 @@ function gmailSteps(address: string): Step[] {
       title: "Turn forwarding on",
       text: (
         <>
-          Choose <strong>Forward a copy of incoming mail to</strong> your
-          Clerova address and <strong>keep Gmail's copy in the Inbox</strong>.
-          Click <strong>Save Changes</strong> at the bottom.
+          Back in Gmail's Forwarding settings (refresh the page), choose{" "}
+          <strong>Forward a copy of incoming mail to</strong>. In the box
+          next to it, pick or type your Clerova address,{" "}
+          <strong>{address}</strong> (not your own email). Leave the next box on{" "}
+          <strong>keep Gmail's copy in the Inbox</strong> and click{" "}
+          <strong>Save Changes</strong> at the bottom. If Gmail says the
+          address is invalid, it isn't confirmed yet: do step 4 first.
         </>
       ),
       picture: (
@@ -127,7 +202,7 @@ function gmailSteps(address: string): Step[] {
           </div>
           <div className="sk-radio sk-highlight">
             <span className="sk-dot sk-dot-on" /> Forward a copy of incoming
-            mail to Clerova
+            mail to <span className="sk-input sk-input-inline">{address}</span>
           </div>
           <div className="sk-row">
             <span className="sk-button">Save Changes</span>
@@ -317,13 +392,7 @@ export function EmailSetupPage({
       </div>
 
       {settings.gmailConfirmation && (
-        <div className="gmail-confirmation">
-          <h3>Gmail sent a confirmation email</h3>
-          <p>
-            Use the confirmation code or link below to finish step 4 in Gmail.
-          </p>
-          <pre>{settings.gmailConfirmation.text}</pre>
-        </div>
+        <GmailConfirmationCard confirmation={settings.gmailConfirmation} address={address} />
       )}
 
       <section className="setup-section">

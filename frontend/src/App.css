@@ -416,6 +416,16 @@ h3 {
   font-size: 14px;
 }
 
+.inbox-set-aside {
+  margin: 16px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.inbox-set-aside .jobs-link {
+  font-size: 13px;
+}
+
 .empty-view p + button,
 .empty-view p + a {
   margin-top: 16px;
@@ -1098,10 +1108,52 @@ h3 {
   gap: 8px;
 }
 
-.jobs-card-top strong {
+.jobs-title {
   flex: 1;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
   font-size: 14px;
+  font-weight: 600;
   line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.jobs-title:hover {
+  color: var(--brand);
+}
+
+.jobs-details {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--background);
+}
+
+.jobs-details p {
+  margin: 0;
+}
+
+.jobs-details-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.jobs-details-message {
+  margin-top: 4px !important;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.jobs-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
 }
 
 .jobs-address,
@@ -1450,7 +1502,7 @@ button.file-chip:focus-visible {
   background: var(--warning-soft);
 }
 
-.gmail-confirmation h3 {
+.gmail-confirmation h2 {
   font-size: 15px;
 }
 
@@ -1459,9 +1511,43 @@ button.file-chip:focus-visible {
   font-size: 14px;
 }
 
+.gmail-confirmation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.gmail-confirmation-actions a {
+  text-decoration: none;
+}
+
+.gmail-confirmation-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.gmail-confirmation-code strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}
+
+.gmail-confirmation p.gmail-confirmation-next {
+  margin: 12px 0 8px;
+}
+
+.gmail-confirmation summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
 .gmail-confirmation pre {
   max-height: 220px;
-  margin: 0;
+  margin: 8px 0 0;
   overflow: auto;
   padding: 12px;
   border-radius: var(--radius-sm);
@@ -1664,6 +1750,13 @@ button.file-chip:focus-visible {
   white-space: nowrap;
 }
 
+.sk-input-inline {
+  display: inline-block;
+  max-width: 62%;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .sk-input-short {
   flex: 1;
   letter-spacing: 0.1em;
@@ -1782,10 +1875,6 @@ button.file-chip:focus-visible {
     margin: 0;
     padding: 0;
     border: 0;
-  }
-
-  .sidebar-billing {
-    white-space: nowrap;
   }
 
   .sidebar-footer p,
@@ -2261,6 +2350,13 @@ button.file-chip:focus-visible {
   color: var(--brand);
   font-size: 12px;
   cursor: pointer;
+}
+
+/* On phones, Plan and billing is in the Settings tab */
+@media (max-width: 800px) {
+  .sidebar-billing {
+    display: none;
+  }
 }
 
 @media (max-width: 600px) {

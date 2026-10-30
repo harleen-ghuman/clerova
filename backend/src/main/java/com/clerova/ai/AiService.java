@@ -81,7 +81,12 @@ public class AiService {
                                 it does not cover, follow the internal data rules: do not
                                 invent it and say the team will check and follow up. When it
                                 doesn't cover a rule, don't tell the resident what is or isn't
-                                allowed, not even for now or until the team confirms.
+                                allowed, not even for now or until the team confirms. That
+                                includes friendly advice that works as a rule: no "in the
+                                meantime, please avoid...", "please don't..." or "we ask that
+                                you..." about that topic. Just say the team will confirm and
+                                follow up. (Safety steps for something urgent or unsafe are
+                                still fine.)
 
                                 Never mention the company information itself to the resident
                                 (no "the policies provided here", "our information doesn't say"
@@ -132,7 +137,12 @@ public class AiService {
                                   reasonably wait.
 
                                 Create a concise factual summary, in English even when the
-                                message is in another language (staff read it).
+                                message is in another language (staff read it). It is
+                                used as the title of the request and of any repair job,
+                                so write one short sentence about the issue itself, such
+                                as "Kitchen sink leaking under the cabinet". Don't start
+                                with "Resident reports" or similar, and don't mention
+                                attachments or how the message was sent.
 
                                 Extract the address when one is explicitly provided.
 
