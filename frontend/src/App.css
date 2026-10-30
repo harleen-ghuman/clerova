@@ -311,6 +311,29 @@ h3 {
   background: #912018;
 }
 
+.confirm-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--danger-line);
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+}
+
+.confirm-inline p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.confirm-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .billing-confirm {
   display: grid;
   gap: 8px;
@@ -916,6 +939,21 @@ h3 {
 
 .rq-result-actions:not(:empty) {
   margin-top: 8px;
+}
+
+.rq-next-step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--success-line);
+  color: var(--text);
+}
+
+.rq-next-step p {
+  margin: 0;
+  line-height: 1.5;
 }
 
 .details-section h3 {

@@ -8,6 +8,7 @@ import {
   hasNewReply,
   hasUrgentReply,
   requestBucket,
+  requestFilterBucket,
   requestSender,
   requestStatusLabel,
   requestTitle,
@@ -70,13 +71,8 @@ export function RequestsPage({
       )
     : requests;
 
-  // A new email during a job needs a person too, so it shows in review
   function inFilter(item: WorkItem, key: RequestFilter) {
-    return (
-      key === "all" ||
-      requestBucket(item) === key ||
-      (key === "review" && hasNewReply(item))
-    );
+    return key === "all" || requestFilterBucket(item) === key;
   }
 
   // Newest activity first: a new email moves an older request up
@@ -95,6 +91,21 @@ export function RequestsPage({
 
   function countFor(key: RequestFilter) {
     return matching.filter((item) => inFilter(item, key)).length;
+  }
+
+  // A search that leaves the open request out of the list closes it, so the
+  // details never belong to a request that isn't listed
+  const shown =
+    selected && (!query || matching.some((item) => item.id === selected.id))
+      ? selected
+      : null;
+
+  function changeFilter(key: RequestFilter) {
+    setFilter(key);
+
+    if (selected && !inFilter(selected, key)) {
+      onSelect(null);
+    }
   }
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
@@ -125,7 +136,7 @@ export function RequestsPage({
   }
 
   return (
-    <div className={`rq-page ${selected ? "rq-has-selection" : ""}`}>
+    <div className={`rq-page ${shown ? "rq-has-selection" : ""}`}>
       <header className="rq-header">
         <h1>Requests</h1>
 
@@ -168,7 +179,7 @@ export function RequestsPage({
               type="button"
               className={`rq-chip ${filter === key ? "active" : ""}`}
               aria-pressed={filter === key}
-              onClick={() => setFilter(key)}
+              onClick={() => changeFilter(key)}
             >
               {key === "all" ? "All" : BUCKET_LABELS[key]}
               <span>{countFor(key)}</span>
@@ -221,7 +232,9 @@ export function RequestsPage({
             <p className="rq-empty">
               {filter === "review" && !query
                 ? "Nothing to review. You're all caught up."
-                : "No requests here."}
+                : query
+                  ? "No requests match your search."
+                  : "No requests here."}
             </p>
           )}
 
@@ -232,7 +245,7 @@ export function RequestsPage({
               <button
                 key={item.id}
                 type="button"
-                className={`rq-row ${selected?.id === item.id ? "active" : ""}`}
+                className={`rq-row ${shown?.id === item.id ? "active" : ""}`}
                 onClick={() => onSelect(item)}
               >
                 <span className="rq-row-top">
@@ -263,19 +276,23 @@ export function RequestsPage({
           })}
         </section>
 
-        {selected ? (
+        {shown ? (
           <RequestDetail
-            key={selected.id}
-            workItem={selected}
+            key={shown.id}
+            workItem={shown}
             emailSendingEnabled={emailSendingEnabled}
-            startReminder={remindFor === selected.id}
+            startReminder={remindFor === shown.id}
             onChanged={onChanged}
             onOpenJobs={onOpenJobs}
             onBack={() => onSelect(null)}
           />
         ) : (
           <section className="rq-detail rq-detail-empty">
-            <p>Select a request to see the conversation and Clerova's suggestion.</p>
+            <p>
+              {query && visible.length === 0
+                ? "No requests match your search."
+                : "Select a request to see the conversation and Clerova's suggestion."}
+            </p>
           </section>
         )}
       </div>

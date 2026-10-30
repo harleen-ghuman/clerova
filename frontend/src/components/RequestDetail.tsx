@@ -32,6 +32,8 @@ import {
   suggestionTitle,
 } from "../utils/requestStatus";
 import { ApprovedResponse } from "./ApprovedResponse";
+import { AutoTextarea } from "./AutoTextarea";
+import { ConfirmInline } from "./ConfirmInline";
 import { FileList } from "./FileList";
 
 interface RequestDetailProps {
@@ -79,6 +81,7 @@ export function RequestDetail({
   const [error, setError] = useState<string | null>(null);
   // Bumped after our own changes so the details reload
   const [reloadKey, setReloadKey] = useState(0);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const isEmail = workItem.source === "EMAIL";
   const replyTo =
@@ -366,6 +369,22 @@ export function RequestDetail({
             <>
               <strong>{decisionCopy(reviewed, Boolean(replyTo)).title}</strong>
               <span>{decisionCopy(reviewed, Boolean(replyTo)).description}</span>
+              {/* An escalation is the request that most needs a clear next step */}
+              {workItem.status === "ESCALATED" && reviewed.status !== "REJECTED" && (
+                <div className="rq-next-step">
+                  {reviewed.reasoning && (
+                    <p>
+                      <strong>Why it needs your team:</strong> {reviewed.reasoning}
+                    </p>
+                  )}
+                  <p>
+                    <strong>Next:</strong>{" "}
+                    {replyTo
+                      ? `Decide the answer, send it with "Write to ${workItem.senderName || replyTo}", then click Mark done.`
+                      : "Decide the answer, send it from your own email, then click Mark done."}
+                  </p>
+                </div>
+              )}
             </>
           )}
 
@@ -407,7 +426,21 @@ export function RequestDetail({
         />
       )}
 
-      {canClose && (
+      {canClose && confirmCancel && (
+        <ConfirmInline
+          message="Cancel this request? Nothing is sent, and it moves to Closed. If the sender writes again, it comes back."
+          confirmLabel="Yes, cancel request"
+          keepLabel="Keep it open"
+          busy={busy !== null}
+          onConfirm={() => {
+            setConfirmCancel(false);
+            void close("CANCELLED");
+          }}
+          onKeep={() => setConfirmCancel(false)}
+        />
+      )}
+
+      {canClose && !confirmCancel && (
         <div className="rq-close-actions">
           <button
             type="button"
@@ -420,15 +453,7 @@ export function RequestDetail({
           <button
             type="button"
             className="rq-button"
-            onClick={() => {
-              if (
-                window.confirm(
-                  "Cancel this request? It moves to Done and nothing is sent. If the sender writes again, it comes back."
-                )
-              ) {
-                void close("CANCELLED");
-              }
-            }}
+            onClick={() => setConfirmCancel(true)}
             disabled={busy !== null}
           >
             Cancel request
@@ -477,6 +502,7 @@ function SuggestionCard({
   onCloseWithoutReplying,
 }: SuggestionCardProps) {
   const [response, setResponse] = useState(action.draftedResponse);
+  const [confirmClose, setConfirmClose] = useState(false);
   const hasReply = action.actionType !== "NO_ACTION";
   const sends = canEmail && hasReply;
 
@@ -492,7 +518,7 @@ function SuggestionCard({
       {hasReply && (
         <label className="rq-reply">
           {recipient ? `Reply to ${recipient}` : "Reply"}
-          <textarea
+          <AutoTextarea
             value={response}
             rows={6}
             maxLength={10000}
@@ -500,6 +526,20 @@ function SuggestionCard({
             onChange={(event) => setResponse(event.target.value)}
           />
         </label>
+      )}
+
+      {confirmClose && (
+        <ConfirmInline
+          message={`Close without replying? Nothing is sent${recipient ? ` to ${recipient}` : ""} and the request moves to Closed. If they write again, it comes back.`}
+          confirmLabel="Yes, close it"
+          keepLabel="Keep it open"
+          busy={busy !== null}
+          onConfirm={() => {
+            setConfirmClose(false);
+            onCloseWithoutReplying();
+          }}
+          onKeep={() => setConfirmClose(false)}
+        />
       )}
 
       <div className="rq-card-actions">
@@ -525,8 +565,8 @@ function SuggestionCard({
         <button
           type="button"
           className="rq-button rq-button-quiet"
-          onClick={onCloseWithoutReplying}
-          disabled={busy !== null}
+          onClick={() => setConfirmClose(true)}
+          disabled={busy !== null || confirmClose}
         >
           Close without replying
         </button>
@@ -675,7 +715,7 @@ function ReplyComposer({
     <section className="rq-card" aria-label={`${reminder ? "Reminder" : "Reply"} to ${recipient}`}>
       <label className="rq-reply">
         {reminder ? "Reminder" : "Reply"} to {recipient}
-        <textarea
+        <AutoTextarea
           value={message}
           rows={6}
           maxLength={10000}

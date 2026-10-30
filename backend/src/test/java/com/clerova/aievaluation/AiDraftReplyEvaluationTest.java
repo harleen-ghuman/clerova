@@ -66,6 +66,23 @@ class AiDraftReplyEvaluationTest {
     }
 
     @Test
+    void bookedVisitInTheJobNotesIsSharedWithoutInternalDetails() {
+        String reply = aiService.draftReply(
+                item(WorkItemStatus.IN_PROGRESS, "Leah Kim", Category.MAINTENANCE, "AC not cooling."),
+                conversation(AC, AC_REPLY,
+                        "Message from Leah Kim <leah@x.com> at 2026-10-26T09:00:00Z:\n"
+                                + "Hi, any update on when the technician is coming? It's getting really hot."),
+                null,
+                new AiService.RepairJob(true,
+                        "CoolAir HVAC booked for Thursday, 10 to 12. Tenant home all day. Quote $340, lockbox code 4471."));
+
+        writtenAsTheCompany(reply, "Hi Leah");
+        String lower = reply.toLowerCase();
+        assertThat(lower).contains("thursday").containsAnyOf("10", "ten");
+        assertThat(lower).doesNotContain("340", "4471", "lockbox", "quote", "arranging the visit");
+    }
+
+    @Test
     void urgentNewProblemDuringAJobGetsSafetySteps() {
         String reply = aiService.draftReply(
                 item(WorkItemStatus.IN_PROGRESS, "Leah Kim", Category.MAINTENANCE, "AC not cooling."),

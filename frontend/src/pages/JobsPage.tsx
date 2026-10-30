@@ -7,6 +7,7 @@ import type {
   MaintenanceRequestStatus,
 } from "../types/MaintenanceRequest";
 import type { WorkItem } from "../types/WorkItem";
+import { ConfirmInline } from "../components/ConfirmInline";
 import { hasNewReply, hasUrgentReply, requestSender, shortTime } from "../utils/requestStatus";
 
 const COLUMNS: {
@@ -16,10 +17,10 @@ const COLUMNS: {
 }[] = [
   { title: "Open", dot: "review", statuses: ["OPEN"] },
   { title: "In progress", dot: "waiting", statuses: ["IN_PROGRESS"] },
-  { title: "Done", dot: "done", statuses: ["COMPLETED", "CANCELLED"] },
+  { title: "Closed", dot: "done", statuses: ["COMPLETED", "CANCELLED"] },
 ];
 
-// Keep the Done column short
+// Keep the Closed column short
 const DONE_LIMIT = 20;
 
 interface JobsPageProps {
@@ -50,6 +51,8 @@ export function JobsPage({
   const [savingNotesId, setSavingNotesId] = useState<string | null>(null);
   const [savedNotesId, setSavedNotesId] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // A job whose Cancel (or Mark done with an unanswered reply) waits for a yes
+  const [confirming, setConfirming] = useState<{ jobId: string; status: MaintenanceRequestStatus } | null>(null);
   // Notes typed but not saved yet, by job
   const [notes, setNotes] = useState<Record<string, string>>({});
   // The same, readable right after typing (before a re-render), and saves
@@ -118,6 +121,7 @@ export function JobsPage({
   }
 
   async function changeStatus(job: MaintenanceRequest, status: MaintenanceRequestStatus) {
+    setConfirming(null);
     setBusyId(job.id);
     setError(job.id, null);
 
@@ -348,7 +352,22 @@ export function JobsPage({
                         )}
                       </details>
 
-                      {!finished && (
+                      {!finished && confirming?.jobId === job.id && (
+                        <ConfirmInline
+                          message={
+                            confirming.status === "CANCELLED"
+                              ? `Cancel this job? Its request closes too, and nothing is sent to ${request ? requestSender(request) : "the sender"}.${newReply ? " They wrote again and haven't had an answer." : ""}`
+                              : `${request ? requestSender(request) : "The sender"} wrote again and hasn't had an answer. Mark the job done anyway?`
+                          }
+                          confirmLabel={confirming.status === "CANCELLED" ? "Yes, cancel job" : "Yes, mark done"}
+                          keepLabel={confirming.status === "CANCELLED" ? "Keep job" : "Not yet"}
+                          busy={busy}
+                          onConfirm={() => void changeStatus(job, confirming.status)}
+                          onKeep={() => setConfirming(null)}
+                        />
+                      )}
+
+                      {!finished && confirming?.jobId !== job.id && (
                         <div className="jobs-actions">
                           {job.status === "OPEN" && (
                             <button
@@ -365,16 +384,11 @@ export function JobsPage({
                               type="button"
                               className="rq-button rq-button-small rq-button-primary"
                               disabled={busy}
-                              onClick={() => {
-                                if (
-                                  !newReply ||
-                                  window.confirm(
-                                    `${requestSender(request!)} wrote again and hasn't had an answer. Mark the job done anyway?`
-                                  )
-                                ) {
-                                  void changeStatus(job, "COMPLETED");
-                                }
-                              }}
+                              onClick={() =>
+                                newReply
+                                  ? setConfirming({ jobId: job.id, status: "COMPLETED" })
+                                  : void changeStatus(job, "COMPLETED")
+                              }
                             >
                               Mark done
                             </button>
@@ -383,17 +397,7 @@ export function JobsPage({
                             type="button"
                             className="rq-button rq-button-small rq-button-quiet"
                             disabled={busy}
-                            onClick={() => {
-                              if (
-                                window.confirm(
-                                  newReply
-                                    ? `Cancel this job? Its request will be closed too. ${requestSender(request!)} wrote again and hasn't had an answer.`
-                                    : "Cancel this job? Its request will be closed too."
-                                )
-                              ) {
-                                void changeStatus(job, "CANCELLED");
-                              }
-                            }}
+                            onClick={() => setConfirming({ jobId: job.id, status: "CANCELLED" })}
                           >
                             Cancel job
                           </button>

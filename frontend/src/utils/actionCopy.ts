@@ -37,7 +37,7 @@ export function decisionCopy(
       case "ESCALATE_TO_HUMAN":
         return {
           title: "Reply sent and escalated",
-          description: "The request stays open until someone on your team resolves it.",
+          description: "The sender was told your team will follow up. It stays open until you close it.",
         };
       default:
         return {
