@@ -51,8 +51,6 @@ const comparisons = [
   },
 ];
 
-const LINKEDIN_URL = "https://www.linkedin.com/in/harleenghuman";
-
 const faqs = [
   {
     q: "Do I have to change my email?",
@@ -379,9 +377,6 @@ function App() {
               forwarding working and look at your first requests with you.
             </p>
             <div className="founder-links">
-              <a className="button button-plain button-small" href={LINKEDIN_URL} target="_blank" rel="noreferrer">
-                Harleen on LinkedIn
-              </a>
               <a href="mailto:hello@clerova-ai.com">hello@clerova-ai.com</a>
             </div>
           </div>
