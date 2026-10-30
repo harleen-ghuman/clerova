@@ -32,9 +32,26 @@ const requestTypes = [
 ];
 
 const plans = [
-  { name: "Starter", plan: "starter" as const, price: 99, founding: 79, requests: "500 requests a month", note: "For small teams and portfolios" },
-  { name: "Growth", plan: "growth" as const, price: 189, founding: 149, requests: "1,500 requests a month", note: "For busy inboxes and growing portfolios" },
+  { name: "Starter", plan: "starter" as const, price: 99, founding: 79, requests: "500 requests a month", note: "Usually enough for up to about 250 units" },
+  { name: "Growth", plan: "growth" as const, price: 189, founding: 149, requests: "1,500 requests a month", note: "Usually enough for up to about 750 units" },
 ];
+
+const comparisons = [
+  {
+    name: "Instead of Gmail and ChatGPT",
+    text: "No copying emails in and pasting answers back. Clerova sorts each request as it arrives, keeps the whole conversation in one place and tracks repairs as jobs.",
+  },
+  {
+    name: "Alongside your property software",
+    text: "Keep AppFolio, Buildium or whatever you use. Clerova handles the emails that still land in your inbox. No data to move and no new portal for residents.",
+  },
+  {
+    name: "Without switching systems",
+    text: "Set up in about five minutes by forwarding your email. No password, no mailbox access, and you can stop anytime.",
+  },
+];
+
+const LINKEDIN_URL = "https://www.linkedin.com/in/harleenghuman";
 
 const faqs = [
   {
@@ -55,15 +72,27 @@ const faqs = [
   },
   {
     q: "What counts as a request?",
-    a: "One email or message that Clerova organizes for you. Replies in the same conversation don't count as new requests.",
+    a: "One email or message that Clerova organizes for you. Replies in the same conversation don't count as new requests. As a rough guide, most teams get one or two a month per unit.",
+  },
+  {
+    q: "What happens if I use all my requests for the month?",
+    a: "Nothing is lost. New emails are saved and organized on the 1st of next month, and you can still reply to every open request. Upgrade anytime and waiting emails are organized right away.",
+  },
+  {
+    q: "Where do resident emails go, and who can see them?",
+    a: "Emails and files are stored with Supabase, our database provider, and each company's data is kept separate. To organize a request, its text is sent to OpenAI through its business API. Attachments aren't sent to the AI. Neither we nor OpenAI use your data to train AI models.",
+  },
+  {
+    q: "Can I delete my data?",
+    a: "Yes. Email hello@clerova-ai.com and we delete it within 30 days, except billing records we must keep by law. Details are in our Privacy Policy.",
   },
 ];
 
 function JobsPreview() {
   const columns = [
-    { title: "Open", dot: "dot-review", cards: [["Kitchen sink leak", "12 Oak St, Unit 4B · From Tina Alvarez"], ["Replace bathroom fan", "310 Cedar Ave · From Marcus Lee"]] },
-    { title: "In progress", dot: "dot-waiting", cards: [["AC not cooling", "5667 Sparrow St · From Leah Kim"]] },
-    { title: "Done", dot: "dot-done", cards: [["Smoke detector battery", "1200 Park Ave · Done Oct 22"]] },
+    { title: "Open", dot: "dot-review", cards: [["Kitchen sink leaking", "12 Oak St, Unit 4B · From Tina Alvarez"], ["Heater won't turn on", "18 Pine Rd, Apt 2 · From Sam Rivera"]] },
+    { title: "In progress", dot: "dot-waiting", cards: [["AC not cooling", "5667 Sparrow St, Unit 5 · From Leah Kim"]] },
+    { title: "Closed", dot: "dot-done", cards: [["Smoke detector beeping", "1200 Park Ave, Unit 11C · From Nina Patel"]] },
   ];
 
   return (
@@ -278,6 +307,21 @@ function App() {
           </ul>
         </section>
 
+        <section className="section">
+          <div className="heading">
+            <span className="kicker">Why Clerova</span>
+            <h2>Works with what you already use</h2>
+          </div>
+          <div className="types types-3">
+            {comparisons.map((item) => (
+              <article key={item.name}>
+                <h3>{item.name}</h3>
+                <p>{item.text}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="section" id="pricing">
           <div className="heading">
             <span className="kicker">Pricing</span>
@@ -312,8 +356,34 @@ function App() {
           </div>
           <p className="pricing-footnote">
             Founding prices are for our first 20 customers and stay the same for
-            as long as you stay. Need more requests? Email hello@clerova-ai.com.
+            as long as you stay. Reach your limit and nothing is lost: new emails
+            wait for next month, or upgrade to organize them right away. Need
+            more than Growth? Email hello@clerova-ai.com.
           </p>
+        </section>
+
+        <section className="section split founder" aria-labelledby="founder-title">
+          <div>
+            <span className="kicker">Who's behind Clerova</span>
+            <h2 id="founder-title">Built in California's Central Valley</h2>
+          </div>
+          <div className="founder-note">
+            <p>
+              Hi, I'm Harleen Ghuman. I built Clerova for small property teams
+              whose days disappear into the same resident emails: leaks, late
+              fees, parking and noise.
+            </p>
+            <p>
+              I set up every founding customer personally. I'll help you get
+              forwarding working and look at your first requests with you.
+            </p>
+            <div className="founder-links">
+              <a className="button button-plain button-small" href={LINKEDIN_URL} target="_blank" rel="noreferrer">
+                Harleen on LinkedIn
+              </a>
+              <a href="mailto:hello@clerova-ai.com">hello@clerova-ai.com</a>
+            </div>
+          </div>
         </section>
 
         <section className="section" id="faq">
