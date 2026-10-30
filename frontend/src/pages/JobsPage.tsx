@@ -311,7 +311,9 @@ export function JobsPage({
                           {request ? (
                             <>
                               <p className="jobs-details-label">
-                                What {requestSender(request)} wrote
+                                {request.source === "EMAIL"
+                                  ? `What ${requestSender(request)} wrote`
+                                  : "The request as entered in Clerova"}
                                 {request.subject ? ` · ${request.subject}` : ""}
                               </p>
                               <p className="jobs-details-message">
@@ -343,7 +345,9 @@ export function JobsPage({
                           {request
                             ? newReply
                               ? `Read the ${urgentReply ? "urgent" : "new"} reply from ${requestSender(request)}`
-                              : `Open the request from ${requestSender(request)}`
+                              : request.source === "EMAIL"
+                                ? `Open the request from ${requestSender(request)}`
+                                : "Open the request"
                             : "Open the request"}
                         </button>
                       </div>
@@ -416,7 +420,7 @@ export function JobsPage({
                         <ConfirmInline
                           message={
                             confirming.status === "CANCELLED"
-                              ? `Cancel this job? Its request closes too, and nothing is sent to ${request ? requestSender(request) : "the sender"}.${newReply ? " They wrote again and haven't had an answer." : ""}`
+                              ? `Cancel this job? Its request closes too${request?.source === "EMAIL" ? `, and nothing is sent to ${requestSender(request)}` : ""}.${newReply ? " They wrote again and haven't had an answer." : ""}`
                               : `${request ? requestSender(request) : "The sender"} wrote again and hasn't had an answer. Mark the job done anyway?`
                           }
                           confirmLabel={confirming.status === "CANCELLED" ? "Yes, cancel job" : "Yes, mark done"}

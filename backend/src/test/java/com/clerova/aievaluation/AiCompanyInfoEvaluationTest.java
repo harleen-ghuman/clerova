@@ -104,7 +104,8 @@ class AiCompanyInfoEvaluationTest {
         String reply = result.draftedResponse.toLowerCase();
         assertThat(reply).containsAnyOf("check", "confirm", "follow up", "get back");
         assertThat(reply).doesNotContainPattern("(?<!whether )(you can|you may|you're allowed|you are allowed|isn't allowed|is not allowed|aren't allowed|are not allowed)");
-        assertThat(reply).doesNotContain("in the meantime, please", "please don't install", "please do not install", "please hold off", "please wait to install");
+        // Asking a question in the meantime is fine; a rule isn't
+        assertThat(reply).doesNotContainPattern("please (avoid|don't|do not|hold off|wait|refrain|keep from)");
     }
 
     @Test

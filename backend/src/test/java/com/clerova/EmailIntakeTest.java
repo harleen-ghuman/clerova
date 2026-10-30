@@ -351,6 +351,21 @@ class EmailIntakeTest {
 
         mockMvc.perform(get("/api/email-settings").with(user))
                 .andExpect(jsonPath("$.gmailConfirmation.text").value("Confirmation code: 123456789"));
+
+        // A test email sent straight to Clerova doesn't prove forwarding works
+        deliverNew("<direct@x>", "Testing Clerova directly.");
+        mockMvc.perform(get("/api/email-settings").with(user))
+                .andExpect(jsonPath("$.gmailConfirmation").isNotEmpty());
+
+        // Mail forwarded from the company's own inbox does, so the card goes away
+        var forwarded = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(
+                payload(forwardingAddress, "<fwd@x>", null, null, "tina@example.com", "The sink is leaking."));
+        forwarded.putArray("ToFull").addObject().put("Email", "office@maple.example");
+        deliver(objectMapper.writeValueAsString(forwarded)).andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/email-settings").with(user))
+                .andExpect(jsonPath("$.gmailConfirmation").isEmpty());
     }
 
     @Test
