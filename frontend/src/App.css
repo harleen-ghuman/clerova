@@ -1450,7 +1450,7 @@ button.file-chip:focus-visible {
   background: var(--warning-soft);
 }
 
-.gmail-confirmation h3 {
+.gmail-confirmation h2 {
   font-size: 15px;
 }
 
@@ -1459,9 +1459,43 @@ button.file-chip:focus-visible {
   font-size: 14px;
 }
 
+.gmail-confirmation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.gmail-confirmation-actions a {
+  text-decoration: none;
+}
+
+.gmail-confirmation-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.gmail-confirmation-code strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}
+
+.gmail-confirmation p.gmail-confirmation-next {
+  margin: 12px 0 8px;
+}
+
+.gmail-confirmation summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
 .gmail-confirmation pre {
   max-height: 220px;
-  margin: 0;
+  margin: 8px 0 0;
   overflow: auto;
   padding: 12px;
   border-radius: var(--radius-sm);
