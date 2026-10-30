@@ -1877,10 +1877,6 @@ button.file-chip:focus-visible {
     border: 0;
   }
 
-  .sidebar-billing {
-    white-space: nowrap;
-  }
-
   .sidebar-footer p,
   .sidebar-account small {
     display: none;
@@ -2354,6 +2350,13 @@ button.file-chip:focus-visible {
   color: var(--brand);
   font-size: 12px;
   cursor: pointer;
+}
+
+/* On phones, Plan and billing is in the Settings tab */
+@media (max-width: 800px) {
+  .sidebar-billing {
+    display: none;
+  }
 }
 
 @media (max-width: 600px) {
