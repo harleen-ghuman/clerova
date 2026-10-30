@@ -365,6 +365,20 @@ export function RequestDetail({
               <strong>Closed without replying</strong>
               <span>Nothing was sent. If the sender writes again, it comes back for review.</span>
             </>
+          ) : closed ? (
+            // Closed after a decision: the old "send it" or "stays open"
+            // instructions no longer apply
+            <>
+              <strong>{workItem.status === "CANCELLED" ? "Request cancelled" : "Request done"}</strong>
+              <span>
+                {reviewed.status === "EXECUTED"
+                  ? "Your reply was sent. "
+                  : ""}
+                {isEmail
+                  ? "Nothing else to do here. If the sender writes again, it comes back for review."
+                  : "Nothing else to do here."}
+              </span>
+            </>
           ) : (
             <>
               <strong>{decisionCopy(reviewed, Boolean(replyTo)).title}</strong>
@@ -415,7 +429,8 @@ export function RequestDetail({
       )}
 
       {/* Sent replies already show in the conversation */}
-      {reviewed && reviewed.status !== "EXECUTED" && hasResponseToSend(reviewed) && (
+      {/* Once closed, an unsent reply can't go out from Clerova; a copy-only one stays for reference */}
+      {reviewed && reviewed.status !== "EXECUTED" && hasResponseToSend(reviewed) && !(closed && replyTo) && (
         <ApprovedResponse
           action={reviewed}
           sendTo={replyTo}
