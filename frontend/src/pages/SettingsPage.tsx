@@ -15,6 +15,7 @@ import {
 import { friendlyError } from "../auth/friendlyError";
 import { MIN_PASSWORD_LENGTH, PASSWORD_HINT, passwordProblem } from "../auth/passwordRules";
 import { supabase } from "../auth/supabase";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { isDemo } from "../demo/mode";
 import type { Me, Organization } from "../types/Account";
 import { PLANS, planName, planPrice } from "../utils/plans";
@@ -134,7 +135,7 @@ function CompanyInfoSection({
           {COMPANY_INFO_FIELDS.map((field) => (
             <label key={field.key}>
               {field.label}
-              <textarea
+              <AutoTextarea
                 rows={2}
                 maxLength={MAX_FIELD_LENGTH}
                 placeholder={field.example}
@@ -626,7 +627,7 @@ function BillingSection({
             onClick={onManageBilling}
             disabled={busy !== null}
           >
-            {status === "past_due" ? "Update card" : "Card and invoices"}
+            {status === "past_due" ? "Update card" : "Manage billing"}
           </button>
           {canCancel && (
             <button
