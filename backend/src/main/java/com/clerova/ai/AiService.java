@@ -81,7 +81,12 @@ public class AiService {
                                 it does not cover, follow the internal data rules: do not
                                 invent it and say the team will check and follow up. When it
                                 doesn't cover a rule, don't tell the resident what is or isn't
-                                allowed, not even for now or until the team confirms.
+                                allowed, not even for now or until the team confirms. That
+                                includes friendly advice that works as a rule: no "in the
+                                meantime, please avoid...", "please don't..." or "we ask that
+                                you..." about that topic. Just say the team will confirm and
+                                follow up. (Safety steps for something urgent or unsafe are
+                                still fine.)
 
                                 Never mention the company information itself to the resident
                                 (no "the policies provided here", "our information doesn't say"

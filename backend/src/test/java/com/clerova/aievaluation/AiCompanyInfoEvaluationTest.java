@@ -93,6 +93,21 @@ class AiCompanyInfoEvaluationTest {
     }
 
     @Test
+    void givesNoInterimRuleForAnotherMissingPolicy() {
+        // Nothing about satellite dishes or balconies in the company info
+        ProposedActionResult result = aiService.proposeAction(
+                item(Category.GENERAL, "Priya Shah", "Can I put a small satellite dish on my balcony?"),
+                null,
+                INFO
+        );
+
+        String reply = result.draftedResponse.toLowerCase();
+        assertThat(reply).containsAnyOf("check", "confirm", "follow up", "get back");
+        assertThat(reply).doesNotContainPattern("(?<!whether )(you can|you may|you're allowed|you are allowed|isn't allowed|is not allowed|aren't allowed|are not allowed)");
+        assertThat(reply).doesNotContain("in the meantime, please", "please don't install", "please do not install", "please hold off", "please wait to install");
+    }
+
+    @Test
     void stillSendsTheResidentsOwnBalanceToTheTeam() {
         ProposedActionResult result = aiService.proposeAction(
                 item(Category.BILLING, "Marcus Lee", "Why is my balance $95 higher this month?"),
