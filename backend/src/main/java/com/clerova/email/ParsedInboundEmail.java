@@ -17,8 +17,29 @@ public record ParsedInboundEmail(
         String inReplyTo,
         String references,
         boolean automated,
-        List<Attachment> attachments
+        List<Attachment> attachments,
+        String replyToEmail,
+        String replyToName
 ) {
+
+    /** Without a Reply-To address. */
+    public ParsedInboundEmail(
+            String providerMessageId,
+            List<String> recipients,
+            String fromEmail,
+            String fromName,
+            String subject,
+            String textBody,
+            String replyText,
+            String messageId,
+            String inReplyTo,
+            String references,
+            boolean automated,
+            List<Attachment> attachments
+    ) {
+        this(providerMessageId, recipients, fromEmail, fromName, subject, textBody, replyText,
+                messageId, inReplyTo, references, automated, attachments, null, null);
+    }
 
     /** @param content the file as base64, or null when the provider didn't send it */
     public record Attachment(String fileName, String contentType, Long sizeBytes, String content) {

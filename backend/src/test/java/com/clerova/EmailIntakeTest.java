@@ -342,6 +342,31 @@ class EmailIntakeTest {
     }
 
     @Test
+    void portalEmailFromANoReplyAddressIsAnsweredAtReplyTo() throws Exception {
+        var portal = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(
+                payload(forwardingAddress, "<portal@x>", null, null, "noreply@portal.example", "New maintenance request: sink leaking."));
+        portal.put("ReplyTo", "Tina Alvarez <Tina@Example.com>");
+        deliver(objectMapper.writeValueAsString(portal)).andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/inbox").with(user))
+                .andExpect(jsonPath("$[0].fromEmail").value("tina@example.com"))
+                .andExpect(jsonPath("$[0].fromName").value("Tina Alvarez"));
+        mockMvc.perform(get("/api/work-items").with(user))
+                .andExpect(jsonPath("$[0].senderEmail").value("tina@example.com"));
+
+        // Clerova's own copies keep their sender, so they are still set aside
+        var copy = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(
+                payload(forwardingAddress, "<copy-rt@x>", null, null, forwardingAddress, "A copy."));
+        copy.put("ReplyTo", "tina@example.com");
+        deliver(objectMapper.writeValueAsString(copy)).andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/inbox").with(user))
+                .andExpect(jsonPath("$[0].statusReason").value(InboundEmailProcessor.OWN_COPY_REASON));
+    }
+
+    @Test
     void gmailForwardingConfirmationIsShownInSettings() throws Exception {
         deliver(payload(forwardingAddress, "<gmail@x>", null, null,
                 "forwarding-noreply@google.com", "Confirmation code: 123456789"))
@@ -560,7 +585,9 @@ class EmailIntakeTest {
         verify(emailSender).send(sent.capture());
 
         assertThat(sent.getValue().to()).isEqualTo("tina@example.com");
-        assertThat(sent.getValue().textBody()).isEqualTo("Hi Tina, the plumber comes Friday.");
+        assertThat(sent.getValue().textBody())
+                .startsWith("Hi Tina, the plumber comes Friday.\n\n")
+                .doesNotContain("Clerova");  // signed with the company, never "via Clerova"
         assertThat(sent.getValue().inReplyTo()).isEqualTo("<job2@x>");
         assertThat(sent.getValue().replyTo())
                 .isEqualTo(forwardingAddress.replace("@", "+wi-" + workItemId.replace("-", "") + "@"));
@@ -1079,7 +1106,9 @@ class EmailIntakeTest {
 
         assertThat(sent.getValue().to()).isEqualTo("tina@example.com");
         assertThat(sent.getValue().subject()).isEqualTo("Re: Sink leaking");
-        assertThat(sent.getValue().textBody()).isEqualTo("Rent is due on the 1st.");
+        assertThat(sent.getValue().textBody())
+                .startsWith("Rent is due on the 1st.\n\n")
+                .doesNotContain("Clerova");  // signed with the company, never "via Clerova"
         assertThat(sent.getValue().inReplyTo()).isEqualTo("<send1@x>");
         assertThat(sent.getValue().replyTo())
                 .isEqualTo(forwardingAddress.replace("@", "+wi-" + workItemId.replace("-", "") + "@"));

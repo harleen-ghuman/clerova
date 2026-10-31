@@ -1,0 +1,4 @@
+# The app itself is behind sign-in; only the demo is worth finding
+User-agent: *
+Allow: /demo
+Disallow: /

@@ -28,6 +28,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -302,7 +303,7 @@ public class ReplyService {
                 emailProperties.replyAddress(token, workItem.getId()),
                 workItem.getSenderEmail(),
                 replySubject(workItem.getSubject()),
-                body,
+                withSignOff(body, displayName(organization.getName())),
                 inReplyTo,
                 references,
                 bcc
@@ -315,6 +316,27 @@ public class ReplyService {
         }
 
         return subject.regionMatches(true, 0, "Re:", 0, 3) ? subject : "Re: " + subject;
+    }
+
+    /**
+     * Ends the reply with the company's name, as the drafts leave it out.
+     * Skipped when the reply already ends with that name.
+     */
+    static String withSignOff(String body, String companyName) {
+        String trimmed = body.stripTrailing();
+
+        if (companyName == null || companyName.isBlank()) {
+            return trimmed;
+        }
+
+        String[] lines = trimmed.split("\\R");
+        String lastLine = lines[lines.length - 1];
+
+        if (lastLine.toLowerCase(Locale.ROOT).contains(companyName.toLowerCase(Locale.ROOT))) {
+            return trimmed;
+        }
+
+        return trimmed + "\n\n" + companyName;
     }
 
     private static String displayName(String name) {

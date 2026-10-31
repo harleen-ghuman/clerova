@@ -674,6 +674,16 @@ function approveAndSend(state: DemoState, item: WorkItem, minutesAgo: number) {
   sendApproved(state, action, minutesAgo);
 }
 
+/** Like the server: replies end with the company's name, unless they already do. */
+function withSignOff(text: string, company: string): string {
+  const trimmed = text.trimEnd();
+  const lastLine = trimmed.split(/\r?\n/).pop() ?? "";
+
+  return !company || lastLine.toLowerCase().includes(company.toLowerCase())
+    ? trimmed
+    : `${trimmed}\n\n${company}`;
+}
+
 function outbound(state: DemoState, item: WorkItem, text: string, at: string) {
   item.suggestionsLeft = MAX_SUGGESTIONS;
   state.conversations[item.id].push({
@@ -682,7 +692,7 @@ function outbound(state: DemoState, item: WorkItem, text: string, at: string) {
     from: null,
     to: item.senderEmail,
     subject: item.subject ? `Re: ${item.subject}` : "Re: Your request",
-    text,
+    text: withSignOff(text, state.me.organization?.name ?? ""),
     at,
     attachments: [],
   });
