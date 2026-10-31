@@ -76,6 +76,105 @@ class AiProposedActionEvaluationTest {
         assertFalse(reply.contains("valve"), "The resident can't shut off the unit above: " + reply);
     }
 
+    @Test
+    void moveOutQuestionDoesNotInventTheCompanysSteps() {
+        WorkItem workItem = createWorkItem(
+                Category.LEASING,
+                Priority.LOW,
+                "9 Aspen Rd #1",
+                "30-day notice to move out on November 30; asks how to get the deposit back.",
+                "Hi, I'm giving my 30 day notice. I'll be moving out of 9 Aspen Rd #1 on November 30. "
+                        + "What do I need to do to get my deposit back?"
+        );
+
+        ProposedActionResult result = aiService.proposeAction(workItem);
+
+        // No company info: Clerova doesn't know this company's move-out rules
+        String reply = result.draftedResponse.toLowerCase();
+        for (String invented : new String[]{"broom", "key", "fob", "clean", "walk-through", "inspection", "21 days", "30 days of"}) {
+            assertFalse(reply.contains(invented), "Invented a move-out step (" + invented + "): " + reply);
+        }
+    }
+
+    @Test
+    void noticeQuestionDoesNotAskAboutTheirOwnLease() {
+        WorkItem workItem = createWorkItem(
+                Category.LEASING,
+                Priority.LOW,
+                "3 Fir St #2",
+                "Asks how much notice is needed to move out at the end of December and when the deposit is returned.",
+                "Hi, I plan to move out of 3 Fir St #2 at the end of December. "
+                        + "How much notice do you need and when will I get my deposit back?"
+        );
+
+        ProposedActionResult result = aiService.proposeAction(workItem);
+
+        String reply = result.draftedResponse.toLowerCase();
+        assertFalse(reply.contains("month-to-month") || reply.contains("month to month")
+                || reply.contains("fixed-term") || reply.contains("fixed term"),
+                "The team has the lease; don't ask the resident: " + reply);
+    }
+
+    @Test
+    void heaterThatWontStartGetsNoGasWarning() {
+        WorkItem workItem = createWorkItem(
+                Category.MAINTENANCE,
+                Priority.HIGH,
+                "88 Elm St, Unit 7",
+                "Heater in unit 7 not turning on; cold at night with a baby at home.",
+                "Hi, the heater in unit 7 at 88 Elm St isn't turning on. It got really cold last night "
+                        + "and I have a baby at home. Can someone come today?"
+        );
+
+        ProposedActionResult result = aiService.proposeAction(workItem);
+
+        assertEquals(ActionType.CREATE_MAINTENANCE_REQUEST, result.actionType);
+        String reply = result.draftedResponse.toLowerCase();
+        assertFalse(reply.contains("gas") || reply.contains("911"), "Warned about a hazard nobody mentioned: " + reply);
+    }
+
+    @Test
+    void replyThatAsksQuestionsIsAQuestion() {
+        WorkItem workItem = createWorkItem(
+                Category.COMPLAINT,
+                Priority.MEDIUM,
+                "41 Willow Way",
+                "Someone keeps parking in assigned spot #18.",
+                "Hi there, someone keeps parking in my assigned spot #18 at 41 Willow Way. "
+                        + "Is there anything you can do? Thanks, Priya"
+        );
+
+        ProposedActionResult result = aiService.proposeAction(workItem);
+
+        // A reply that asks for details waits for the answer; one that doesn't can close
+        boolean asks = result.draftedResponse.contains("?")
+                || result.draftedResponse.toLowerCase().contains("please let us know");
+        if (result.actionType == ActionType.RESPOND_TO_CUSTOMER) {
+            assertFalse(asks, "Asks the resident for details but closes the request: " + result.draftedResponse);
+        }
+    }
+
+    @Test
+    void replyHasNoClosingLineBecauseTheCompanyNameIsAdded() {
+        WorkItem workItem = createWorkItem(
+                Category.MAINTENANCE,
+                Priority.LOW,
+                "8 Ash St",
+                "Porch light is out.",
+                "Hi, the porch light at 8 Ash St is out. Thanks, Kim"
+        );
+
+        ProposedActionResult result = aiService.proposeAction(workItem);
+
+        String[] lines = result.draftedResponse.strip().split("\\R");
+        String last = lines[lines.length - 1].trim().toLowerCase();
+        assertFalse(last.matches("(thanks|thank you|best|best regards|regards|sincerely|warmly|cheers)[,.!]*"),
+                "Ends with a dangling closing: " + result.draftedResponse);
+        String reply = result.draftedResponse.toLowerCase();
+        assertFalse(reply.contains("unsafe") || reply.contains("911") || reply.contains("emergency"),
+                "Warned about a hazard nobody mentioned: " + reply);
+    }
+
     private WorkItem createWorkItem(
             Category category,
             Priority priority,

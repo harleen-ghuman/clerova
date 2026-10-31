@@ -87,6 +87,13 @@ public class AiExtractionEvaluationTest {
         return Stream.of(
 
                 Arguments.of(
+                        "No heat with a baby at home",
+                        "Hi Dana, the heater in unit 7 at 88 Elm St isn't turning on. It got really cold last night and I have a baby at home. Can someone come today?",
+                        Category.MAINTENANCE,
+                        Priority.HIGH
+                ),
+
+                Arguments.of(
                         "Urgent flooding",
                         "The basement at 500 Oak Street is flooding with water.",
                         Category.MAINTENANCE,

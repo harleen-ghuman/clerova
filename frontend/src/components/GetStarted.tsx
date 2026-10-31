@@ -85,8 +85,9 @@ export function GetStarted({
       <ol className="get-started-steps">
         {forwardingAddress ? (
           <>
-            <li>
-              <span className="get-started-num">1</span>
+            {/* Once a request has come in, the address is evidently set up */}
+            <li className={hasRequest ? "done" : ""}>
+              <span className="get-started-num">{hasRequest ? "✓" : "1"}</span>
               <div>
                 <strong>Copy your Clerova address</strong>
                 <div className="get-started-address">
@@ -101,8 +102,8 @@ export function GetStarted({
                 </div>
               </div>
             </li>
-            <li>
-              <span className="get-started-num">2</span>
+            <li className={hasRequest ? "done" : ""}>
+              <span className="get-started-num">{hasRequest ? "✓" : "2"}</span>
               <div>
                 <strong>Forward your requests email to it</strong>
                 <p>In Gmail or Outlook. You keep your inbox as it is.</p>

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 
-import { prefilledEmail, wantsSignIn } from "../auth/referral";
+import { prefilledEmail, takeSessionEndedMessage, wantsSignIn } from "../auth/referral";
 import { friendlyError } from "../auth/friendlyError";
 import { MIN_PASSWORD_LENGTH, PASSWORD_HINT, passwordProblem } from "../auth/passwordRules";
 import { fetchGoogleSignInEnabled, supabase } from "../auth/supabase";
@@ -77,7 +77,7 @@ export function AuthPage({
   const [email, setEmail] = useState(prefilledEmail);
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(oauthError);
+  const [error, setError] = useState<string | null>(() => oauthError() ?? takeSessionEndedMessage());
   const [notice, setNotice] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
 

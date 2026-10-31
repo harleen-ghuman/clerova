@@ -231,6 +231,9 @@ Background processor (every 5 seconds)
   address carries the work item (`token+wi-<id>@...`), so answers thread
   onto the same request even if the mail client drops the threading
   headers. In-Reply-To and References headers are matched too.
+- Every reply ends with the company name, unless its last line already has it.
+- Emails sent from a no-reply address with one Reply-To address (resident
+  portals, web forms) are answered at the Reply-To address.
 - Requests closed in the last 14 days reopen when the customer replies.
   Older ones start a new request.
 - Each new email counts once against the monthly requests, once the AI has

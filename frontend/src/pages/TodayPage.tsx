@@ -171,8 +171,10 @@ export function TodayPage({
 
   const open = requests.filter((item) => requestBucket(item) !== "done");
   const review = open.filter((item) => requestBucket(item) === "review");
+  // A new reply on it is already listed above, so it isn't shown twice
   const urgent = open.filter(
-    (item) => item.priority === "HIGH" && requestBucket(item) !== "waiting"
+    (item) =>
+      item.priority === "HIGH" && requestBucket(item) !== "waiting" && !hasNewReply(item)
   );
   const waitingLong = open.filter(
     (item) =>

@@ -82,8 +82,16 @@ public class InboundEmailService {
         message.setInReplyTo(truncate(trimToNull(email.inReplyTo()), 998));
         message.setReferences(email.references());
         message.setMailboxHash(recipient.get().mailboxHash());
-        message.setFromEmail(truncate(trimToNull(email.fromEmail()), 320));
-        message.setFromName(truncate(trimToNull(email.fromName()), 255));
+        // Replies go where the email asks: a portal's no-reply sender with
+        // the resident in Reply-To becomes the resident. Clerova's own mail
+        // and copies keep their sender, so they are still recognized.
+        boolean useReplyTo = email.replyToEmail() != null
+                && !email.replyToEmail().equalsIgnoreCase(String.valueOf(email.fromEmail()).trim())
+                && !isFromClerovaOrBounce(email.fromEmail())
+                && !isFromClerovaOrBounce(email.replyToEmail());
+
+        message.setFromEmail(truncate(trimToNull(useReplyTo ? email.replyToEmail() : email.fromEmail()), 320));
+        message.setFromName(truncate(trimToNull(useReplyTo ? email.replyToName() : email.fromName()), 255));
         message.setToAddresses(String.join(", ", email.recipients()));
         message.setSubject(truncate(email.subject(), 1000));
         message.setTextBody(truncate(email.textBody(), MAX_BODY_LENGTH));

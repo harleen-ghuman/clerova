@@ -1,6 +1,7 @@
 const STORAGE_KEY = "clerova.referralSource";
 const PLAN_KEY = "clerova.chosenPlan";
 const EMAIL_KEY = "clerova.prefillEmail";
+const SIGNING_UP_KEY = "clerova.signingUp";
 
 /**
  * Remembers where a visitor came from (utm_source or ref in the URL, e.g.
@@ -27,6 +28,12 @@ export function captureReferralSource() {
 
     if (email) {
       sessionStorage.setItem(EMAIL_KEY, email.slice(0, 200));
+    }
+
+    // Came from a "Start free trial" link, so sign-up is shown even on a
+    // browser that has signed in before
+    if (plan || email || source) {
+      sessionStorage.setItem(SIGNING_UP_KEY, "1");
     }
   } catch {
     // Storage can be unavailable (private mode); referral is optional.
@@ -77,13 +84,59 @@ export function getChosenPlan(): "STARTER" | "GROWTH" | null {
   }
 }
 
-/** Whether the app was opened from a "Sign in" link (?mode=sign-in). */
+const HAS_ACCOUNT_KEY = "clerova.hasAccount";
+const SESSION_ENDED_KEY = "clerova.sessionEnded";
+
+/**
+ * Whether to open on Sign in: a "Sign in" link (?mode=sign-in), or someone
+ * who has signed in on this browser before and didn't come to sign up.
+ */
 export function wantsSignIn(): boolean {
   try {
-    return new URLSearchParams(window.location.search).get("mode") === "sign-in";
+    const params = new URLSearchParams(window.location.search);
+
+    if (params.get("mode") === "sign-in") {
+      return true;
+    }
+
+    const signingUp =
+      params.get("mode") === "sign-up" || sessionStorage.getItem(SIGNING_UP_KEY) === "1";
+    return !signingUp && localStorage.getItem(HAS_ACCOUNT_KEY) === "1";
   } catch {
     return false;
   }
+}
+
+/** Remembers that this browser has an account, so it opens on Sign in next time. */
+export function rememberAccount(): void {
+  try {
+    localStorage.setItem(HAS_ACCOUNT_KEY, "1");
+  } catch {
+    // Opens on Create account instead
+  }
+}
+
+/** Notes that the server ended the session, to say so on the sign-in page. */
+export function noteSessionEnded(): void {
+  try {
+    sessionStorage.setItem(SESSION_ENDED_KEY, "1");
+  } catch {
+    // The sign-in page just won't explain why
+  }
+}
+
+/** "Your session has ended" once, after the server ended the session. */
+export function takeSessionEndedMessage(): string | null {
+  try {
+    if (sessionStorage.getItem(SESSION_ENDED_KEY) === "1") {
+      sessionStorage.removeItem(SESSION_ENDED_KEY);
+      return "Your session has ended. Please sign in again.";
+    }
+  } catch {
+    // Nothing to show
+  }
+
+  return null;
 }
 
 /** Email typed on the website's sign-up box (?email=), to prefill sign-up. */

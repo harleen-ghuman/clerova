@@ -232,7 +232,12 @@ export function RequestDetail({
         : workItem.status === "WAITING_FOR_INFORMATION"
           ? "waiting"
           : null;
-  const canWrite = Boolean(replyTo) && situation !== null;
+  // An approved reply that hasn't gone out yet comes first; until it's sent
+  // there's nothing to remind the sender about
+  const unsentReply = Boolean(
+    reviewed && reviewed.status !== "EXECUTED" && hasResponseToSend(reviewed)
+  );
+  const canWrite = Boolean(replyTo) && situation !== null && !unsentReply;
   const meta = [
     workItem.address,
     capitalize(workItem.category),
@@ -436,6 +441,8 @@ export function RequestDetail({
           sendTo={replyTo}
           onSent={(updated) => {
             setAction(updated);
+            // An earlier "couldn't send" no longer applies
+            setError(null);
             onChanged();
           }}
         />
@@ -596,6 +603,9 @@ function SuggestionCard({
             This request didn't come by email, so you'll copy the reply after
             approving.
           </span>
+        )}
+        {hasReply && canEmail && (
+          <span className="rq-hint">Your company name is added at the end of the email.</span>
         )}
       </div>
     </section>
@@ -784,7 +794,7 @@ function ReplyComposer({
           Cancel
         </button>
         <span className="rq-hint">
-          Goes to {sendTo}.{" "}
+          Goes to {sendTo}, ending with your company name.{" "}
           {situation === "job"
             ? "The job doesn't change."
             : situation === "escalated"

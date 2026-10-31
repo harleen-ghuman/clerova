@@ -721,7 +721,7 @@ public class WorkItemService {
                 != ProposedActionStatus.PENDING_APPROVAL) {
 
             throw new ConflictException(
-                    "This suggestion was already handled. Refresh to see the latest."
+                    "This was already handled, maybe in another tab. This is the latest."
             );
         }
 
