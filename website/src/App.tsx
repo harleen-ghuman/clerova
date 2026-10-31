@@ -164,6 +164,7 @@ function App() {
           <a href="#setup">Getting started</a>
           <a href="#pricing">Pricing</a>
           <a href="#faq">FAQ</a>
+          <a href="#contact">Contact</a>
           <a href={DEMO_URL}>Try the demo</a>
         </nav>
 
@@ -361,7 +362,7 @@ function App() {
           </p>
         </section>
 
-        <section className="section split founder" aria-labelledby="founder-title">
+        <section className="section split founder" id="contact" aria-labelledby="founder-title">
           <div>
             <span className="kicker">Who's behind Clerova</span>
             <h2 id="founder-title">Built in California's Central Valley</h2>
@@ -376,7 +377,14 @@ function App() {
               I set up every founding customer personally. I'll help you get
               forwarding working and look at your first requests with you.
             </p>
+            <p>
+              Questions, a walkthrough, or help getting set up? Email me and
+              I'll reply within one business day.
+            </p>
             <div className="founder-links">
+              <a className="button button-dark" href="mailto:hello@clerova-ai.com">
+                Contact us
+              </a>
               <a href="mailto:hello@clerova-ai.com">hello@clerova-ai.com</a>
             </div>
           </div>
@@ -408,15 +416,22 @@ function App() {
               Try the demo
             </a>
           </div>
+          <p className="cta-contact">
+            Questions first? <a href="mailto:hello@clerova-ai.com">Email hello@clerova-ai.com</a>
+          </p>
         </section>
       </main>
 
-      <div className={`sticky-cta ${showStickyCta ? "shown" : ""}`} aria-hidden={!showStickyCta}>
+      <aside
+        className={`sticky-cta ${showStickyCta ? "shown" : ""}`}
+        aria-label="Free trial"
+        aria-hidden={!showStickyCta}
+      >
         <span>14 days free</span>
         <a className="button button-primary" href={signUpUrl()} tabIndex={showStickyCta ? 0 : -1}>
           Start free trial
         </a>
-      </div>
+      </aside>
 
       <footer className="footer">
         <a className="brand" href="#top">
@@ -426,7 +441,7 @@ function App() {
         <nav className="footer-links" aria-label="Footer">
           <a href="/terms">Terms</a>
           <a href="/privacy">Privacy</a>
-          <a href="mailto:hello@clerova-ai.com">hello@clerova-ai.com</a>
+          <a href="mailto:hello@clerova-ai.com">Contact: hello@clerova-ai.com</a>
         </nav>
         <span>© 2026 Clerova</span>
       </footer>
