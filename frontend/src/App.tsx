@@ -438,7 +438,8 @@ function App({
       </nav>
 
       <main className="app-main">
-        {(billingNotice || billingError) && (
+        {/* On Settings, billing errors show next to the billing buttons instead */}
+        {(billingNotice || (billingError && activeView !== "settings")) && (
           <div className="billing-banner" role="status">
             <span>{billingError ?? billingNotice}</span>
             {billingError && (
@@ -598,6 +599,7 @@ function App({
                 onAccountUpdated(me);
               }}
               onManageBilling={manageBilling}
+              billingError={billingError}
               onBillingChanged={loadOrganization}
               onUpgrade={upgrade}
               upgrading={upgrading}

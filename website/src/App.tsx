@@ -154,8 +154,8 @@ function App() {
       </a>
 
       <header className="navbar">
-        <a className="brand" href="#top" aria-label="Clerova home">
-          <span className="brand-mark">C</span>
+        <a className="brand" href="#top">
+          <span className="brand-mark" aria-hidden="true">C</span>
           <span className="brand-name">Clerova</span>
         </a>
 
@@ -420,7 +420,7 @@ function App() {
 
       <footer className="footer">
         <a className="brand" href="#top">
-          <span className="brand-mark">C</span>
+          <span className="brand-mark" aria-hidden="true">C</span>
           <span className="brand-name">Clerova</span>
         </a>
         <nav className="footer-links" aria-label="Footer">

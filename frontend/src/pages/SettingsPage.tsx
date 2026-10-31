@@ -26,6 +26,8 @@ interface SettingsPageProps {
   organization: Organization;
   onSaved: (me: Me) => void;
   onManageBilling: () => void;
+  /** Opening billing or upgrading failed; shown next to those buttons. */
+  billingError?: string | null;
   /** The plan changed (cancelled or kept); reload the organization. */
   onBillingChanged: () => Promise<unknown>;
   onUpgrade: () => void;
@@ -178,6 +180,7 @@ export function SettingsPage({
   organization,
   onSaved,
   onManageBilling,
+  billingError,
   onBillingChanged,
   onUpgrade,
   upgrading,
@@ -223,6 +226,7 @@ export function SettingsPage({
         <BillingSection
           organization={organization}
           onManageBilling={onManageBilling}
+          billingError={billingError}
           onBillingChanged={onBillingChanged}
           onUpgrade={onUpgrade}
           upgrading={upgrading}
@@ -500,12 +504,14 @@ function longDate(value: string | null): string | null {
 function BillingSection({
   organization,
   onManageBilling,
+  billingError,
   onBillingChanged,
   onUpgrade,
   upgrading,
 }: {
   organization: Organization;
   onManageBilling: () => void;
+  billingError?: string | null;
   onBillingChanged: () => Promise<unknown>;
   onUpgrade: () => void;
   upgrading: boolean;
@@ -652,6 +658,11 @@ function BillingSection({
         </p>
       )}
       {error && <p className="action-error">{error}</p>}
+      {billingError && (
+        <p className="action-error" role="alert">
+          {billingError}
+        </p>
+      )}
     </section>
   );
 }
