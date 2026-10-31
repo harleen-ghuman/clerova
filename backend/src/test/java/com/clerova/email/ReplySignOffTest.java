@@ -25,4 +25,10 @@ class ReplySignOffTest {
         assertThat(ReplyService.withSignOff("Hi Tina,\n\nThanks,\nAlex", "Maple Property Group"))
                 .isEqualTo("Hi Tina,\n\nThanks,\nAlex\n\nMaple Property Group");
     }
+
+    @Test
+    void putsTheNameRightUnderAClosing() {
+        assertThat(ReplyService.withSignOff("Hi Priya,\n\nWe'll look into it.\n\nThanks,\n", "Maple Property Group"))
+                .isEqualTo("Hi Priya,\n\nWe'll look into it.\n\nThanks,\nMaple Property Group");
+    }
 }

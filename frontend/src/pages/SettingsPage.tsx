@@ -26,6 +26,8 @@ interface SettingsPageProps {
   organization: Organization;
   onSaved: (me: Me) => void;
   onManageBilling: () => void;
+  /** What upgrading changes, asked before upgrading. */
+  upgradeQuestion: string;
   /** Opening billing or upgrading failed; shown next to those buttons. */
   billingError?: string | null;
   /** The plan changed (cancelled or kept); reload the organization. */
@@ -184,6 +186,7 @@ export function SettingsPage({
   onBillingChanged,
   onUpgrade,
   upgrading,
+  upgradeQuestion,
   focusCompanyInfo = false,
   onCompanyInfoFocused,
   onSignOut,
@@ -230,6 +233,7 @@ export function SettingsPage({
           onBillingChanged={onBillingChanged}
           onUpgrade={onUpgrade}
           upgrading={upgrading}
+          upgradeQuestion={upgradeQuestion}
         />
       )}
 
@@ -508,6 +512,7 @@ function BillingSection({
   onBillingChanged,
   onUpgrade,
   upgrading,
+  upgradeQuestion,
 }: {
   organization: Organization;
   onManageBilling: () => void;
@@ -515,8 +520,10 @@ function BillingSection({
   onBillingChanged: () => Promise<unknown>;
   onUpgrade: () => void;
   upgrading: boolean;
+  upgradeQuestion: string;
 }) {
   const [confirming, setConfirming] = useState(false);
+  const [confirmingUpgrade, setConfirmingUpgrade] = useState(false);
   const [busy, setBusy] = useState<"cancel" | "keep" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -576,7 +583,32 @@ function BillingSection({
       <h2>Plan and billing</h2>
       <p>{summary}</p>
 
-      {confirming ? (
+      {confirmingUpgrade ? (
+        <div className="billing-confirm" role="group" aria-label="Upgrade to Growth">
+          <strong>Upgrade to Growth?</strong>
+          <p>{upgradeQuestion}</p>
+          <div className="settings-actions">
+            <button
+              type="button"
+              className="rq-button rq-button-small rq-button-primary"
+              onClick={() => {
+                setConfirmingUpgrade(false);
+                onUpgrade();
+              }}
+            >
+              Yes, upgrade
+            </button>
+            <button
+              type="button"
+              className="secondary-action-button"
+              onClick={() => setConfirmingUpgrade(false)}
+              autoFocus
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+      ) : confirming ? (
         <div className="billing-confirm" role="group" aria-label="Cancel your plan">
           <strong>Cancel your plan?</strong>
           <p>
@@ -621,7 +653,7 @@ function BillingSection({
             <button
               type="button"
               className="secondary-action-button"
-              onClick={onUpgrade}
+              onClick={() => setConfirmingUpgrade(true)}
               disabled={upgrading || busy !== null}
             >
               {upgrading ? "Upgrading..." : "Upgrade to Growth"}

@@ -679,9 +679,9 @@ function withSignOff(text: string, company: string): string {
   const trimmed = text.trimEnd();
   const lastLine = trimmed.split(/\r?\n/).pop() ?? "";
 
-  return !company || lastLine.toLowerCase().includes(company.toLowerCase())
-    ? trimmed
-    : `${trimmed}\n\n${company}`;
+  if (!company || lastLine.toLowerCase().includes(company.toLowerCase())) return trimmed;
+  // "Thanks," is followed by the name on the next line
+  return `${trimmed}${lastLine.trim().endsWith(",") ? "\n" : "\n\n"}${company}`;
 }
 
 function outbound(state: DemoState, item: WorkItem, text: string, at: string) {
@@ -1037,7 +1037,7 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
 
   if ((match = route.match(/^POST \/api\/work-items\/proposed-actions\/([^/]+)\/approve$/))) {
     const action = findAction(state, match[1]);
-    if (action.status !== "PENDING_APPROVAL") conflict("This suggestion was already handled. Refresh to see the latest.");
+    if (action.status !== "PENDING_APPROVAL") conflict("This was already handled, maybe in another tab. This is the latest.");
     const finalResponse = typeof body.finalResponse === "string" ? body.finalResponse : undefined;
     if (finalResponse && finalResponse.length > 10_000) throw new ApiRequestError("The reply must be 10,000 characters or fewer.", 400);
     approve(state, action, finalResponse);
@@ -1046,7 +1046,7 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
 
   if ((match = route.match(/^POST \/api\/work-items\/proposed-actions\/([^/]+)\/reject$/))) {
     const action = findAction(state, match[1]);
-    if (action.status !== "PENDING_APPROVAL") conflict("This suggestion was already handled. Refresh to see the latest.");
+    if (action.status !== "PENDING_APPROVAL") conflict("This was already handled, maybe in another tab. This is the latest.");
     action.status = "REJECTED";
     action.updatedAt = now();
     const item = findItem(state, action.workItemId);

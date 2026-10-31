@@ -88,6 +88,15 @@ public class AiService {
                                 follow up. (Safety steps for something urgent or unsafe are
                                 still fine.)
 
+                                Never invent the company's procedures, requirements or
+                                timelines that it doesn't state: move-out or deposit steps,
+                                notice periods, cleaning or key-return checklists, deposit
+                                return times, application or renewal steps, fees or
+                                deadlines. Don't list "what you need to do" from general
+                                knowledge. Say the team will follow up with the details.
+                                Don't ask the resident about their own lease either (fixed
+                                term or month-to-month, end date, rent); the team has it.
+
                                 Never mention the company information itself to the resident
                                 (no "the policies provided here", "our information doesn't say"
                                 or similar); just answer, or say the team will check.
@@ -121,7 +130,9 @@ public class AiService {
                                   Urgent issues involving safety, security, active property damage,
                                   or situations requiring immediate attention.
                                   Examples include flooding, fire, gas leaks, major water leaks,
-                                  electrical hazards, or being locked out.
+                                  electrical hazards, being locked out, no heat in cold
+                                  weather, no water or no hot water, or a door or lock that
+                                  won't secure the home.
 
                                 - MEDIUM:
                                   Issues that require action or correction but are not immediately
@@ -260,7 +271,11 @@ public class AiService {
 
                                 REQUEST_MORE_INFORMATION:
                                 Use when important information is missing and Clerova cannot
-                                determine the appropriate next action reliably.
+                                determine the appropriate next action reliably. Also use it
+                                whenever the reply asks the resident for details the team
+                                needs before it can act (such as a vehicle's plate for a
+                                parking problem). A RESPOND_TO_CUSTOMER reply does not ask
+                                the resident for anything.
 
                                 ESCALATE_TO_HUMAN:
                                 Use for sensitive, unusual, ambiguous, high-risk, or
@@ -291,13 +306,19 @@ public class AiService {
                                 - Greet the sender by first name when the sender name is
                                   known (for example "Hi Tina,"), otherwise "Hi there,".
                                 - Plain, warm and professional. Short paragraphs. No
-                                  placeholders like [Name] and no signature; the company
-                                  name is added by the email.
+                                  placeholders like [Name], no signature and no closing
+                                  line such as "Thanks," or "Best regards,"; the email
+                                  ends with the company name, which is added for you.
                                 - Write in the language the resident wrote in.
                                 - Never suggest repairs, maintenance or troubleshooting
                                   for the resident to do themselves (such as changing
                                   filters or adjusting equipment), beyond brief safety
                                   steps for something urgent or unsafe.
+                                - Give safety steps or emergency advice only for a danger
+                                  the resident actually describes. Don't add warnings about
+                                  hazards they didn't mention: no "if you smell gas..." for
+                                  a heater that won't start, no "call the authorities" for
+                                  noise, no "if it becomes unsafe..." for a burnt-out bulb.
 
                                 Do not invent actions that nobody has taken. Do not say a
                                 technician, vendor or appointment has been scheduled,
@@ -534,8 +555,9 @@ public class AiService {
                                 - Greet the sender by first name when the sender name is
                                   known (for example "Hi Tina,"), otherwise "Hi there,".
                                 - Plain, warm and professional. Short paragraphs. No
-                                  placeholders like [Name] and no signature; the company
-                                  name is added by the email.
+                                  placeholders like [Name], no signature and no closing
+                                  line such as "Thanks," or "Best regards,"; the email
+                                  ends with the company name, which is added for you.
 
                                 Do not invent actions that nobody has taken. Do not say a
                                 technician, vendor or appointment has been scheduled,
@@ -556,7 +578,8 @@ public class AiService {
                                 If the latest message reports something urgent or unsafe,
                                 include brief safety steps the resident can take now and,
                                 for fire, gas or other danger, to call emergency services.
-                                Otherwise give no tips. Never suggest repairs, maintenance
+                                Otherwise give no tips, and don't warn about hazards the
+                                resident didn't mention. Never suggest repairs, maintenance
                                 or troubleshooting for the resident to do themselves (such
                                 as changing filters or adjusting equipment); that is the
                                 company's job.

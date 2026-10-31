@@ -336,7 +336,8 @@ public class ReplyService {
             return trimmed;
         }
 
-        return trimmed + "\n\n" + companyName;
+        // "Thanks," is followed by the name on the next line
+        return trimmed + (lastLine.strip().endsWith(",") ? "\n" : "\n\n") + companyName;
     }
 
     private static String displayName(String name) {
