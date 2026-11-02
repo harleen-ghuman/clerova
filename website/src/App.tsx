@@ -374,8 +374,9 @@ function App() {
               fees, parking and noise.
             </p>
             <p>
-              I set up every founding customer personally. I'll help you get
-              forwarding working and look at your first requests with you.
+              I set up every founding customer personally, online. I'll help you
+              get forwarding working and look at your first requests with you
+              over a video call.
             </p>
             <p>
               Questions, a walkthrough, or help getting set up? Email me and
