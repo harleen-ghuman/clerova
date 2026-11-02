@@ -5,11 +5,11 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <title>Clerova | Your requests inbox, sorted and drafted</title>
+  <title>Clerova | AI for property management emails and maintenance requests</title>
 
   <meta
           name="description"
-          content="Forward your email to Clerova. It organizes every resident request, suggests the next step and drafts the reply. You approve and it's sent."
+          content="Clerova sorts maintenance requests and tenant emails for property managers, suggests the next step and drafts the reply. You approve it. Works with Gmail and Outlook."
   />
 
   <meta name="robots" content="index, follow" />
@@ -18,15 +18,15 @@
   <meta property="og:site_name" content="Clerova" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="Clerova: your requests inbox, sorted and drafted. Approve & send." />
+  <meta property="og:image:alt" content="Clerova: maintenance requests and tenant emails, sorted and drafted for property managers. Approve & send." />
   <meta property="og:url" content="https://clerova-ai.com/" />
   <meta
           property="og:title"
-          content="Clerova | Your requests inbox, sorted and drafted"
+          content="Clerova | AI for property management emails and maintenance requests"
   />
   <meta
           property="og:description"
-          content="Forward your email to Clerova. It organizes every resident request, suggests the next step and drafts the reply. You approve and it's sent."
+          content="Clerova sorts maintenance requests and tenant emails for property managers, suggests the next step and drafts the reply. You approve it. Works with Gmail and Outlook."
   />
   <meta
           property="og:image"
@@ -36,11 +36,11 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta
           name="twitter:title"
-          content="Clerova | Your requests inbox, sorted and drafted"
+          content="Clerova | AI for property management emails and maintenance requests"
   />
   <meta
           name="twitter:description"
-          content="Forward your email to Clerova. It organizes every resident request, suggests the next step and drafts the reply. You approve and it's sent."
+          content="Clerova sorts maintenance requests and tenant emails for property managers, suggests the next step and drafts the reply. You approve it. Works with Gmail and Outlook."
   />
   <meta
           name="twitter:image"
@@ -48,6 +48,46 @@
   />
 
   <link rel="canonical" href="https://clerova-ai.com/" />
+  <!-- Tells search engines what Clerova is. Prices match the Starter and Growth plans. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://clerova-ai.com/#organization",
+        "name": "Clerova",
+        "url": "https://clerova-ai.com/",
+        "logo": "https://clerova-ai.com/favicon.svg",
+        "email": "hello@clerova-ai.com",
+        "founder": { "@type": "Person", "name": "Harleen Ghuman" },
+        "address": { "@type": "PostalAddress", "addressRegion": "CA", "addressCountry": "US" }
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://clerova-ai.com/#website",
+        "url": "https://clerova-ai.com/",
+        "name": "Clerova",
+        "publisher": { "@id": "https://clerova-ai.com/#organization" }
+      },
+      {
+        "@type": "SoftwareApplication",
+        "name": "Clerova",
+        "url": "https://clerova-ai.com/",
+        "applicationCategory": "BusinessApplication",
+        "applicationSubCategory": "Property management",
+        "operatingSystem": "Web",
+        "description": "Clerova sorts maintenance requests and tenant emails for property managers, suggests the next step and drafts the reply for a person to approve.",
+        "publisher": { "@id": "https://clerova-ai.com/#organization" },
+        "offers": [
+          { "@type": "Offer", "name": "Starter", "price": "99", "priceCurrency": "USD", "description": "500 requests a month. 14-day free trial." },
+          { "@type": "Offer", "name": "Growth", "price": "189", "priceCurrency": "USD", "description": "1,500 requests a month. 14-day free trial." }
+        ]
+      }
+    ]
+  }
+  </script>
+
 
   <meta name="theme-color" content="#16181d" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
