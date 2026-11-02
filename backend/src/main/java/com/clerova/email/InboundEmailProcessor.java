@@ -230,6 +230,7 @@ public class InboundEmailProcessor {
     }
 
     private void attachFollowUp(InboundMessage message, WorkItem workItem) {
+        WorkItemStatus statusBefore = workItem.getStatus();
         message.setWorkItemId(workItem.getId());
         finish(message, InboundMessageStatus.ATTACHED, null);
 
@@ -258,6 +259,11 @@ public class InboundEmailProcessor {
 
         if (needsProposal) {
             generateProposal(workItem);
+
+            // "Thanks!" on a closed request needs nothing: it stays closed
+            if (statusBefore == WorkItemStatus.COMPLETED || statusBefore == WorkItemStatus.CANCELLED) {
+                workItemService.closeAgainIfNothingToDo(workItem.getOrganizationId(), workItem.getId(), statusBefore);
+            }
         } else {
             // During a job: the request is flagged; check whether it's urgent
             workItemService.checkFollowUpUrgency(

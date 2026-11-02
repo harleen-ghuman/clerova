@@ -489,6 +489,31 @@ class EmailIntakeTest {
     }
 
     @Test
+    void thankYouOnAClosedRequestKeepsItClosed() throws Exception {
+        proposeAction(ActionType.RESPOND_TO_CUSTOMER);
+        String workItemId = deliverNew("<thanks1@x>", "Where can guests park?");
+
+        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/approve",
+                        latestAction(workItemId).get("id").asText()).with(user))
+                .andExpect(status().isOk());
+
+        // Clerova finds nothing to do about "Thanks!"
+        proposeAction(ActionType.NO_ACTION);
+        deliver(payload(forwardingAddress, "<thanks2@x>", "<thanks1@x>", null, "tina@example.com", "Great, thank you!"))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/inbox").with(user))
+                .andExpect(jsonPath("$[0].status").value("ATTACHED"));
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
+        mockMvc.perform(get("/api/work-items/{id}/conversation", workItemId).with(user))
+                .andExpect(jsonPath("$[1].text").value("Great, thank you!"));
+        mockMvc.perform(get("/api/work-items/{id}/proposed-actions", workItemId).with(user))
+                .andExpect(jsonPath("$[0].status").value("REJECTED"));
+    }
+
+    @Test
     void replyToLongClosedRequestStartsNewRequest() throws Exception {
         proposeAction(ActionType.RESPOND_TO_CUSTOMER);
         String workItemId = deliverNew("<old1@x>", "When is rent due?");

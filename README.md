@@ -237,7 +237,10 @@ Background processor (every 5 seconds)
 - Emails sent from a no-reply address with one Reply-To address (resident
   portals, web forms) are answered at the Reply-To address.
 - Requests closed in the last 14 days reopen when the customer replies.
-  Older ones start a new request.
+  Older ones start a new request. A reply that needs nothing (Clerova
+  suggests no action, like "Thanks!") keeps the request closed.
+- A hand-forwarded email that names the sender without an address (some
+  Outlook forwards) is filed under that person, with the reply to copy.
 - Each new email counts once against the monthly requests, once the AI has
   read it, so failed attempts don't count. AI failures are retried after 1
   minute and then 5 minutes. The Inbox shows a plain reason for any failure

@@ -37,9 +37,23 @@ record ForwardedEmail(String fromEmail, String fromName, String subject) {
 
         String line = from.group(1).trim();
         Matcher email = EMAIL.matcher(line);
+        Matcher originalSubject = SUBJECT_LINE.matcher(body);
 
         if (!email.find()) {
-            return Optional.empty();
+            // Outlook can show only the name ("From: Sam Ortiz"). With the
+            // rest of the header below it, it's still a forward: the sender
+            // is that person, not whoever forwarded it, but there's no
+            // address to reply to.
+            if (!originalSubject.find(from.end()) || line.isEmpty() || line.length() > 200) {
+                return Optional.empty();
+            }
+
+            String subjectLine = originalSubject.group(1).trim();
+            return Optional.of(new ForwardedEmail(
+                    null,
+                    line.replace("\"", "").trim(),
+                    subjectLine.isEmpty() ? FORWARD_SUBJECT.matcher(subject).replaceFirst("").trim() : subjectLine
+            ));
         }
 
         String address = email.group();
@@ -54,7 +68,6 @@ record ForwardedEmail(String fromEmail, String fromName, String subject) {
                 .replace("\"", "")
                 .trim();
 
-        Matcher originalSubject = SUBJECT_LINE.matcher(body);
         String cleanSubject = originalSubject.find(from.end())
                 ? originalSubject.group(1).trim()
                 : FORWARD_SUBJECT.matcher(subject).replaceFirst("").trim();

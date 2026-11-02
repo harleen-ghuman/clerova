@@ -1061,7 +1061,7 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
     if (action.status === "EXECUTED") conflict("This reply was already sent.");
     if (action.status !== "APPROVED") conflict("Approve the reply before sending it.");
     const item = findItem(state, action.workItemId);
-    if (item.source !== "EMAIL" || !item.senderEmail) conflict("This request didn't come in by email, so there's no one to reply to.");
+    if (item.source !== "EMAIL" || !item.senderEmail) conflict("There's no email address to reply to on this request.");
     sendApproved(state, action);
     return action;
   }
@@ -1111,7 +1111,7 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
 
   if ((match = route.match(/^POST \/api\/work-items\/([^/]+)\/draft-reply$/))) {
     const item = findItem(state, match[1]);
-    if (item.source !== "EMAIL" || !item.senderEmail) conflict("This request didn't come in by email, so there's no one to reply to.");
+    if (item.source !== "EMAIL" || !item.senderEmail) conflict("There's no email address to reply to on this request.");
     requireCanWrite(item);
     takeSuggestion(item);
     return { reply: draftFor(state, item), suggestionsLeft: item.suggestionsLeft };
@@ -1122,7 +1122,7 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
     const message = String(body.message ?? "").trim();
     if (!message) throw new ApiRequestError("Write a reply before sending.", 400);
     if (message.length > 10_000) throw new ApiRequestError("The reply is too long. Keep it under 10,000 characters.", 400);
-    if (item.source !== "EMAIL" || !item.senderEmail) conflict("This request didn't come in by email, so there's no one to reply to.");
+    if (item.source !== "EMAIL" || !item.senderEmail) conflict("There's no email address to reply to on this request.");
     requireCanWrite(item);
     outbound(state, item, message, now());
     record(state, item.id, "REPLY_SENT", `Reply sent to ${item.senderEmail}`, "Alex Morgan");

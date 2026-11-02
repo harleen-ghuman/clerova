@@ -368,7 +368,7 @@ export function RequestDetail({
           {closed && reviewed.status === "REJECTED" ? (
             <>
               <strong>Closed without replying</strong>
-              <span>Nothing was sent. If the sender writes again, it comes back for review.</span>
+              <span>Nothing was sent. If the sender writes again with anything that needs you, it comes back for review.</span>
             </>
           ) : closed ? (
             // Closed after a decision: the old "send it" or "stays open"
@@ -380,7 +380,7 @@ export function RequestDetail({
                   ? "Your reply was sent. "
                   : ""}
                 {isEmail
-                  ? "Nothing else to do here. If the sender writes again, it comes back for review."
+                  ? "Nothing else to do here. If the sender writes again with anything that needs you, it comes back for review."
                   : "Nothing else to do here."}
               </span>
             </>
@@ -600,8 +600,8 @@ function SuggestionCard({
         )}
         {hasReply && !canEmail && (
           <span className="rq-hint">
-            This request didn't come by email, so you'll copy the reply after
-            approving.
+            There's no email address to send this to, so you'll copy the reply
+            after approving.
           </span>
         )}
         {hasReply && canEmail && (

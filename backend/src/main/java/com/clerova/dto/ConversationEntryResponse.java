@@ -26,9 +26,10 @@ public record ConversationEntryResponse(
     }
 
     public static ConversationEntryResponse from(InboundMessage message) {
-        String from = message.getFromName() != null
-                ? message.getFromName() + " <" + message.getFromEmail() + ">"
-                : message.getFromEmail();
+        // A forward can name the sender without their address
+        String from = message.getFromName() == null ? message.getFromEmail()
+                : message.getFromEmail() == null ? message.getFromName()
+                : message.getFromName() + " <" + message.getFromEmail() + ">";
 
         return new ConversationEntryResponse(
                 message.getId(),

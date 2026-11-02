@@ -273,7 +273,7 @@ public class ReplyService {
     private OutgoingEmail buildEmail(UUID organizationId, WorkItem workItem, String body) {
 
         if (workItem.getSource() != WorkItemSource.EMAIL || workItem.getSenderEmail() == null) {
-            throw new ConflictException("This request didn't come in by email, so there's no one to reply to.");
+            throw new ConflictException("There's no email address to reply to on this request.");
         }
 
         if (body == null || body.isBlank()) {

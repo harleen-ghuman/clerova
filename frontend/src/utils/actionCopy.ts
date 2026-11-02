@@ -42,7 +42,7 @@ export function decisionCopy(
       default:
         return {
           title: "Reply sent",
-          description: "The request is closed. If they reply, it comes back for review.",
+          description: "The request is closed. If they reply with anything that needs you, it comes back for review.",
         };
     }
   }

@@ -20,7 +20,7 @@ const steps = [
   },
   {
     title: "Replies come back to the same request",
-    text: "When the resident answers, the conversation continues in one place and comes back to Needs review.",
+    text: "When the resident answers, the conversation continues in one place, and anything that needs you comes back to Needs review.",
   },
 ];
 
@@ -70,7 +70,7 @@ const faqs = [
   },
   {
     q: "What counts as a request?",
-    a: "One email or message that Clerova organizes for you. Replies in the same conversation don't count as new requests. As a rough guide, plan on one or two a month per unit.",
+    a: "One email or message that Clerova organizes for you. Replies in the same conversation don't count as new requests, and newsletters, receipts and other automatic emails are set aside without counting. As a rough guide, plan on one or two a month per unit.",
   },
   {
     q: "What happens if I use all my requests for the month?",

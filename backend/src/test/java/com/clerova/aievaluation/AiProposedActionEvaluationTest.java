@@ -175,6 +175,56 @@ class AiProposedActionEvaluationTest {
                 "Warned about a hazard nobody mentioned: " + reply);
     }
 
+    @Test
+    void angryResidentGetsNoStaffNotesInTheReply() {
+        WorkItem workItem = createWorkItem(Category.MAINTENANCE, Priority.HIGH, "12 Elm St #3",
+                "Roof leak reported three times; threatens to withhold rent and call the city.",
+                "I have asked three times for the leaking roof to be fixed at 12 Elm St #3. If it is not fixed by "
+                        + "Friday I am withholding rent and calling the city inspector.");
+
+        String reply = aiService.proposeAction(workItem).draftedResponse.toLowerCase();
+
+        for (String leak : new String[]{"internal note", "actiontype", "action type", "reasoning", "note to staff", "(internal", "[internal"}) {
+            assertFalse(reply.contains(leak), "Staff text in the reply (" + leak + "): " + reply);
+        }
+    }
+
+    @Test
+    void replyIsNotSignedWithAGenericName() {
+        WorkItem workItem = createWorkItem(Category.LEASING, Priority.LOW, "41 Oak Ave",
+                "Prospect asks if a 2 bedroom is available and wants a weekend tour.",
+                "Hi, I saw your listing for a 2 bedroom on 41 Oak Ave. Is it still available and can I schedule a tour this weekend?");
+
+        String reply = aiService.proposeAction(workItem).draftedResponse.strip().toLowerCase();
+
+        assertFalse(reply.contains("clerova"), reply);
+        assertFalse(reply.endsWith("property management") || reply.endsWith("the team"), reply);
+    }
+
+    @Test
+    void noInventedPortalOrInterimRentAdvice() {
+        String pay = aiService.proposeAction(createWorkItem(Category.BILLING, Priority.LOW, "300 Pine St #2",
+                "New resident asks how to pay rent online.", "How do I pay rent online? I just moved in to 300 Pine St #2."))
+                .draftedResponse.toLowerCase();
+        assertFalse(pay.contains("invitation") || pay.contains("resend"), "Invented a portal invite: " + pay);
+
+        String roommate = aiService.proposeAction(createWorkItem(Category.LEASING, Priority.MEDIUM, "14 Oak #6",
+                "Roommate moved out and stopped paying half the rent.",
+                "My roommate moved out and stopped paying her half of the rent at 14 Oak #6. Am I responsible for all of it?"))
+                .draftedResponse.toLowerCase();
+        assertFalse(roommate.contains("continue making") || roommate.contains("continue paying") || roommate.contains("keep paying"),
+                "Interim instruction: " + roommate);
+    }
+
+    @Test
+    void emailMeantForSomeoneElseIsNotPassedOn() {
+        ProposedActionResult result = aiService.proposeAction(createWorkItem(Category.GENERAL, Priority.LOW, null,
+                "Personal message about lunch, likely sent to the wrong address.", "Hi Jessica, are we still on for lunch Thursday?"));
+
+        String reply = result.draftedResponse == null ? "" : result.draftedResponse.toLowerCase();
+        assertFalse(reply.contains("pass") || reply.contains("forward"), "Promised to pass it on: " + reply);
+    }
+
     private WorkItem createWorkItem(
             Category category,
             Priority priority,
