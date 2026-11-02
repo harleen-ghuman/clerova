@@ -45,6 +45,10 @@ public class InboundEmailProcessor {
     public static final String AUTOMATED_REASON = "Automated or bulk email";
     public static final String OWN_COPY_REASON = "Your copy of an email sent through Clerova";
     public static final String EMPTY_REASON = "Empty email, with no subject, text or attachments";
+    public static final String NOTICE_REASON =
+            "Automatic notice, like a receipt, shipping update or statement. Not counted toward your plan.";
+    /** Set when someone chose to process an ignored or failed email anyway. */
+    public static final String PROCESS_ANYWAY_REASON = "You asked Clerova to organize this email.";
     public static final String RETRY_REASON = "Couldn't read this email yet. Clerova will try again in a few minutes.";
     static final String QUOTA_WAIT_REASON =
             "Your plan's requests for this month are used up. This email will be organized on %s, or as soon as you upgrade.";
@@ -203,7 +207,13 @@ public class InboundEmailProcessor {
             return;
         }
 
-        WorkItem workItem = workItemService.createWorkItemFromEmail(message, attachmentNames);
+        boolean processAnyway = PROCESS_ANYWAY_REASON.equals(message.getStatusReason());
+        WorkItem workItem = workItemService.createWorkItemFromEmail(message, attachmentNames, processAnyway);
+
+        if (workItem == null) {
+            finish(message, InboundMessageStatus.IGNORED, NOTICE_REASON);
+            return;
+        }
 
         message.setWorkItemId(workItem.getId());
         finish(message, InboundMessageStatus.PROCESSED, null);

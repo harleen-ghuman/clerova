@@ -342,6 +342,40 @@ class EmailIntakeTest {
     }
 
     @Test
+    void receiptsAndShippingUpdatesAreSetAsideWithoutUsingThePlan() throws Exception {
+        ExtractionResult notice = new ExtractionResult();
+        notice.category = Category.GENERAL;
+        notice.priority = Priority.LOW;
+        notice.summary = "Order shipped";
+        notice.automaticNotice = true;
+        when(aiService.extract(anyString())).thenReturn(notice);
+
+        deliver(payload(forwardingAddress, "<ship@x>", null, null, "shipment-tracking@shop.example", "Shipped: your order"))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        JsonNode message = json(mockMvc.perform(get("/api/inbox").with(user))).get(0);
+        assertThat(message.get("status").asText()).isEqualTo("IGNORED");
+        assertThat(message.get("statusReason").asText()).isEqualTo(InboundEmailProcessor.NOTICE_REASON);
+        mockMvc.perform(get("/api/work-items").with(user)).andExpect(jsonPath("$.length()").value(0));
+        mockMvc.perform(get("/api/me").with(user))
+                .andExpect(jsonPath("$.organization.aiRequestsUsedThisMonth").value(0));
+        verify(aiService, never()).proposeAction(any(), any());
+
+        // "Process anyway" makes it a request, even though it's still a notice
+        mockMvc.perform(post("/api/inbox/{id}/reprocess", message.get("id").asText()).with(user))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("RECEIVED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/inbox").with(user))
+                .andExpect(jsonPath("$[0].status").value("PROCESSED"));
+        mockMvc.perform(get("/api/work-items").with(user)).andExpect(jsonPath("$.length()").value(1));
+        mockMvc.perform(get("/api/me").with(user))
+                .andExpect(jsonPath("$.organization.aiRequestsUsedThisMonth").value(1));
+    }
+
+    @Test
     void portalEmailFromANoReplyAddressIsAnsweredAtReplyTo() throws Exception {
         var portal = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(
                 payload(forwardingAddress, "<portal@x>", null, null, "noreply@portal.example", "New maintenance request: sink leaking."));

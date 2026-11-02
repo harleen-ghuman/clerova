@@ -154,8 +154,13 @@ public class WorkItemService {
 
     /**
      * Creates a work item from a received email and links the email to it.
+     *
+     * @param keepNotices true when the person asked to process the email
+     *                    anyway, so an automatic notice still becomes a request
+     * @return the new work item, or null for an automatic notice (a receipt,
+     *         shipping update or statement), which isn't counted
      */
-    public WorkItem createWorkItemFromEmail(InboundMessage email, List<String> attachmentNames) {
+    public WorkItem createWorkItemFromEmail(InboundMessage email, List<String> attachmentNames, boolean keepNotices) {
 
         UUID organizationId = email.getOrganizationId();
 
@@ -184,6 +189,12 @@ public class WorkItemService {
         );
 
         ExtractionResult extraction = aiService.extract(extractionInput);
+
+        // Receipts and shipping updates in a forwarded inbox aren't requests,
+        // so they don't use up the plan
+        if (extraction.automaticNotice && !keepNotices) {
+            return null;
+        }
 
         // Counted only once the AI has read it, so retries don't add up
         aiUsageService.consumeRequest(organizationId);

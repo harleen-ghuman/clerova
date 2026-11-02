@@ -222,6 +222,7 @@ export function TodayPage({
               welcome={welcome}
               forwardingAddress={forwardingAddress}
               hasRequest={hasRequest}
+              hasEmail={requests.some((item) => item.source === "EMAIL")}
               hasReply={hasReply}
               onOpenEmailSetup={onOpenEmailSetup}
               onOpenCompanyInfo={onOpenCompanyInfo}

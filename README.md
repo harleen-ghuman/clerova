@@ -224,6 +224,8 @@ Background processor (every 5 seconds)
   - reply to a request ............. Added to that request's conversation
                                      and returned to review (flagged as a
                                      new reply if its job is in progress)
+  - receipt, shipping update or
+    statement (AI decides) ......... Ignored, not counted (can be processed anyway)
   - anything else .................. New work item + AI suggestion
 ```
 

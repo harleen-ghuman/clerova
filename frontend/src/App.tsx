@@ -66,7 +66,13 @@ function App({
   onSignOut,
 }: AppProps) {
   const [organization, setOrganization] = useState(initialOrganization);
-  const [activeView, setActiveView] = useState<AppView>("today");
+  // After a refresh the browser still has the screen's history entry, so
+  // the same screen (and open request) comes back instead of Today
+  const [restoredNav] = useState<NavState | null>(() => {
+    const state = window.history.state as NavState | null;
+    return state?.clerova ? state : null;
+  });
+  const [activeView, setActiveView] = useState<AppView>(restoredNav?.view ?? "today");
   const [requestFilter, setRequestFilter] = useState<RequestFilter>("review");
   // Opened from Today to send a reminder: the request starts with a draft
   const [remindFor, setRemindFor] = useState<string | null>(null);
@@ -78,7 +84,7 @@ function App({
   const [requestsLoading, setRequestsLoading] = useState(true);
   const [requestsError, setRequestsError] = useState<string | null>(null);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(restoredNav?.selectedId ?? null);
   // Used when the selected request isn't in the lists, e.g. an older one
   const [selectedFallback, setSelectedFallback] = useState<WorkItem | null>(null);
 
@@ -229,9 +235,17 @@ function App({
   }
 
   useEffect(() => {
-    // The first screen, so Back from the next one comes back here
-    const initial: NavState = { clerova: true, view: "today", selectedId: null };
-    window.history.replaceState(initial, "");
+    if (!restoredNav) {
+      // The first screen, so Back from the next one comes back here
+      const initial: NavState = { clerova: true, view: "today", selectedId: null };
+      window.history.replaceState(initial, "");
+    } else if (restoredNav.selectedId) {
+      // It may be older than the lists; fetch it so it can still be shown
+      const id = restoredNav.selectedId;
+      getWorkItem(id)
+        .then((item) => setSelectedFallback(item))
+        .catch(() => setSelectedId((current) => (current === id ? null : current)));
+    }
 
     function onPopState(event: PopStateEvent) {
       const state = event.state as NavState | null;
@@ -246,7 +260,7 @@ function App({
 
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, []);
+  }, [restoredNav]);
 
   function navigate(view: AppView) {
     if (view === "email-setup") {
