@@ -522,6 +522,7 @@ function App({
               emailSettings?.intakeEnabled ? emailSettings.forwardingAddress : null
             }
             hasAnyRequest={openRequests.length + closedRequests.length > 0}
+            requestsLoading={requestsLoading}
             onOpenEmailSetup={() => navigate("email-setup")}
             onOpenCompanyInfo={() => {
               setFocusCompanyInfo(true);

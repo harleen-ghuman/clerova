@@ -35,6 +35,8 @@ interface TodayPageProps {
   forwardingAddress: string | null;
   /** Any request ever, open or closed. */
   hasAnyRequest: boolean;
+  /** The request lists are still loading; the page waits so nothing jumps. */
+  requestsLoading?: boolean;
   onOpenEmailSetup: () => void;
   onOpenCompanyInfo: () => void;
   /** Open requests; closed ones are ignored here. */
@@ -128,6 +130,7 @@ export function TodayPage({
   welcome,
   forwardingAddress,
   hasAnyRequest,
+  requestsLoading = false,
   onOpenEmailSetup,
   onOpenCompanyInfo,
   requests,
@@ -240,7 +243,7 @@ export function TodayPage({
         );
       })()}
 
-      {(hasAnyRequest || (summary?.allTimeRequests ?? 0) > 0) && (
+      {!requestsLoading && (hasAnyRequest || (summary?.allTimeRequests ?? 0) > 0) && (
       <>
       <section aria-labelledby="needs-you">
         <h2 id="needs-you" className="today-heading">Needs you now</h2>
