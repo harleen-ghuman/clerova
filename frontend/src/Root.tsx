@@ -7,6 +7,7 @@ import { completeCheckout } from "./api/billing";
 import { errorMessage } from "./api/client";
 import { isAuthConfigured, supabase } from "./auth/supabase";
 import { AuthPage } from "./pages/AuthPage";
+import { rememberAccount } from "./auth/referral";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { PlanPage } from "./pages/PlanPage";
 import type { Me } from "./types/Account";
@@ -68,6 +69,8 @@ export function Root() {
     if (!userId) {
       return;
     }
+
+    rememberAccount();
 
     let cancelled = false;
 

@@ -47,6 +47,27 @@ public class AiExtractionEvaluationTest {
         );
     }
 
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("noticeCases")
+    void automaticNoticesAreToldApartFromRequests(String name, String email, boolean notice) {
+        ExtractionResult result = aiService.extract(email);
+
+        assertEquals(notice, result.automaticNotice, "Wrong for: " + name);
+    }
+
+    static Stream<Arguments> noticeCases() {
+        return Stream.of(
+                Arguments.of("Amazon shipped", "From: Amazon.com <shipment-tracking@amazon.com>\nSubject: Shipped: \"Spa Gifts for Women 13Pcs...\" and 2 more items\n\nYour package is on the way. Arriving today. Track package.", true),
+                Arguments.of("Order confirmation", "From: Amazon.com <auto-confirm@amazon.com>\nSubject: Ordered: \"Spa Gifts...\"\n\nThanks for your order, Gurmohit. Order #112-3345. Arriving Friday. Order total $42.18.", true),
+                Arguments.of("Brokerage statement", "From: <no-reply.statements@tastyfx.com>\nSubject: Your tastyfx Statement - 01 Nov 2026\n\nYour daily statement is attached. Attachments: statement.pdf", true),
+                Arguments.of("Return refund", "From: return@amazon.com\nSubject: Your return summary\n\nWe received your return. Your refund of $19.99 will be issued in 3-5 business days.", true),
+                Arguments.of("Portal maintenance notice", "From: AppFolio <donotreply@appfolio.com>\nSubject: New Maintenance Request - 14 Oak Ave Unit 3\n\nA new maintenance request was submitted.\nTenant: Tina Alvarez\nIssue: Kitchen sink leaking under the cabinet.\nPermission to enter: Yes", false),
+                Arguments.of("Vendor invoice", "From: Jordan Fisher <jordan@fisherplumbing.example>\nSubject: Invoice 1182 - 14 Oak Ave\n\nHi, attached is invoice 1182 for the repair at 14 Oak Ave unit 3, $240 due in 30 days.", false),
+                Arguments.of("Utility shut-off notice", "From: PG&E <noreply@pge.example>\nSubject: Past due notice for 220 Pine St\n\nYour account for 220 Pine St is past due. Service may be shut off on Nov 20 unless $312.40 is paid.", false),
+                Arguments.of("Resident email", "From: Marcus Reed <marcus.reed@example.com>\nSubject: Late fee?\n\nI paid rent on the 2nd but see a $50 late fee. Can you check? 220 Pine St #4", false)
+        );
+    }
+
     @org.junit.jupiter.api.Test
     void spanishEmailIsSummarizedInEnglishForStaff() {
         ExtractionResult result = aiService.extract(
@@ -85,6 +106,13 @@ public class AiExtractionEvaluationTest {
 
     static Stream<Arguments> extractionCases() {
         return Stream.of(
+
+                Arguments.of(
+                        "No heat with a baby at home",
+                        "Hi Dana, the heater in unit 7 at 88 Elm St isn't turning on. It got really cold last night and I have a baby at home. Can someone come today?",
+                        Category.MAINTENANCE,
+                        Priority.HIGH
+                ),
 
                 Arguments.of(
                         "Urgent flooding",

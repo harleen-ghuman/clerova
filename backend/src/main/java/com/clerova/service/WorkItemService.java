@@ -5,6 +5,7 @@ import com.clerova.ai.AiService;
 import com.clerova.domain.InboundMessage;
 import com.clerova.domain.MaintenanceRequestStatus;
 import com.clerova.domain.ProposedAction;
+import com.clerova.domain.ActionType;
 import com.clerova.domain.ProposedActionStatus;
 import com.clerova.domain.WorkItem;
 import com.clerova.domain.WorkItemEventType;
@@ -154,8 +155,13 @@ public class WorkItemService {
 
     /**
      * Creates a work item from a received email and links the email to it.
+     *
+     * @param keepNotices true when the person asked to process the email
+     *                    anyway, so an automatic notice still becomes a request
+     * @return the new work item, or null for an automatic notice (a receipt,
+     *         shipping update or statement), which isn't counted
      */
-    public WorkItem createWorkItemFromEmail(InboundMessage email, List<String> attachmentNames) {
+    public WorkItem createWorkItemFromEmail(InboundMessage email, List<String> attachmentNames, boolean keepNotices) {
 
         UUID organizationId = email.getOrganizationId();
 
@@ -173,7 +179,9 @@ public class WorkItemService {
                 %s
                 %s
                 """.formatted(
-                email.getFromName() != null
+                email.getFromEmail() == null
+                        ? email.getFromName()
+                        : email.getFromName() != null
                         ? email.getFromName() + " <" + email.getFromEmail() + ">"
                         : email.getFromEmail(),
                 email.getSubject() != null ? email.getSubject() : "(no subject)",
@@ -184,6 +192,12 @@ public class WorkItemService {
         );
 
         ExtractionResult extraction = aiService.extract(extractionInput);
+
+        // Receipts and shipping updates in a forwarded inbox aren't requests,
+        // so they don't use up the plan
+        if (extraction.automaticNotice && !keepNotices) {
+            return null;
+        }
 
         // Counted only once the AI has read it, so retries don't add up
         aiUsageService.consumeRequest(organizationId);
@@ -211,7 +225,9 @@ public class WorkItemService {
                     organizationId,
                     saved.getId(),
                     WorkItemEventType.CREATED,
-                    "Received by email from " + email.getFromEmail(),
+                    "Received by email from " + (email.getFromEmail() != null
+                            ? email.getFromEmail()
+                            : email.getFromName() + " (forwarded without an email address)"),
                     null
             );
 
@@ -379,6 +395,41 @@ public class WorkItemService {
      *
      * @return true if the work item needs a new proposal
      */
+    /**
+     * After a reply reopened a closed request: when Clerova suggests no
+     * action (a "thank you"), the request goes back to how it was closed,
+     * so it doesn't wait for review. The email stays in its conversation.
+     */
+    @Transactional
+    public void closeAgainIfNothingToDo(UUID organizationId, UUID workItemId, WorkItemStatus closedStatus) {
+        WorkItem workItem = getWorkItem(organizationId, workItemId);
+
+        if (workItem.getStatus() != WorkItemStatus.WAITING_FOR_APPROVAL) {
+            return;
+        }
+
+        proposedActionRepository
+                .findFirstByWorkItemIdOrderByCreatedAtDesc(workItemId)
+                .filter(action -> action.getStatus() == ProposedActionStatus.PENDING_APPROVAL
+                        && action.getActionType() == ActionType.NO_ACTION)
+                .ifPresent(action -> {
+                    action.setStatus(ProposedActionStatus.REJECTED);
+                    action.recordDecision(null);
+                    proposedActionRepository.save(action);
+
+                    workItem.setStatus(closedStatus);
+                    workItemRepository.save(workItem);
+
+                    workItemEventService.record(
+                            organizationId,
+                            workItemId,
+                            WorkItemEventType.CLOSED,
+                            "Kept closed: the new email needed nothing more",
+                            null
+                    );
+                });
+    }
+
     @Transactional
     public boolean reopenForFollowUp(UUID organizationId, UUID workItemId, String fromEmail) {
 
@@ -451,7 +502,7 @@ public class WorkItemService {
         WorkItem workItem = getWorkItem(organizationId, workItemId);
 
         if (workItem.getSource() != WorkItemSource.EMAIL || workItem.getSenderEmail() == null) {
-            throw new ConflictException("This request didn't come in by email, so there's no one to reply to.");
+            throw new ConflictException("There's no email address to reply to on this request.");
         }
 
         requireCanWrite(workItem);
@@ -721,7 +772,7 @@ public class WorkItemService {
                 != ProposedActionStatus.PENDING_APPROVAL) {
 
             throw new ConflictException(
-                    "This suggestion was already handled. Refresh to see the latest."
+                    "This was already handled, maybe in another tab. This is the latest."
             );
         }
 

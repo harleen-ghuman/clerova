@@ -92,12 +92,13 @@ export function Sidebar({
         type="button"
         className="sidebar-brand"
         onClick={() => onNavigate("today")}
-        aria-label="Go to Today"
       >
-        <span className="sidebar-mark">C</span>
+        <span className="sidebar-mark" aria-hidden="true">C</span>
         <span>
           <strong>Clerova</strong>
           <small>{organization.name}</small>
+          {/* Spoken after the visible name, so voice control can use what's on screen */}
+          <span className="visually-hidden"> (go to Today)</span>
         </span>
       </button>
 

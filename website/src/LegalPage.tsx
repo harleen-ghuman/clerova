@@ -14,8 +14,8 @@ export function LegalPage({ title, updated, children }: LegalPageProps) {
   return (
     <div className="site">
       <header className="navbar">
-        <a className="brand" href="/" aria-label="Clerova home">
-          <span className="brand-mark">C</span>
+        <a className="brand" href="/">
+          <span className="brand-mark" aria-hidden="true">C</span>
           <span className="brand-name">Clerova</span>
         </a>
         <a className="button button-small button-dark" href="/">

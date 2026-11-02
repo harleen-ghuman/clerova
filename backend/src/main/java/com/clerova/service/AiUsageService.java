@@ -109,10 +109,10 @@ public class AiUsageService {
         String next;
 
         if (billingService.isEnabled() && organization.getPlan() == Plan.STARTER) {
-            next = "Upgrade to Growth for %,d a month, or new requests wait until %s."
+            next = "Upgrade to Growth for %,d a month, or Clerova can organize new ones again on %s."
                     .formatted(growthMonthlyRequests, reset);
         } else if (billingService.isEnabled() && organization.getPlan() == Plan.GROWTH) {
-            next = "New requests wait until %s. Email %s if you need more."
+            next = "Clerova can organize new ones again on %s. Email %s if you need more."
                     .formatted(reset, supportAddress);
         } else {
             next = "Email %s to get more.".formatted(supportAddress);

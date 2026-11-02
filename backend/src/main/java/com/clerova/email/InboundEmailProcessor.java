@@ -45,6 +45,10 @@ public class InboundEmailProcessor {
     public static final String AUTOMATED_REASON = "Automated or bulk email";
     public static final String OWN_COPY_REASON = "Your copy of an email sent through Clerova";
     public static final String EMPTY_REASON = "Empty email, with no subject, text or attachments";
+    public static final String NOTICE_REASON =
+            "Automatic notice, like a receipt, shipping update or statement. Not counted toward your plan.";
+    /** Set when someone chose to process an ignored or failed email anyway. */
+    public static final String PROCESS_ANYWAY_REASON = "You asked Clerova to organize this email.";
     public static final String RETRY_REASON = "Couldn't read this email yet. Clerova will try again in a few minutes.";
     static final String QUOTA_WAIT_REASON =
             "Your plan's requests for this month are used up. This email will be organized on %s, or as soon as you upgrade.";
@@ -203,7 +207,13 @@ public class InboundEmailProcessor {
             return;
         }
 
-        WorkItem workItem = workItemService.createWorkItemFromEmail(message, attachmentNames);
+        boolean processAnyway = PROCESS_ANYWAY_REASON.equals(message.getStatusReason());
+        WorkItem workItem = workItemService.createWorkItemFromEmail(message, attachmentNames, processAnyway);
+
+        if (workItem == null) {
+            finish(message, InboundMessageStatus.IGNORED, NOTICE_REASON);
+            return;
+        }
 
         message.setWorkItemId(workItem.getId());
         finish(message, InboundMessageStatus.PROCESSED, null);
@@ -220,6 +230,7 @@ public class InboundEmailProcessor {
     }
 
     private void attachFollowUp(InboundMessage message, WorkItem workItem) {
+        WorkItemStatus statusBefore = workItem.getStatus();
         message.setWorkItemId(workItem.getId());
         finish(message, InboundMessageStatus.ATTACHED, null);
 
@@ -248,6 +259,11 @@ public class InboundEmailProcessor {
 
         if (needsProposal) {
             generateProposal(workItem);
+
+            // "Thanks!" on a closed request needs nothing: it stays closed
+            if (statusBefore == WorkItemStatus.COMPLETED || statusBefore == WorkItemStatus.CANCELLED) {
+                workItemService.closeAgainIfNothingToDo(workItem.getOrganizationId(), workItem.getId(), statusBefore);
+            }
         } else {
             // During a job: the request is flagged; check whether it's urgent
             workItemService.checkFollowUpUrgency(

@@ -74,7 +74,8 @@ public class InboxService {
 
         message.setAutomated(false);
         message.setStatus(InboundMessageStatus.RECEIVED);
-        message.setStatusReason(null);
+        // Also tells the processor not to set it aside as a notice again
+        message.setStatusReason(InboundEmailProcessor.PROCESS_ANYWAY_REASON);
         message.setAttempts(0);
         message.setNextAttemptAt(null);
 

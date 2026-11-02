@@ -59,7 +59,8 @@ export function requestStatusLabel(item: WorkItem): string {
 }
 
 export function requestTitle(item: WorkItem): string {
-  return item.subject?.trim() || item.summary || "Request";
+  // Summaries are sentences; as a title they read better without the period
+  return item.subject?.trim() || item.summary?.trim().replace(/\.$/, "") || "Request";
 }
 
 export function requestSender(item: WorkItem): string {

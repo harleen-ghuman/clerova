@@ -224,6 +224,8 @@ Background processor (every 5 seconds)
   - reply to a request ............. Added to that request's conversation
                                      and returned to review (flagged as a
                                      new reply if its job is in progress)
+  - receipt, shipping update or
+    statement (AI decides) ......... Ignored, not counted (can be processed anyway)
   - anything else .................. New work item + AI suggestion
 ```
 
@@ -231,8 +233,14 @@ Background processor (every 5 seconds)
   address carries the work item (`token+wi-<id>@...`), so answers thread
   onto the same request even if the mail client drops the threading
   headers. In-Reply-To and References headers are matched too.
+- Every reply ends with the company name, unless its last line already has it.
+- Emails sent from a no-reply address with one Reply-To address (resident
+  portals, web forms) are answered at the Reply-To address.
 - Requests closed in the last 14 days reopen when the customer replies.
-  Older ones start a new request.
+  Older ones start a new request. A reply that needs nothing (Clerova
+  suggests no action, like "Thanks!") keeps the request closed.
+- A hand-forwarded email that names the sender without an address (some
+  Outlook forwards) is filed under that person, with the reply to copy.
 - Each new email counts once against the monthly requests, once the AI has
   read it, so failed attempts don't count. AI failures are retried after 1
   minute and then 5 minutes. The Inbox shows a plain reason for any failure

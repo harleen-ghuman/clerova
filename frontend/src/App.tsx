@@ -20,6 +20,7 @@ import { JobsPage } from "./pages/JobsPage";
 import { InboxPage } from "./pages/InboxPage";
 import { EmailSetupPage } from "./pages/EmailSetupPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { ConfirmInline } from "./components/ConfirmInline";
 import type { EmailSettings } from "./types/Email";
 import type { Me, Organization } from "./types/Account";
 import type { MaintenanceRequest } from "./types/MaintenanceRequest";
@@ -65,7 +66,13 @@ function App({
   onSignOut,
 }: AppProps) {
   const [organization, setOrganization] = useState(initialOrganization);
-  const [activeView, setActiveView] = useState<AppView>("today");
+  // After a refresh the browser still has the screen's history entry, so
+  // the same screen (and open request) comes back instead of Today
+  const [restoredNav] = useState<NavState | null>(() => {
+    const state = window.history.state as NavState | null;
+    return state?.clerova ? state : null;
+  });
+  const [activeView, setActiveView] = useState<AppView>(restoredNav?.view ?? "today");
   const [requestFilter, setRequestFilter] = useState<RequestFilter>("review");
   // Opened from Today to send a reminder: the request starts with a draft
   const [remindFor, setRemindFor] = useState<string | null>(null);
@@ -77,7 +84,7 @@ function App({
   const [requestsLoading, setRequestsLoading] = useState(true);
   const [requestsError, setRequestsError] = useState<string | null>(null);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(restoredNav?.selectedId ?? null);
   // Used when the selected request isn't in the lists, e.g. an older one
   const [selectedFallback, setSelectedFallback] = useState<WorkItem | null>(null);
 
@@ -228,9 +235,17 @@ function App({
   }
 
   useEffect(() => {
-    // The first screen, so Back from the next one comes back here
-    const initial: NavState = { clerova: true, view: "today", selectedId: null };
-    window.history.replaceState(initial, "");
+    if (!restoredNav) {
+      // The first screen, so Back from the next one comes back here
+      const initial: NavState = { clerova: true, view: "today", selectedId: null };
+      window.history.replaceState(initial, "");
+    } else if (restoredNav.selectedId) {
+      // It may be older than the lists; fetch it so it can still be shown
+      const id = restoredNav.selectedId;
+      getWorkItem(id)
+        .then((item) => setSelectedFallback(item))
+        .catch(() => setSelectedId((current) => (current === id ? null : current)));
+    }
 
     function onPopState(event: PopStateEvent) {
       const state = event.state as NavState | null;
@@ -245,7 +260,7 @@ function App({
 
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, []);
+  }, [restoredNav]);
 
   function navigate(view: AppView) {
     if (view === "email-setup") {
@@ -340,6 +355,7 @@ function App({
   }
 
   const [upgrading, setUpgrading] = useState(false);
+  const [askingUpgrade, setAskingUpgrade] = useState(false);
   const [keeping, setKeeping] = useState(false);
 
   /** Undoes a scheduled cancellation, in one click. */
@@ -354,25 +370,20 @@ function App({
       .finally(() => setKeeping(false));
   }
 
+  const growthPlan = PLANS.find((item) => item.plan === "GROWTH")!;
+  const growthPrice = planPrice(
+    organization.foundingCustomer ? growthPlan.foundingMonthly : growthPlan.monthly,
+    organization.billingInterval === "year" ? "year" : "month"
+  );
+  // Asked on the page before upgrading (a browser pop-up can be blocked)
+  const upgradeQuestion = `You'll get ${growthPlan.requests.toLocaleString()} requests a month, starting now. Growth is $${growthPrice.amount.toLocaleString()} a ${growthPrice.per}. ${
+    organization.subscriptionStatus === "trialing"
+      ? "You won't be charged until your trial ends."
+      : "The difference for the rest of this billing period is added to your next bill."
+  }${organization.cancelAtPeriodEnd ? " Your plan will also stop being cancelled." : ""}`;
+
   function upgrade() {
-    const growth = PLANS.find((item) => item.plan === "GROWTH")!;
-    const price = planPrice(
-      organization.foundingCustomer ? growth.foundingMonthly : growth.monthly,
-      organization.billingInterval === "year" ? "year" : "month"
-    );
-    const when =
-      organization.subscriptionStatus === "trialing"
-        ? "You won't be charged until your trial ends."
-        : "The difference for the rest of this billing period is added to your next bill.";
-
-    if (
-      !window.confirm(
-        `Upgrade to Growth for $${price.amount.toLocaleString()} / ${price.per}? You get ${growth.requests.toLocaleString()} requests a month starting now. ${when}${organization.cancelAtPeriodEnd ? " Your plan will also stop being cancelled." : ""}`
-      )
-    ) {
-      return;
-    }
-
+    setAskingUpgrade(false);
     setUpgrading(true);
     setBillingError(null);
     upgradeToGrowth()
@@ -438,7 +449,8 @@ function App({
       </nav>
 
       <main className="app-main">
-        {(billingNotice || billingError) && (
+        {/* On Settings, billing errors show next to the billing buttons instead */}
+        {(billingNotice || (billingError && activeView !== "settings")) && (
           <div className="billing-banner" role="status">
             <span>{billingError ?? billingNotice}</span>
             {billingError && (
@@ -479,15 +491,25 @@ function App({
                 ? "Growth includes 1,500 requests a month."
                 : usageLevel === "limit" && "Email hello@clerova-ai.com if you need more."}
             </span>
-            {canUpgrade && (
+            {canUpgrade && !askingUpgrade && (
               <button
                 type="button"
                 className="rq-button rq-button-small rq-button-primary"
-                onClick={upgrade}
+                onClick={() => setAskingUpgrade(true)}
                 disabled={upgrading}
               >
                 {upgrading ? "Upgrading..." : "Upgrade to Growth"}
               </button>
+            )}
+            {canUpgrade && askingUpgrade && (
+              <ConfirmInline
+                message={upgradeQuestion}
+                confirmLabel="Yes, upgrade"
+                keepLabel="Not now"
+                tone="primary"
+                onConfirm={upgrade}
+                onKeep={() => setAskingUpgrade(false)}
+              />
             )}
           </div>
         )}
@@ -598,9 +620,11 @@ function App({
                 onAccountUpdated(me);
               }}
               onManageBilling={manageBilling}
+              billingError={billingError}
               onBillingChanged={loadOrganization}
               onUpgrade={upgrade}
               upgrading={upgrading}
+              upgradeQuestion={upgradeQuestion}
               focusCompanyInfo={focusCompanyInfo}
               onCompanyInfoFocused={() => setFocusCompanyInfo(false)}
               onSignOut={onSignOut}

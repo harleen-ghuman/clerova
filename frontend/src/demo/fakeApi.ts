@@ -674,6 +674,16 @@ function approveAndSend(state: DemoState, item: WorkItem, minutesAgo: number) {
   sendApproved(state, action, minutesAgo);
 }
 
+/** Like the server: replies end with the company's name, unless they already do. */
+function withSignOff(text: string, company: string): string {
+  const trimmed = text.trimEnd();
+  const lastLine = trimmed.split(/\r?\n/).pop() ?? "";
+
+  if (!company || lastLine.toLowerCase().includes(company.toLowerCase())) return trimmed;
+  // "Thanks," is followed by the name on the next line
+  return `${trimmed}${lastLine.trim().endsWith(",") ? "\n" : "\n\n"}${company}`;
+}
+
 function outbound(state: DemoState, item: WorkItem, text: string, at: string) {
   item.suggestionsLeft = MAX_SUGGESTIONS;
   state.conversations[item.id].push({
@@ -682,7 +692,7 @@ function outbound(state: DemoState, item: WorkItem, text: string, at: string) {
     from: null,
     to: item.senderEmail,
     subject: item.subject ? `Re: ${item.subject}` : "Re: Your request",
-    text,
+    text: withSignOff(text, state.me.organization?.name ?? ""),
     at,
     attachments: [],
   });
@@ -1027,7 +1037,7 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
 
   if ((match = route.match(/^POST \/api\/work-items\/proposed-actions\/([^/]+)\/approve$/))) {
     const action = findAction(state, match[1]);
-    if (action.status !== "PENDING_APPROVAL") conflict("This suggestion was already handled. Refresh to see the latest.");
+    if (action.status !== "PENDING_APPROVAL") conflict("This was already handled, maybe in another tab. This is the latest.");
     const finalResponse = typeof body.finalResponse === "string" ? body.finalResponse : undefined;
     if (finalResponse && finalResponse.length > 10_000) throw new ApiRequestError("The reply must be 10,000 characters or fewer.", 400);
     approve(state, action, finalResponse);
@@ -1036,7 +1046,7 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
 
   if ((match = route.match(/^POST \/api\/work-items\/proposed-actions\/([^/]+)\/reject$/))) {
     const action = findAction(state, match[1]);
-    if (action.status !== "PENDING_APPROVAL") conflict("This suggestion was already handled. Refresh to see the latest.");
+    if (action.status !== "PENDING_APPROVAL") conflict("This was already handled, maybe in another tab. This is the latest.");
     action.status = "REJECTED";
     action.updatedAt = now();
     const item = findItem(state, action.workItemId);
@@ -1051,7 +1061,7 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
     if (action.status === "EXECUTED") conflict("This reply was already sent.");
     if (action.status !== "APPROVED") conflict("Approve the reply before sending it.");
     const item = findItem(state, action.workItemId);
-    if (item.source !== "EMAIL" || !item.senderEmail) conflict("This request didn't come in by email, so there's no one to reply to.");
+    if (item.source !== "EMAIL" || !item.senderEmail) conflict("There's no email address to reply to on this request.");
     sendApproved(state, action);
     return action;
   }
@@ -1101,7 +1111,7 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
 
   if ((match = route.match(/^POST \/api\/work-items\/([^/]+)\/draft-reply$/))) {
     const item = findItem(state, match[1]);
-    if (item.source !== "EMAIL" || !item.senderEmail) conflict("This request didn't come in by email, so there's no one to reply to.");
+    if (item.source !== "EMAIL" || !item.senderEmail) conflict("There's no email address to reply to on this request.");
     requireCanWrite(item);
     takeSuggestion(item);
     return { reply: draftFor(state, item), suggestionsLeft: item.suggestionsLeft };
@@ -1112,7 +1122,7 @@ function route_(route: string, url: URL, body: Record<string, unknown>): unknown
     const message = String(body.message ?? "").trim();
     if (!message) throw new ApiRequestError("Write a reply before sending.", 400);
     if (message.length > 10_000) throw new ApiRequestError("The reply is too long. Keep it under 10,000 characters.", 400);
-    if (item.source !== "EMAIL" || !item.senderEmail) conflict("This request didn't come in by email, so there's no one to reply to.");
+    if (item.source !== "EMAIL" || !item.senderEmail) conflict("There's no email address to reply to on this request.");
     requireCanWrite(item);
     outbound(state, item, message, now());
     record(state, item.id, "REPLY_SENT", `Reply sent to ${item.senderEmail}`, "Alex Morgan");

@@ -7,6 +7,8 @@ interface GetStartedProps {
   welcome: boolean;
   forwardingAddress: string | null;
   hasRequest: boolean;
+  /** An emailed request has arrived, so forwarding works. */
+  hasEmail: boolean;
   hasReply: boolean;
   onOpenEmailSetup: () => void;
   onOpenCompanyInfo: () => void;
@@ -26,6 +28,7 @@ export function GetStarted({
   welcome,
   forwardingAddress,
   hasRequest,
+  hasEmail,
   hasReply,
   onOpenEmailSetup,
   onOpenCompanyInfo,
@@ -85,8 +88,9 @@ export function GetStarted({
       <ol className="get-started-steps">
         {forwardingAddress ? (
           <>
-            <li>
-              <span className="get-started-num">1</span>
+            {/* Once a request has come in, the address is evidently set up */}
+            <li className={hasEmail ? "done" : ""}>
+              <span className="get-started-num">{hasEmail ? "✓" : "1"}</span>
               <div>
                 <strong>Copy your Clerova address</strong>
                 <div className="get-started-address">
@@ -101,8 +105,8 @@ export function GetStarted({
                 </div>
               </div>
             </li>
-            <li>
-              <span className="get-started-num">2</span>
+            <li className={hasEmail ? "done" : ""}>
+              <span className="get-started-num">{hasEmail ? "✓" : "2"}</span>
               <div>
                 <strong>Forward your requests email to it</strong>
                 <p>In Gmail or Outlook. You keep your inbox as it is.</p>
@@ -111,16 +115,16 @@ export function GetStarted({
                 </button>
               </div>
             </li>
-            <li className={hasRequest ? "done" : ""}>
-              <span className="get-started-num">{hasRequest ? "✓" : "3"}</span>
+            <li className={hasEmail ? "done" : ""}>
+              <span className="get-started-num">{hasEmail ? "✓" : "3"}</span>
               <div>
                 <strong>Send a test email</strong>
                 <p>
-                  {hasRequest
+                  {hasEmail
                     ? "Your first request arrived."
                     : "Opens your email app with a sample request. It shows up in Requests within a minute."}
                 </p>
-                {!hasRequest && testLink && (
+                {!hasEmail && testLink && (
                   <a className="rq-button rq-button-small rq-button-primary" href={testLink}>
                     Send a test email
                   </a>

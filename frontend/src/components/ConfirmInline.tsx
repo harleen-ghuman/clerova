@@ -4,6 +4,8 @@ interface ConfirmInlineProps {
   /** The safe choice, focused first so Enter never confirms by accident. */
   keepLabel: string;
   busy?: boolean;
+  /** Red for something destructive (the default), blue for a purchase. */
+  tone?: "danger" | "primary";
   onConfirm: () => void;
   onKeep: () => void;
 }
@@ -17,6 +19,7 @@ export function ConfirmInline({
   confirmLabel,
   keepLabel,
   busy = false,
+  tone = "danger",
   onConfirm,
   onKeep,
 }: ConfirmInlineProps) {
@@ -26,7 +29,7 @@ export function ConfirmInline({
       <div className="confirm-inline-actions">
         <button
           type="button"
-          className="rq-button rq-button-small rq-button-danger"
+          className={`rq-button rq-button-small rq-button-${tone}`}
           onClick={onConfirm}
           disabled={busy}
         >

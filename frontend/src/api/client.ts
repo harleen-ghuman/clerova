@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "../config";
+import { noteSessionEnded } from "../auth/referral";
 import { supabase } from "../auth/supabase";
 import { isDemo } from "../demo/mode";
 
@@ -48,6 +49,7 @@ export async function apiRequest<T>(
 
   if (response.status === 401 && data.session) {
     // The session is no longer valid; return to the sign-in screen.
+    noteSessionEnded();
     await supabase.auth.signOut();
   }
 

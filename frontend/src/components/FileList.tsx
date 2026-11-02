@@ -74,7 +74,6 @@ export function FileList({ files }: { files: AttachmentFile[] }) {
                   className="file-chip"
                   onClick={() => void open(file)}
                   disabled={busy !== null}
-                  aria-label={`${viewable(file) ? "Open" : "Download"} ${name}`}
                 >
                   <span className="file-chip-name">{name}</span>
                   <span className="file-chip-action">

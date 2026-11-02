@@ -9,4 +9,9 @@ public class ExtractionResult {
     public Priority priority;
     public String summary;
     public String address;
+    /**
+     * An automatic notice that needs nothing from the company (a receipt,
+     * shipping update, statement). It's set aside instead of becoming a request.
+     */
+    public boolean automaticNotice;
 }

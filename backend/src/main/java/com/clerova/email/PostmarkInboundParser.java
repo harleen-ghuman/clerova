@@ -76,6 +76,12 @@ public class PostmarkInboundParser {
             replyText = null;
         }
 
+        // Tenant portals often send from a no-reply address with the
+        // resident in Reply-To; a hand-forwarded email already names them
+        String[] replyTo = forwarded.isPresent()
+                ? new String[] {null, null}
+                : address(firstNonBlank(text(payload, "ReplyTo"), headers.get("reply-to")));
+
         return new ParsedInboundEmail(
                 text(payload, "MessageID"),
                 recipients,
@@ -88,7 +94,9 @@ public class PostmarkInboundParser {
                 headers.get("in-reply-to"),
                 headers.get("references"),
                 isAutomated(headers),
-                attachments
+                attachments,
+                replyTo[0],
+                replyTo[1]
         );
     }
 
@@ -114,6 +122,36 @@ public class PostmarkInboundParser {
                 || headers.containsKey("list-id")
                 || headers.containsKey("x-autoreply")
                 || headers.containsKey("x-autorespond");
+    }
+
+    private static final java.util.regex.Pattern ADDRESS =
+            java.util.regex.Pattern.compile("[^\\s<>,;\"]+@[^\\s<>,;\"]+\\.[^\\s<>,;\"]+");
+
+    /**
+     * The email address and name of a single Reply-To, like "Tina <tina@x.com>".
+     * A list of several addresses is ignored, since there is no one person to answer.
+     */
+    static String[] address(String value) {
+        if (value == null || value.isBlank()) {
+            return new String[] {null, null};
+        }
+
+        var matcher = ADDRESS.matcher(value);
+
+        if (!matcher.find()) {
+            return new String[] {null, null};
+        }
+
+        String email = matcher.group().toLowerCase(Locale.ROOT);
+
+        if (matcher.find()) {
+            return new String[] {null, null};
+        }
+
+        int angle = value.indexOf('<');
+        String name = angle > 0 ? value.substring(0, angle).replace("\"", "").trim() : null;
+
+        return new String[] {email, name == null || name.isBlank() ? null : name};
     }
 
     private static String text(JsonNode node, String field) {

@@ -646,6 +646,18 @@ p {
   margin-bottom: 10px;
 }
 
+.cta .cta-contact {
+  margin: 20px 0 0;
+}
+
+.cta-contact a {
+  color: var(--white);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+
 .footer {
   width: min(1160px, calc(100% - 32px));
   margin: 0 auto;

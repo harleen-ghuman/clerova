@@ -342,6 +342,65 @@ class EmailIntakeTest {
     }
 
     @Test
+    void receiptsAndShippingUpdatesAreSetAsideWithoutUsingThePlan() throws Exception {
+        ExtractionResult notice = new ExtractionResult();
+        notice.category = Category.GENERAL;
+        notice.priority = Priority.LOW;
+        notice.summary = "Order shipped";
+        notice.automaticNotice = true;
+        when(aiService.extract(anyString())).thenReturn(notice);
+
+        deliver(payload(forwardingAddress, "<ship@x>", null, null, "shipment-tracking@shop.example", "Shipped: your order"))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        JsonNode message = json(mockMvc.perform(get("/api/inbox").with(user))).get(0);
+        assertThat(message.get("status").asText()).isEqualTo("IGNORED");
+        assertThat(message.get("statusReason").asText()).isEqualTo(InboundEmailProcessor.NOTICE_REASON);
+        mockMvc.perform(get("/api/work-items").with(user)).andExpect(jsonPath("$.length()").value(0));
+        mockMvc.perform(get("/api/me").with(user))
+                .andExpect(jsonPath("$.organization.aiRequestsUsedThisMonth").value(0));
+        verify(aiService, never()).proposeAction(any(), any());
+
+        // "Process anyway" makes it a request, even though it's still a notice
+        mockMvc.perform(post("/api/inbox/{id}/reprocess", message.get("id").asText()).with(user))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("RECEIVED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/inbox").with(user))
+                .andExpect(jsonPath("$[0].status").value("PROCESSED"));
+        mockMvc.perform(get("/api/work-items").with(user)).andExpect(jsonPath("$.length()").value(1));
+        mockMvc.perform(get("/api/me").with(user))
+                .andExpect(jsonPath("$.organization.aiRequestsUsedThisMonth").value(1));
+    }
+
+    @Test
+    void portalEmailFromANoReplyAddressIsAnsweredAtReplyTo() throws Exception {
+        var portal = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(
+                payload(forwardingAddress, "<portal@x>", null, null, "noreply@portal.example", "New maintenance request: sink leaking."));
+        portal.put("ReplyTo", "Tina Alvarez <Tina@Example.com>");
+        deliver(objectMapper.writeValueAsString(portal)).andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/inbox").with(user))
+                .andExpect(jsonPath("$[0].fromEmail").value("tina@example.com"))
+                .andExpect(jsonPath("$[0].fromName").value("Tina Alvarez"));
+        mockMvc.perform(get("/api/work-items").with(user))
+                .andExpect(jsonPath("$[0].senderEmail").value("tina@example.com"));
+
+        // Clerova's own copies keep their sender, so they are still set aside
+        var copy = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(
+                payload(forwardingAddress, "<copy-rt@x>", null, null, forwardingAddress, "A copy."));
+        copy.put("ReplyTo", "tina@example.com");
+        deliver(objectMapper.writeValueAsString(copy)).andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/inbox").with(user))
+                .andExpect(jsonPath("$[0].statusReason").value(InboundEmailProcessor.OWN_COPY_REASON));
+    }
+
+    @Test
     void gmailForwardingConfirmationIsShownInSettings() throws Exception {
         deliver(payload(forwardingAddress, "<gmail@x>", null, null,
                 "forwarding-noreply@google.com", "Confirmation code: 123456789"))
@@ -427,6 +486,31 @@ class EmailIntakeTest {
 
         JsonNode events = json(mockMvc.perform(get("/api/work-items/{id}/events", workItemId).with(user)));
         assertThat(events.findValuesAsText("type")).contains("REOPENED", "FOLLOW_UP_RECEIVED");
+    }
+
+    @Test
+    void thankYouOnAClosedRequestKeepsItClosed() throws Exception {
+        proposeAction(ActionType.RESPOND_TO_CUSTOMER);
+        String workItemId = deliverNew("<thanks1@x>", "Where can guests park?");
+
+        mockMvc.perform(post("/api/work-items/proposed-actions/{id}/approve",
+                        latestAction(workItemId).get("id").asText()).with(user))
+                .andExpect(status().isOk());
+
+        // Clerova finds nothing to do about "Thanks!"
+        proposeAction(ActionType.NO_ACTION);
+        deliver(payload(forwardingAddress, "<thanks2@x>", "<thanks1@x>", null, "tina@example.com", "Great, thank you!"))
+                .andExpect(jsonPath("$.status").value("STORED"));
+        processor.processDue();
+
+        mockMvc.perform(get("/api/inbox").with(user))
+                .andExpect(jsonPath("$[0].status").value("ATTACHED"));
+        mockMvc.perform(get("/api/work-items/{id}", workItemId).with(user))
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
+        mockMvc.perform(get("/api/work-items/{id}/conversation", workItemId).with(user))
+                .andExpect(jsonPath("$[1].text").value("Great, thank you!"));
+        mockMvc.perform(get("/api/work-items/{id}/proposed-actions", workItemId).with(user))
+                .andExpect(jsonPath("$[0].status").value("REJECTED"));
     }
 
     @Test
@@ -560,7 +644,9 @@ class EmailIntakeTest {
         verify(emailSender).send(sent.capture());
 
         assertThat(sent.getValue().to()).isEqualTo("tina@example.com");
-        assertThat(sent.getValue().textBody()).isEqualTo("Hi Tina, the plumber comes Friday.");
+        assertThat(sent.getValue().textBody())
+                .startsWith("Hi Tina, the plumber comes Friday.\n\n")
+                .doesNotContain("Clerova");  // signed with the company, never "via Clerova"
         assertThat(sent.getValue().inReplyTo()).isEqualTo("<job2@x>");
         assertThat(sent.getValue().replyTo())
                 .isEqualTo(forwardingAddress.replace("@", "+wi-" + workItemId.replace("-", "") + "@"));
@@ -1079,7 +1165,9 @@ class EmailIntakeTest {
 
         assertThat(sent.getValue().to()).isEqualTo("tina@example.com");
         assertThat(sent.getValue().subject()).isEqualTo("Re: Sink leaking");
-        assertThat(sent.getValue().textBody()).isEqualTo("Rent is due on the 1st.");
+        assertThat(sent.getValue().textBody())
+                .startsWith("Rent is due on the 1st.\n\n")
+                .doesNotContain("Clerova");  // signed with the company, never "via Clerova"
         assertThat(sent.getValue().inReplyTo()).isEqualTo("<send1@x>");
         assertThat(sent.getValue().replyTo())
                 .isEqualTo(forwardingAddress.replace("@", "+wi-" + workItemId.replace("-", "") + "@"));

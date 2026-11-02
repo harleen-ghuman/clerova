@@ -70,6 +70,30 @@ class ForwardedEmailTest {
     }
 
     @Test
+    void outlookForwardShowingOnlyTheName() {
+        String body = """
+                Please handle.
+
+                ________________________________
+                From: Sam Ortiz
+                Sent: Friday, October 31, 2026 7:02 AM
+                To: Dana Lee
+                Subject: Water stain
+
+                There is a water stain growing on the ceiling of unit 7.
+                """;
+        ForwardedEmail original = ForwardedEmail.detect("FW: Water stain", body, MANAGER).orElseThrow();
+
+        // The resident wrote it; there's no address, so nobody gets an email by mistake
+        assertThat(original.fromEmail()).isNull();
+        assertThat(original.fromName()).isEqualTo("Sam Ortiz");
+        assertThat(original.subject()).isEqualTo("Water stain");
+
+        // Without the rest of the header, "From:" is just text
+        assertThat(ForwardedEmail.detect("Fwd: note", "From: the second floor, water drips.", MANAGER)).isEmpty();
+    }
+
+    @Test
     void notAForward() {
         // Auto-forwarding keeps the resident as the sender and the subject as is
         assertThat(ForwardedEmail.detect("Kitchen sink leaking", "From: someone@x.com", MANAGER)).isEmpty();
