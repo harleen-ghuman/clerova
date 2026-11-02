@@ -31,10 +31,11 @@ export function LegalPage({ title, updated, children }: LegalPageProps) {
 
       <footer className="footer">
         <a className="brand" href="/">
-          <span className="brand-mark">C</span>
+          <span className="brand-mark" aria-hidden="true">C</span>
           <span className="brand-name">Clerova</span>
         </a>
         <nav className="footer-links" aria-label="Footer">
+          <a href="/guides">Guides</a>
           <a href="/terms">Terms</a>
           <a href="/privacy">Privacy</a>
           <a href="mailto:hello@clerova-ai.com">hello@clerova-ai.com</a>

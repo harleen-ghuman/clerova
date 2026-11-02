@@ -184,9 +184,9 @@ function App() {
             <span className="kicker">For property managers</span>
             <h1>Your requests inbox, sorted and drafted before you open it.</h1>
             <p className="lead">
-              Forward your email to Clerova. It organizes every resident
-              request, suggests the next step and drafts the reply. You approve
-              and it's sent.
+              Forward your email to Clerova. It sorts every maintenance request
+              and tenant email, suggests the next step and drafts the reply.
+              You approve and it's sent.
             </p>
             <form className="hero-form" onSubmit={startTrial}>
               <label className="visually-hidden" htmlFor="hero-email">
@@ -265,7 +265,7 @@ function App() {
         <section className="section">
           <div className="heading">
             <span className="kicker">Jobs</span>
-            <h2>Approved repairs land on your Jobs board</h2>
+            <h2>Approved maintenance requests land on your Jobs board</h2>
             <p>
               Move each job from open to in progress to done. When a job is
               finished, the request closes with it.
@@ -277,7 +277,7 @@ function App() {
         <section className="section">
           <div className="heading">
             <span className="kicker">Request types</span>
-            <h2>One list for everything residents send</h2>
+            <h2>One list for every tenant email and maintenance request</h2>
           </div>
           <div className="types">
             {requestTypes.map((type) => (
@@ -393,7 +393,7 @@ function App() {
         <section className="section" id="faq">
           <div className="heading">
             <span className="kicker">FAQ</span>
-            <h2>Questions</h2>
+            <h2>Questions from property managers</h2>
           </div>
           <div className="faq">
             {faqs.map((item) => (
@@ -439,6 +439,7 @@ function App() {
           <span className="brand-name">Clerova</span>
         </a>
         <nav className="footer-links" aria-label="Footer">
+          <a href="/guides">Guides</a>
           <a href="/terms">Terms</a>
           <a href="/privacy">Privacy</a>
           <a href="mailto:hello@clerova-ai.com">Contact: hello@clerova-ai.com</a>

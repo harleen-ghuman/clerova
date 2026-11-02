@@ -1,0 +1,108 @@
+/* Guide pages: articles for property managers, styled like the legal pages */
+
+.guide-nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.guide-nav a:not(.button) {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.guide-nav a:not(.button):hover {
+  color: var(--ink);
+}
+
+.guide-lead {
+  margin-top: 16px;
+  font-size: 18px !important;
+  color: var(--muted) !important;
+}
+
+.guide-meta {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.legal h3 {
+  margin-top: 24px;
+  font-size: 17px;
+}
+
+.guide-template {
+  margin-top: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  white-space: pre-line;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.guide-cta {
+  margin-top: 44px;
+  padding: 24px;
+  border-radius: 16px;
+  background: var(--ink);
+  color: var(--white);
+}
+
+.guide-cta h2 {
+  margin-top: 0 !important;
+  color: var(--white);
+}
+
+.guide-cta p {
+  color: var(--line-strong) !important;
+}
+
+.guide-cta .cta-actions {
+  justify-content: flex-start;
+  margin-top: 16px;
+}
+
+.legal .guide-cta a {
+  text-decoration: none;
+}
+
+/* The article link color would make these buttons unreadable */
+.legal .guide-cta .button-light {
+  color: var(--ink);
+}
+
+.legal .guide-cta .button-outline-light {
+  color: var(--white);
+}
+
+.guide-list {
+  list-style: none;
+  padding-left: 0 !important;
+}
+
+.guide-list li {
+  margin-top: 16px !important;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.guide-list a {
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.guide-list p {
+  margin-top: 6px !important;
+}
+
+@media (max-width: 640px) {
+  .guide-nav a:not(.button) {
+    display: none;
+  }
+}
