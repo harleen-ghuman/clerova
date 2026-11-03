@@ -22,6 +22,22 @@ class PostmarkInboundParserTest {
     }
 
     @Test
+    void onlyEmailsWrittenToClerovaCountAsHandForwards() {
+        var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
+        String clerova = "maple-x1@in.clerova-ai.com";
+
+        // Written to Clerova (Forward in Gmail or Outlook)
+        assertThat(PostmarkInboundParser.sentToClerovaByHand(mapper.readTree(
+                "{\"OriginalRecipient\":\"" + clerova + "\",\"ToFull\":[{\"Email\":\"Maple-X1@in.clerova-ai.com\"}]}"))).isTrue();
+        // The manager's inbox forwarded it: the To line is still theirs
+        assertThat(PostmarkInboundParser.sentToClerovaByHand(mapper.readTree(
+                "{\"OriginalRecipient\":\"" + clerova + "\",\"ToFull\":[{\"Email\":\"pm@maple.com\"}]}"))).isFalse();
+        // A resident writing back into a request's thread
+        assertThat(PostmarkInboundParser.sentToClerovaByHand(mapper.readTree(
+                "{\"OriginalRecipient\":\"maple-x1+wi-abc@in.clerova-ai.com\",\"ToFull\":[{\"Email\":\"maple-x1+wi-abc@in.clerova-ai.com\"}]}"))).isFalse();
+    }
+
+    @Test
     void readsASingleReplyToAddress() {
         assertThat(PostmarkInboundParser.address("Tina Alvarez <Tina@Example.com>"))
                 .containsExactly("tina@example.com", "Tina Alvarez");

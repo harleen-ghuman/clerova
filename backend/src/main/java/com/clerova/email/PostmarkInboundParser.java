@@ -66,8 +66,13 @@ public class PostmarkInboundParser {
         String replyText = text(payload, "StrippedTextReply");
 
         // Forwarded by hand: the resident is the sender, and the reply-only
-        // text would be just the forwarder's note, so keep the whole body
-        Optional<ForwardedEmail> forwarded = ForwardedEmail.detect(subject, textBody, fromEmail);
+        // text would be just the forwarder's note, so keep the whole body.
+        // Only when it was written to Clerova itself: an auto-forwarded
+        // email whose subject starts "Fwd:" is the resident passing on
+        // someone else's message, and the reply belongs to the resident.
+        Optional<ForwardedEmail> forwarded = sentToClerovaByHand(payload)
+                ? ForwardedEmail.detect(subject, textBody, fromEmail)
+                : Optional.empty();
 
         if (forwarded.isPresent()) {
             fromEmail = forwarded.get().fromEmail();
@@ -98,6 +103,36 @@ public class PostmarkInboundParser {
                 replyTo[0],
                 replyTo[1]
         );
+    }
+
+    /**
+     * Whether someone wrote this email to the Clerova address themselves
+     * (it is in To or Cc), as opposed to their mailbox forwarding it
+     * automatically, which keeps the original To. A reply into a request's
+     * thread (+wi-) is a resident writing back, never a manager's forward.
+     */
+    static boolean sentToClerovaByHand(JsonNode payload) {
+        String clerovaAddress = text(payload, "OriginalRecipient");
+
+        if (clerovaAddress == null || clerovaAddress.isBlank()) {
+            return true;
+        }
+
+        if (clerovaAddress.toLowerCase(Locale.ROOT).contains("+wi-")) {
+            return false;
+        }
+
+        for (String field : List.of("ToFull", "CcFull")) {
+            for (JsonNode recipient : payload.path(field)) {
+                String email = text(recipient, "Email");
+
+                if (email != null && email.trim().equalsIgnoreCase(clerovaAddress.trim())) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

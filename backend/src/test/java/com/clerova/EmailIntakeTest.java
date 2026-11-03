@@ -303,6 +303,30 @@ class EmailIntakeTest {
     }
 
     @Test
+    void residentPassingOnAnotherEmailStaysTheSenderWhenTheInboxForwardsIt() throws Exception {
+        // The manager's mailbox forwards everything; the To line is still theirs
+        var root = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(
+                payload(forwardingAddress, "<auto-fwd@x>", null, null, "tina.alvarez@gmail.com", """
+                        This is what my neighbor sent me. Can you help?
+
+                        ---------- Forwarded message ---------
+                        From: Bob Neighbor <bob.4b@gmail.com>
+                        Subject: Noise
+
+                        Stop complaining about my music.
+                        """));
+        root.put("Subject", "Fwd: Noise");
+        root.putArray("ToFull").addObject().put("Email", "pm@maple.com");
+
+        deliver(root.toString()).andExpect(jsonPath("$.status").value("STORED"));
+
+        processor.processDue();
+
+        JsonNode item = json(mockMvc.perform(get("/api/work-items").with(user))).get(0);
+        assertThat(item.get("senderEmail").asText()).isEqualTo("tina.alvarez@gmail.com");
+    }
+
+    @Test
     void clerovaOwnEmailsAndBouncesDontBecomeRequests() throws Exception {
         deliver(payload(forwardingAddress, "<own@x>", null, null, "notifications@in.test.clerova", "Usage"))
                 .andExpect(jsonPath("$.status").value("STORED"));
