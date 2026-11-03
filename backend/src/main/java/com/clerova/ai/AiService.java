@@ -120,7 +120,9 @@ public class AiService {
                                 notice periods, cleaning or key-return checklists, deposit
                                 return times, application or renewal steps, fees or
                                 deadlines. Don't list "what you need to do" from general
-                                knowledge. Say the team will follow up with the details.
+                                knowledge. Say the team will follow up with the details,
+                                without hinting at what those details might include (no
+                                "including keys, cleaning or a final inspection").
                                 Don't ask the resident about their own lease either (fixed
                                 term or month-to-month, end date, rent); the team has it.
 

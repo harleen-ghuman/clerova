@@ -421,6 +421,11 @@ export function EmailSetupPage({
           Clerova uses the original sender, so your reply goes to the resident,
           not back to you.
         </p>
+        <p className="setup-tip">
+          Company Google Workspace account and no "Add a forwarding address"
+          button? Your admin has turned forwarding off. Ask them to allow
+          automatic forwarding in the Google Admin console Gmail settings.
+        </p>
       </section>
 
       <section className="setup-section">
@@ -431,9 +436,11 @@ export function EmailSetupPage({
           <li>Check "Keep a copy of forwarded messages" and save.</li>
         </ol>
         <p className="setup-tip">
-          Microsoft 365 organizations sometimes block forwarding to outside
-          addresses. If emails don't arrive, ask your IT admin to allow it, or
-          use an inbox rule that forwards specific emails.
+          Many Microsoft 365 organizations block automatic forwarding to
+          outside addresses, and that includes inbox rules. If emails don't
+          arrive, or you get an "Access denied" bounce, ask your IT admin to
+          allow external forwarding for your mailbox. Until then, forward
+          emails one at a time with Forward.
         </p>
       </section>
 
