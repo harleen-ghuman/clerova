@@ -1,9 +1,11 @@
 package com.clerova.service;
 
+import com.clerova.exception.ApiException;
 import com.clerova.exception.ConflictException;
 import com.clerova.billing.BillingService;
 import com.clerova.email.InboundAddressService;
 import com.clerova.domain.AppUser;
+import com.clerova.domain.Industry;
 import com.clerova.domain.Organization;
 import com.clerova.domain.Plan;
 import com.clerova.domain.UserRole;
@@ -15,6 +17,7 @@ import com.clerova.repository.AppUserRepository;
 import com.clerova.repository.OrganizationRepository;
 import com.clerova.security.CurrentUserService;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +34,7 @@ public class AccountService {
     private final InboundAddressService inboundAddressService;
     private final int trialDays;
     private final int trialAiMonthlyLimit;
+    private final boolean truckingEnabled;
 
     public AccountService(
             CurrentUserService currentUserService,
@@ -39,8 +43,10 @@ public class AccountService {
             BillingService billingService,
             InboundAddressService inboundAddressService,
             @Value("${app.trial.days}") int trialDays,
-            @Value("${app.trial.ai-monthly-limit}") int trialAiMonthlyLimit
+            @Value("${app.trial.ai-monthly-limit}") int trialAiMonthlyLimit,
+            @Value("${app.trucking.enabled:false}") boolean truckingEnabled
     ) {
+        this.truckingEnabled = truckingEnabled;
         this.currentUserService = currentUserService;
         this.organizationRepository = organizationRepository;
         this.appUserRepository = appUserRepository;
@@ -78,6 +84,12 @@ public class AccountService {
             throw new ConflictException(
                     "Your workspace is already set up."
             );
+        }
+
+        // Trucking is being built; it opens to sign-ups when it's ready
+        if (request.industry() == Industry.TRUCKING && !truckingEnabled) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INDUSTRY_NOT_AVAILABLE",
+                    "Clerova for trucking isn't open for sign-ups yet.");
         }
 
         Organization organization = new Organization();

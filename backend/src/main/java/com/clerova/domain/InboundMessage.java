@@ -23,6 +23,9 @@ public class InboundMessage {
 
     private UUID workItemId;
 
+    /** The load this email belongs to, in a trucking workspace. */
+    private UUID loadId;
+
     @Column(nullable = false, length = 998)
     private String dedupeKey;
 
@@ -289,5 +292,13 @@ public class InboundMessage {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public UUID getLoadId() {
+        return loadId;
+    }
+
+    public void setLoadId(UUID loadId) {
+        this.loadId = loadId;
     }
 }

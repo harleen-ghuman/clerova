@@ -1,8 +1,10 @@
 package com.clerova.email;
 
 import com.clerova.domain.InboundAttachment;
+import com.clerova.domain.Industry;
 import com.clerova.domain.InboundMessage;
 import com.clerova.domain.Organization;
+import com.clerova.trucking.PdfText;
 import com.clerova.repository.InboundMessageRepository;
 import com.clerova.storage.FileStorage;
 import com.clerova.storage.FileStorageException;
@@ -30,6 +32,8 @@ public class InboundEmailService {
 
     /** Larger files keep only their name; the sender's original email still has them. */
     static final long MAX_FILE_BYTES = 10L * 1024 * 1024;
+    /** Rate cons are small; bigger PDFs aren't read, to keep the webhook quick. */
+    static final long MAX_PDF_TEXT_BYTES = 5L * 1024 * 1024;
     static final long MAX_EMAIL_BYTES = 25L * 1024 * 1024;
 
     private final EmailProperties emailProperties;
@@ -117,6 +121,14 @@ public class InboundEmailService {
             attachment.setSizeBytes(parsed.sizeBytes() != null || content == null
                     ? parsed.sizeBytes()
                     : Long.valueOf(content.length));
+
+            // A trucking workspace's rate cons are read from their text
+            if (organization.getIndustry() == Industry.TRUCKING
+                    && content != null
+                    && content.length <= MAX_PDF_TEXT_BYTES
+                    && PdfText.isPdf(parsed.fileName(), parsed.contentType())) {
+                attachment.setExtractedText(PdfText.read(content));
+            }
 
             if (content != null
                     && content.length <= MAX_FILE_BYTES
