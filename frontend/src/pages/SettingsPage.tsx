@@ -214,6 +214,7 @@ export function SettingsPage({
         fullName={fullName}
         organizationName={organization.name}
         onSaved={onSaved}
+        readers={propertyManagement ? "Residents" : "Brokers"}
       />
       {propertyManagement && (
         <CompanyInfoSection focus={focusCompanyInfo} onFocused={onCompanyInfoFocused} />
@@ -279,10 +280,13 @@ function DetailsSection({
   fullName,
   organizationName,
   onSaved,
+  readers,
 }: {
   fullName: string | null;
   organizationName: string;
   onSaved: (me: Me) => void;
+  /** Who reads the replies, like "Residents". */
+  readers: string;
 }) {
   const [name, setName] = useState(fullName ?? "");
   const [company, setCompany] = useState(organizationName);
@@ -339,7 +343,7 @@ function DetailsSection({
             disabled={saving}
           />
           <span className="auth-hint">
-            Residents see this name on your replies. Your Clerova address
+            {readers} see this name on your replies. Your Clerova address
             stays the same.
           </span>
         </label>

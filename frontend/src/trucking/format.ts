@@ -23,10 +23,27 @@ export function city(place: string | null | undefined): string {
 
   if (last) {
     const town = last[1].split(",").at(-1)!.trim();
-    return `${town}, ${last[2]}`;
+    return `${townCase(town)}, ${last[2]}`;
   }
 
   return place.length > 32 ? place.slice(0, 32) + "…" : place;
+}
+
+/** "$35/hour after 2 hours free", leaving out whatever the rate con doesn't say. */
+export function detention(rateCents: number | null, freeMinutes: number | null): string {
+  if (rateCents === null && freeMinutes === null) {
+    return "None on the rate con";
+  }
+
+  const rate = rateCents !== null ? `${money(rateCents)}/hour` : "Rate not stated";
+  return freeMinutes !== null ? `${rate} after ${hours(freeMinutes)} free` : rate;
+}
+
+/** "STOCKTON" becomes "Stockton"; mixed case is left as written. */
+function townCase(town: string): string {
+  return town === town.toUpperCase()
+    ? town.toLowerCase().replace(/(^|[\s'-])([a-z])/g, (_, start: string, letter: string) => start + letter.toUpperCase())
+    : town;
 }
 
 export function lane(origin: string | null, destination: string | null): string {

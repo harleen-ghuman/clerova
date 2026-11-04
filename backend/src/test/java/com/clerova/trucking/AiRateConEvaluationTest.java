@@ -80,6 +80,50 @@ class AiRateConEvaluationTest {
             Total due: $650.00   Terms: Net 30
             """;
 
+    /** A signed, scanned rate con whose text layer came out garbled (names and numbers made up). */
+    private static final String GARBLED_SCAN = """
+            FOR LOAD INFORMATION: Carrier Rate Confirmation
+            NORTHPASS load #5520194-1
+            LOGISTICS OROUP Dana Rul.:.
+            Phone: 530-555-01◄2 Rate: $1,212.00 USD
+            Email: druiz@northpass.example
+            SIERRA RUN LLC MC: 1048817 I DOT: 0329911 INVOICIINSTRUCTIONS
+            QulcllPay vii TrtumpflP,y llt ,11111t 2.5%.. Haw your tund9 wllflln two_.,,,_ dep.
+            Equlipmlft VS3,53'\\Wl M lf1VOlcfnl .ubmltted WM emlll Ind mall wtl,,. paid In fl«
+            3 t-dlly term,,
+            RATE DETAILS
+            Rate per Unit (50 per net ton) USD $50.00 • 24.24 = $1,212.00
+            Total: USD $1,212.00
+            NorthPass Logistics MC:771204
+            STOPS
+            4/17/2026 Pine Flat Ranch 8-3 FCFS
+            Plcbp HC 12 Box 410
+            Ely,HV,89301
+            lnstrvctlons: Driver « Disf)Moh must notfy Dana O 530-555-0172 when the truck is loaded and unloaded. failur
+            notficatlon wil reail In a $25 fee.
+            Note: Detention pay is not appblble If the broker Is not notified °'
+            POD~ be turned in by the f<llowing Tuesday eftw ~. I f POO !$late~ wi1 be a $25 Fee for each~ it~
+            4/18/2026 Valley Oak Ranch 7--4 FCFS
+            Dropoff 8749 Lone Oak Ave
+            Hanford, CA, 93230
+            """;
+
+    @Test
+    void doesNotGuessAtGarbledValues() {
+        RateConResult read = truckingAiService.readRateCon("Subject: Fwd:\n\n", GARBLED_SCAN);
+
+        assertThat(read.isRateConfirmation).isTrue();
+        assertThat(read.loadNumber).contains("5520194");
+        assertThat(Money.cents(read.lineHaulRate)).isEqualTo(121200L);
+        assertThat(TruckingIntakeService.mcNumber(read.brokerMcNumber)).isEqualTo("771204");
+        // "net 3 t-day terms" is cut off: never "3" or "Net 3"
+        assertThat(read.paymentTerms == null ? "" : read.paymentTerms.strip())
+                .doesNotMatch("(?i)(net\\s*)?3(\\s*days?)?");
+        assertThat(Money.cents(read.detentionRatePerHour)).isNull();
+        // The $25 notification fee isn't a detention rule
+        assertThat(read.detentionCondition == null ? "" : read.detentionCondition).doesNotContain("$25");
+    }
+
     @Test
     void readsADryVanRateCon() {
         RateConResult read = truckingAiService.readRateCon(

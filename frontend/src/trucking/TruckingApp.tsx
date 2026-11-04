@@ -214,6 +214,7 @@ export function TruckingApp({
         onManageBilling={() => navigate("settings")}
         items={items}
         usageLabel="rate cons"
+        showBilling={false}
       />
 
       <nav className="mobile-nav" aria-label="Mobile navigation">
