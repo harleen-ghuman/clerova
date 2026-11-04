@@ -421,6 +421,7 @@ VITE_API_BASE_URL
 VITE_SUPABASE_URL
 VITE_SUPABASE_ANON_KEY
 VITE_GOOGLE_CLIENT_ID   # optional: Google's own button, so the sign-in window names this site
+VITE_TRUCKING_ENABLED   # optional: "true" shows the trucking choice at sign-up (needs TRUCKING_ENABLED on the API)
 ```
 
 ### Database

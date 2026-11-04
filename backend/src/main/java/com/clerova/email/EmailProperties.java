@@ -59,4 +59,9 @@ public class EmailProperties {
     public String replyAddress(String token, java.util.UUID workItemId) {
         return token + "+" + WorkItemMailboxHash.of(workItemId) + "@" + inboundDomain;
     }
+
+    /** Reply-to address that routes a broker's answer back to its load. */
+    public String loadReplyAddress(String token, java.util.UUID loadId) {
+        return token + "+" + com.clerova.trucking.LoadMailboxHash.of(loadId) + "@" + inboundDomain;
+    }
 }

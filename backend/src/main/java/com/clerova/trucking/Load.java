@@ -52,6 +52,9 @@ public class Load {
 
     private String rateConFile;
 
+    /** The dispatcher's latest update, like "Loaded, ETA Phoenix 6 AM". */
+    private String statusNote;
+
     @OneToMany(mappedBy = "load", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("position")
     private List<LoadStop> stops = new ArrayList<>();
@@ -131,6 +134,8 @@ public class Load {
     public void setPaperworkRule(String paperworkRule) { this.paperworkRule = paperworkRule; }
     public String getRateConFile() { return rateConFile; }
     public void setRateConFile(String rateConFile) { this.rateConFile = rateConFile; }
+    public String getStatusNote() { return statusNote; }
+    public void setStatusNote(String statusNote) { this.statusNote = statusNote; }
     public List<LoadStop> getStops() { return stops; }
     public List<LoadFlag> getFlags() { return flags; }
     public Instant getCreatedAt() { return createdAt; }

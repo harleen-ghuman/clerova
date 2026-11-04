@@ -26,6 +26,8 @@ export interface InboundMessage {
   status: InboundMessageStatus;
   statusReason: string | null;
   workItemId: string | null;
+  /** The load it's filed under, in a trucking workspace. */
+  loadId?: string | null;
   attachments: string[];
   files?: AttachmentFile[];
 }

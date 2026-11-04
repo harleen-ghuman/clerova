@@ -38,6 +38,8 @@ interface SettingsPageProps {
   focusCompanyInfo?: boolean;
   onCompanyInfoFocused?: () => void;
   onSignOut: () => void;
+  /** Off in a trucking workspace: company info and plans are for property management. */
+  propertyManagement?: boolean;
 }
 
 
@@ -190,17 +192,21 @@ export function SettingsPage({
   focusCompanyInfo = false,
   onCompanyInfoFocused,
   onSignOut,
+  propertyManagement = true,
 }: SettingsPageProps) {
-  const hasBilling = organization.billingEnabled && Boolean(organization.subscriptionStatus);
+  const hasBilling =
+    propertyManagement && organization.billingEnabled && Boolean(organization.subscriptionStatus);
 
   return (
     <div className="settings">
       <header className="page-header">
         <h1>Settings</h1>
         <p>
-          {hasBilling
-            ? "Your details, company info, sign-in and billing."
-            : "Your details, company info and sign-in."}
+          {!propertyManagement
+            ? "Your details and sign-in."
+            : hasBilling
+              ? "Your details, company info, sign-in and billing."
+              : "Your details, company info and sign-in."}
         </p>
       </header>
 
@@ -209,7 +215,9 @@ export function SettingsPage({
         organizationName={organization.name}
         onSaved={onSaved}
       />
-      <CompanyInfoSection focus={focusCompanyInfo} onFocused={onCompanyInfoFocused} />
+      {propertyManagement && (
+        <CompanyInfoSection focus={focusCompanyInfo} onFocused={onCompanyInfoFocused} />
+      )}
       {isDemo() ? (
         <section className="settings-section">
           <h2>Sign-in</h2>

@@ -1,0 +1,441 @@
+/* Trucking workspaces: Today, Loads board, load page, Brokers */
+
+.tk-page {
+  max-width: 1080px;
+  padding: 28px 32px 48px;
+}
+
+.tk-sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.tk-panel {
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.tk-panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.tk-panel h2 span {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.tk-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 0;
+  border: 0;
+  border-top: 1px solid var(--border-faint);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tk-row:first-of-type {
+  border-top: 0;
+}
+
+.tk-row:hover .tk-lane {
+  color: var(--brand);
+}
+
+.tk-row-main {
+  min-width: 0;
+}
+
+.tk-lane {
+  font-weight: 600;
+}
+
+.tk-sub {
+  color: var(--text-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.tk-none {
+  margin: 0;
+  padding: 8px 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.tk-pill {
+  flex: 0 0 auto;
+  padding: 2px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tk-pill-fix {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.tk-pill-note {
+  border-color: #f5d9a8;
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.tk-pill-good {
+  border-color: var(--success-line);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.tk-pill-info {
+  border-color: var(--brand-line);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.tk-start {
+  margin-bottom: 16px;
+  padding: 18px;
+  border: 1px solid var(--brand-line);
+  border-radius: var(--radius-md);
+  background: var(--brand-soft);
+}
+
+.tk-start p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+}
+
+.tk-start code {
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+/* Board */
+.tk-board-wrap {
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.tk-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  gap: 12px;
+  min-width: 920px;
+}
+
+.tk-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  background: var(--border-faint);
+}
+
+.tk-column h2 {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 4px 4px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.tk-column h2 span {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.tk-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tk-card:hover {
+  border-color: var(--border-strong);
+}
+
+.tk-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tk-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+/* Load page */
+.tk-back {
+  margin-bottom: 12px;
+}
+
+.tk-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tk-head h1 {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.tk-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.tk-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.tk-next {
+  border-color: var(--brand-line);
+  background: var(--brand-soft);
+}
+
+.tk-next p {
+  margin: 0 0 10px;
+}
+
+.tk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tk-note-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.tk-note-form input {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+.tk-hint {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.tk-flag {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 10px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border-faint);
+}
+
+.tk-flag:first-of-type {
+  border-top: 0;
+  padding-top: 4px;
+}
+
+.tk-flag.done {
+  opacity: 0.6;
+}
+
+.tk-flag p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.tk-flag blockquote {
+  grid-column: 2;
+  margin: 2px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--text-secondary);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.tk-flag .tk-actions {
+  grid-column: 2;
+  margin-top: 4px;
+}
+
+.tk-draft {
+  border-color: var(--brand);
+}
+
+.tk-draft label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.tk-draft textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  line-height: 1.5;
+}
+
+.tk-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tk-msg {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.tk-msg.out {
+  background: var(--surface);
+  border-color: var(--brand-line);
+}
+
+.tk-msg-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 8px;
+  margin-bottom: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.tk-msg-body {
+  margin: 0;
+  font-size: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tk-kv {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.tk-kv dt {
+  color: var(--text-muted);
+}
+
+.tk-kv dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.tk-stops {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tk-stops strong {
+  display: block;
+  font-size: 13px;
+}
+
+/* Brokers */
+.tk-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.tk-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.tk-table th,
+.tk-table td {
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-faint);
+  text-align: left;
+  vertical-align: top;
+}
+
+.tk-table th {
+  border-top: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .tk-page {
+    padding: 20px 16px 40px;
+  }
+
+  .tk-sections,
+  .tk-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

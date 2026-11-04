@@ -3,7 +3,8 @@ import { useState, type FormEvent } from "react";
 import { completeOnboarding, getMe } from "../api/account";
 import { ApiRequestError, errorMessage } from "../api/client";
 import { getReferralSource } from "../auth/referral";
-import type { Me } from "../types/Account";
+import type { Industry, Me } from "../types/Account";
+import { TRUCKING_ENABLED } from "../config";
 
 interface OnboardingPageProps {
   email: string;
@@ -14,6 +15,7 @@ interface OnboardingPageProps {
 }
 
 const UNITS_MANAGED = ["1-50", "51-200", "201-500", "501-2000", "2000+"];
+const TRUCKS = ["1-2", "3-9", "10-25", "26-100", "100+"];
 
 const REFERRAL_SOURCES = [
   "Instagram",
@@ -36,7 +38,9 @@ export function OnboardingPage({
 
   const [fullName, setFullName] = useState(suggestedName);
   const [organizationName, setOrganizationName] = useState("");
+  const [industry, setIndustry] = useState<Industry>("PROPERTY_MANAGEMENT");
   const [companySize, setCompanySize] = useState("");
+  const trucking = industry === "TRUCKING";
   const [referralSource, setReferralSource] = useState(
     trackedSource ?? ""
   );
@@ -53,7 +57,7 @@ export function OnboardingPage({
       const me = await completeOnboarding({
         fullName,
         organizationName,
-        industry: "PROPERTY_MANAGEMENT",
+        industry,
         companySize,
         referralSource: referralSource || storedSource || "",
       });
@@ -90,11 +94,38 @@ export function OnboardingPage({
 
         <h1>Set up your workspace</h1>
         <p className="auth-description">
-          Signed in as {email}. Tell us a little about your property
-          management business.
+          {TRUCKING_ENABLED
+            ? `Signed in as ${email}. Tell us a little about your business.`
+            : `Signed in as ${email}. Tell us a little about your property management business.`}
         </p>
 
         <form className="auth-form" onSubmit={handleSubmit}>
+          {TRUCKING_ENABLED && (
+            <fieldset className="industry-options" disabled={submitting}>
+              <legend>What does your company do?</legend>
+              {(
+                [
+                  ["PROPERTY_MANAGEMENT", "Property management", "Tenant emails and maintenance requests"],
+                  ["TRUCKING", "Trucking", "Rate cons, broker emails and loads"],
+                ] as const
+              ).map(([value, name, text]) => (
+                <label key={value} className={`industry-option ${industry === value ? "selected" : ""}`}>
+                  <input
+                    type="radio"
+                    name="industry"
+                    value={value}
+                    checked={industry === value}
+                    onChange={() => {
+                      setIndustry(value);
+                      setCompanySize("");
+                    }}
+                  />
+                  <strong>{name}</strong>
+                  <span>{text}</span>
+                </label>
+              ))}
+            </fieldset>
+          )}
           <label>
             Your name
             <input
@@ -119,14 +150,14 @@ export function OnboardingPage({
           </label>
 
           <label>
-            Units managed
+            {trucking ? "Trucks" : "Units managed"}
             <select
               value={companySize}
               onChange={(event) => setCompanySize(event.target.value)}
               disabled={submitting}
             >
               <option value="">Select...</option>
-              {UNITS_MANAGED.map((option) => (
+              {(trucking ? TRUCKS : UNITS_MANAGED).map((option) => (
                 <option key={option} value={option}>
                   {option}
                 </option>
