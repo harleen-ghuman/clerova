@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -16,4 +17,6 @@ public interface InboundAttachmentRepository extends JpaRepository<InboundAttach
             @Param("id") UUID id,
             @Param("organizationId") UUID organizationId
     );
+
+    List<InboundAttachment> findByInboundMessageId(UUID inboundMessageId);
 }

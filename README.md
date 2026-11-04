@@ -407,6 +407,8 @@ Optional:
 | `SUPABASE_JWT_SECRET` | only for projects on the legacy JWT secret |
 | `OPENAI_BASE_URL`, `POSTMARK_API_URL`, `STRIPE_API_URL` | official endpoints |
 | `SHOW_SQL`, `FORMAT_SQL` | false |
+| `TRUCKING_ENABLED` | false (trucking workspaces are being built; true lets sign-up create one) |
+| `FMCSA_WEB_KEY` | blank (the free FMCSA QCMobile key; turns on the broker check for trucking rate cons) |
 
 The connection pool is kept small because the Supabase session pooler has a
 fixed client limit, and old and new instances overlap during a Render

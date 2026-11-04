@@ -31,6 +31,10 @@ public class InboundAttachment {
     @Column(length = 500)
     private String storagePath;
 
+    /** The text of a PDF, read on arrival for trucking workspaces. */
+    @Column(columnDefinition = "TEXT")
+    private String extractedText;
+
     public UUID getId() {
         return id;
     }
@@ -73,5 +77,13 @@ public class InboundAttachment {
 
     public void setStoragePath(String storagePath) {
         this.storagePath = storagePath;
+    }
+
+    public String getExtractedText() {
+        return extractedText;
+    }
+
+    public void setExtractedText(String extractedText) {
+        this.extractedText = extractedText;
     }
 }

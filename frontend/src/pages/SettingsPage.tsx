@@ -238,6 +238,24 @@ export function SettingsPage({
       )}
 
       <section className="settings-section">
+        <h2>On your phone</h2>
+        <p>
+          Add Clerova to your home screen. It gets its own icon and opens full
+          screen, like an app.
+        </p>
+        <ul className="settings-list">
+          <li>
+            <strong>iPhone:</strong> open app.clerova-ai.com in Safari, tap
+            Share, then Add to Home Screen. Sign in once more inside it.
+          </li>
+          <li>
+            <strong>Android:</strong> open it in Chrome, tap the menu (⋮), then
+            Add to Home screen or Install app.
+          </li>
+        </ul>
+      </section>
+
+      <section className="settings-section">
         <h2>Account</h2>
         <div className="settings-actions">
           <button type="button" className="secondary-action-button" onClick={onSignOut}>

@@ -12,6 +12,7 @@ import com.clerova.repository.InboundMessageRepository;
 import com.clerova.repository.WorkItemRepository;
 import com.clerova.service.AiUsageService;
 import com.clerova.service.WorkItemService;
+import com.clerova.trucking.TruckingIntakeService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -86,6 +87,7 @@ public class InboundEmailProcessor {
     private final TransactionTemplate transactionTemplate;
     private final EmailProperties emailProperties;
     private final ReplyCopyService replyCopyService;
+    private final TruckingIntakeService truckingIntakeService;
 
     public InboundEmailProcessor(
             @Value("${app.email.processing.enabled}") boolean enabled,
@@ -96,8 +98,10 @@ public class InboundEmailProcessor {
             AiRateLimitInterceptor aiRateLimiter,
             TransactionTemplate transactionTemplate,
             EmailProperties emailProperties,
-            ReplyCopyService replyCopyService
+            ReplyCopyService replyCopyService,
+            TruckingIntakeService truckingIntakeService
     ) {
+        this.truckingIntakeService = truckingIntakeService;
         this.enabled = enabled;
         this.inboundMessageRepository = inboundMessageRepository;
         this.workItemRepository = workItemRepository;
@@ -186,6 +190,14 @@ public class InboundEmailProcessor {
             // A forwarded inbox also forwards the copy of each sent reply
             finish(message, InboundMessageStatus.IGNORED,
                     isFromClerova(message.getFromEmail()) ? OWN_COPY_REASON : AUTOMATED_REASON);
+            return;
+        }
+
+        // A trucking workspace's emails become loads, not requests
+        if (truckingIntakeService.isTruckingWorkspace(message.getOrganizationId())) {
+            TruckingIntakeService.Result result = truckingIntakeService.handle(message);
+            message.setLoadId(result.loadId());
+            finish(message, result.status(), result.reason());
             return;
         }
 
