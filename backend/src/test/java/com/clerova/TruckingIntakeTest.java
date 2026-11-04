@@ -48,7 +48,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = "app.email.postmark-server-token=test-token")
 @AutoConfigureMockMvc
 class TruckingIntakeTest {
 
@@ -69,6 +69,9 @@ class TruckingIntakeTest {
 
     @MockitoBean
     private AiService aiService;
+
+    @MockitoBean
+    private com.clerova.email.EmailSender emailSender;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -179,7 +182,7 @@ class TruckingIntakeTest {
         verify(truckingAiService, never()).readRateCon(anyString(), anyString());
         JsonNode inbox = json(mockMvc.perform(get("/api/inbox").with(user)));
         assertThat(inbox.get(0).get("status").asText()).isEqualTo("IGNORED");
-        assertThat(inbox.get(0).get("statusReason").asText()).isEqualTo(TruckingIntakeService.NOT_A_RATE_CON_REASON);
+        assertThat(inbox.get(0).get("statusReason").asText()).isEqualTo(TruckingIntakeService.NOT_MATCHED_REASON);
         assertThat(usedThisMonth()).isZero();
         // And never as a property management request
         verify(aiService, never()).extract(anyString());
@@ -233,6 +236,157 @@ class TruckingIntakeTest {
                 .andExpect(status().isNotFound());
     }
 
+    private String bookLoad() throws Exception {
+        when(truckingAiService.readRateCon(anyString(), anyString())).thenReturn(rateCon("2150.00", ""));
+        deliver("<rc-book@x>", "Rate Confirmation 88213", "Rate con attached.", TruckingIntakeTestPdf.pdf("RATE CONFIRMATION 88213"));
+        processor.processDue();
+        return json(mockMvc.perform(get("/api/loads").with(user))).get(0).get("id").asText();
+    }
+
+    private static com.clerova.trucking.BrokerReplyResult reply(boolean needed, String draft) {
+        var result = new com.clerova.trucking.BrokerReplyResult();
+        result.needsReply = needed;
+        result.kind = com.clerova.trucking.ReplyKind.STATUS;
+        result.summary = "Asks where the truck is";
+        result.draft = draft;
+        return result;
+    }
+
+    @Test
+    void aBrokerQuestionIsFiledUnderItsLoadWithADraftedReplyToApprove() throws Exception {
+        String loadId = bookLoad();
+        when(truckingAiService.draftBrokerReply(anyString(), anyString(), anyString()))
+                .thenReturn(reply(true, "Hi Dana,\n\nThe driver is loaded and on the way."));
+        when(emailSender.send(org.mockito.ArgumentMatchers.any())).thenReturn("pm-out-1");
+
+        // The dispatcher's update is what the AI may use
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/loads/{id}", loadId)
+                        .with(user).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"IN_TRANSIT\",\"statusNote\":\"Loaded at 9:40, ETA Phoenix 6 AM\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("IN_TRANSIT"))
+                .andExpect(jsonPath("$.statusNote").value("Loaded at 9:40, ETA Phoenix 6 AM"));
+
+        deliver("dana@crestline.example", forwardingAddress, "<q-1@x>", null,
+                "Where is the truck on 88213?", "Receiver is asking for an ETA.", null);
+        processor.processDue();
+
+        ArgumentCaptor<String> facts = ArgumentCaptor.forClass(String.class);
+        verify(truckingAiService).draftBrokerReply(facts.capture(), anyString(), anyString());
+        assertThat(facts.getValue()).contains("ETA Phoenix 6 AM").contains("picked up, on the way");
+
+        JsonNode load = json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user)));
+        assertThat(load.get("draft").get("body").asText()).contains("on the way");
+        assertThat(load.get("draft").get("toEmail").asText()).isEqualTo("dana@crestline.example");
+        assertThat(load.get("conversation")).hasSize(2);
+        assertThat(json(mockMvc.perform(get("/api/loads").with(user))).get(0).get("draftReplies").asInt()).isEqualTo(1);
+        JsonNode inbox = json(mockMvc.perform(get("/api/inbox").with(user)));
+        assertThat(inbox.get(0).get("status").asText()).isEqualTo("ATTACHED");
+        assertThat(inbox.get(0).get("loadId").asText()).isEqualTo(loadId);
+        // Broker emails don't count toward the plan
+        assertThat(usedThisMonth()).isEqualTo(1);
+
+        // Approve and send, as edited
+        mockMvc.perform(post("/api/loads/{id}/replies/{replyId}/send", loadId, load.get("draft").get("id").asText())
+                        .with(user).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"body\":\"Hi Dana,\\n\\nLoaded at 9:40. ETA Phoenix 6 AM.\\n\\nThanks,\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.draft").isEmpty());
+
+        ArgumentCaptor<com.clerova.email.OutgoingEmail> sent = ArgumentCaptor.forClass(com.clerova.email.OutgoingEmail.class);
+        verify(emailSender).send(sent.capture());
+        assertThat(sent.getValue().to()).isEqualTo("dana@crestline.example");
+        assertThat(sent.getValue().subject()).isEqualTo("Re: Where is the truck on 88213?");
+        assertThat(sent.getValue().inReplyTo()).isEqualTo("<q-1@x>");
+        assertThat(sent.getValue().replyTo()).contains("+ld-" + loadId.replace("-", ""));
+        assertThat(sent.getValue().textBody()).endsWith("Thanks,\nSierra Run Transport");
+
+        load = json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user)));
+        assertThat(load.get("conversation")).hasSize(3);
+        assertThat(load.get("conversation").get(2).get("incoming").asBoolean()).isFalse();
+
+        // Sending twice isn't possible
+        mockMvc.perform(post("/api/loads/{id}/replies/{replyId}/send", loadId, sent.getValue() != null
+                        ? json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user))).get("conversation").get(2).get("id").asText() : "")
+                        .with(user).contentType(MediaType.APPLICATION_JSON).content("{\"body\":\"again\"}"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void theBrokersAnswerToOurEmailFindsTheLoadByItsReplyAddress() throws Exception {
+        String loadId = bookLoad();
+        when(truckingAiService.draftBrokerReply(anyString(), anyString(), anyString())).thenReturn(reply(false, ""));
+        String token = forwardingAddress.substring(0, forwardingAddress.indexOf('@'));
+        String domain = forwardingAddress.substring(forwardingAddress.indexOf('@'));
+
+        // No load number, no thread headers, a different person at the broker
+        deliver("ops@othermail.example", token + "+ld-" + loadId.replace("-", "") + domain, "<a-1@x>", null,
+                "Thanks", "Got it, thanks.", null);
+        processor.processDue();
+
+        JsonNode load = json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user)));
+        assertThat(load.get("conversation")).hasSize(2);
+        // Nothing to answer, so no draft
+        assertThat(load.get("draft").isNull()).isTrue();
+    }
+
+    @Test
+    void emailsAreMatchedByThreadOrBrokerOnlyWhenItsClearWhichLoad() throws Exception {
+        String loadId = bookLoad();
+        when(truckingAiService.draftBrokerReply(anyString(), anyString(), anyString())).thenReturn(reply(false, ""));
+
+        // A reply in the rate con's thread
+        deliver("dana@crestline.example", forwardingAddress, "<t-1@x>", "<rc-book@x>", "Re: RC", "Updated PU#", null);
+        // From the broker's company, which has one load in progress
+        deliver("billing@crestline.example", forwardingAddress, "<b-1@x>", null, "Paperwork", "Please send the POD.", null);
+        processor.processDue();
+        assertThat(json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user))).get("conversation")).hasSize(3);
+
+        // A second Crestline load makes "from Crestline" ambiguous
+        RateConResult second = rateCon("1800.00", "");
+        second.loadNumber = "99001";
+        when(truckingAiService.readRateCon(anyString(), anyString())).thenReturn(second);
+        deliver("<rc-2@x>", "Rate Confirmation 99001", "Attached.", TruckingIntakeTestPdf.pdf("RATE CONFIRMATION 99001"));
+        deliver("billing@crestline.example", forwardingAddress, "<b-2@x>", null, "Paperwork", "Please send the POD.", null);
+        processor.processDue();
+
+        JsonNode inbox = json(mockMvc.perform(get("/api/inbox").with(user)));
+        assertThat(inbox.get(0).get("statusReason").asText()).isEqualTo(TruckingIntakeService.NOT_MATCHED_REASON);
+    }
+
+    @Test
+    void draftsCanBeDismissedAndUpdatesAreChecked() throws Exception {
+        String loadId = bookLoad();
+        when(truckingAiService.draftBrokerReply(anyString(), anyString(), anyString())).thenReturn(reply(true, "Hi Dana, checking with the driver."));
+        deliver("dana@crestline.example", forwardingAddress, "<q-2@x>", null, "88213 status?", "ETA?", null);
+        processor.processDue();
+
+        String replyId = json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user))).get("draft").get("id").asText();
+        mockMvc.perform(post("/api/loads/{id}/replies/{replyId}/dismiss", loadId, replyId).with(user))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.draft").isEmpty());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/loads/{id}", loadId)
+                        .with(user).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"statusNote\":\"" + "x".repeat(501) + "\"}"))
+                .andExpect(status().isBadRequest());
+
+        JsonNode brokers = json(mockMvc.perform(get("/api/brokers").with(user)));
+        assertThat(brokers).hasSize(1);
+        assertThat(brokers.get(0).get("broker").get("name").asText()).isEqualTo("Crestline Freight");
+        assertThat(brokers.get(0).get("openLoads").asInt()).isEqualTo(1);
+
+        // Another workspace can't touch it
+        RequestPostProcessor other = onboardNewUser(mockMvc);
+        mockMvc.perform(post("/api/loads/{id}/replies/{replyId}/send", loadId, replyId).with(other)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"body\":\"hi\"}"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/loads/{id}", loadId)
+                        .with(other).contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PAID\"}"))
+                .andExpect(status().isNotFound());
+        assertThat(json(mockMvc.perform(get("/api/brokers").with(other)))).isEmpty();
+    }
+
     private static RateConResult rateCon(String rate, String rateInEmail) {
         RateConResult read = new RateConResult();
         read.isRateConfirmation = true;
@@ -268,15 +422,25 @@ class TruckingIntakeTest {
     }
 
     private void deliver(String messageId, String subject, String body, String pdfBase64) throws Exception {
+        deliver("dana@crestline.example", forwardingAddress, messageId, null, subject, body, pdfBase64);
+    }
+
+    private void deliver(String from, String recipient, String messageId, String inReplyTo,
+                         String subject, String body, String pdfBase64) throws Exception {
         var root = objectMapper.createObjectNode();
         root.put("MessageID", UUID.randomUUID().toString());
-        root.put("From", "dana@crestline.example");
-        root.putObject("FromFull").put("Email", "dana@crestline.example").put("Name", "Dana Ruiz");
+        root.put("From", from);
+        root.putObject("FromFull").put("Email", from).put("Name", "Dana Ruiz");
         root.putArray("ToFull").addObject().put("Email", "dispatch@sierrarun.example");
-        root.put("OriginalRecipient", forwardingAddress);
+        root.put("OriginalRecipient", recipient);
         root.put("Subject", subject);
         root.put("TextBody", body);
-        root.putArray("Headers").addObject().put("Name", "Message-ID").put("Value", messageId);
+        var headers = root.putArray("Headers");
+        headers.addObject().put("Name", "Message-ID").put("Value", messageId);
+
+        if (inReplyTo != null) {
+            headers.addObject().put("Name", "In-Reply-To").put("Value", inReplyTo);
+        }
         var attachments = root.putArray("Attachments");
 
         if (pdfBase64 != null) {

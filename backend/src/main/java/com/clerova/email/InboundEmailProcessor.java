@@ -198,6 +198,15 @@ public class InboundEmailProcessor {
             TruckingIntakeService.Result result = truckingIntakeService.handle(message);
             message.setLoadId(result.loadId());
             finish(message, result.status(), result.reason());
+
+            if (result.draftReply()) {
+                try {
+                    truckingIntakeService.draftReply(message);
+                } catch (RuntimeException e) {
+                    // The email is filed; the dispatcher can still answer it
+                    log.warn("Couldn't draft a reply for inbound email {}", message.getId(), e);
+                }
+            }
             return;
         }
 

@@ -11,6 +11,8 @@ interface EmailSetupPageProps {
   /** Suggested for copies of sent replies. */
   userEmail: string;
   onSettingsChanged: (settings: EmailSettings) => void;
+  /** A trucking workspace: broker emails and rate cons become loads. */
+  trucking?: boolean;
 }
 
 interface Step {
@@ -330,6 +332,7 @@ export function EmailSetupPage({
   error,
   userEmail,
   onSettingsChanged,
+  trucking = false,
 }: EmailSetupPageProps) {
   const [copied, setCopied] = useState<"idle" | "done" | "failed">("idle");
 
@@ -357,8 +360,9 @@ export function EmailSetupPage({
       <div className="empty-view">
         <h2>Email forwarding isn't ready yet</h2>
         <p>
-          Your Clerova address is still being set up. In the meantime, add
-          requests with "New request" on the Requests page.
+          {trucking
+            ? "Your Clerova address is still being set up. Check back in a few minutes."
+            : 'Your Clerova address is still being set up. In the meantime, add requests with "New request" on the Requests page.'}
         </p>
       </div>
     );
@@ -371,9 +375,9 @@ export function EmailSetupPage({
       <header className="page-header">
         <h1>Email setup</h1>
         <p>
-          Forward emails to your Clerova address. Each one becomes a request
-          with a suggested next step. You keep your inbox, and Clerova never
-          needs your password.
+          {trucking
+            ? "Forward your broker emails to your Clerova address. Rate cons become loads, and broker questions are matched to their load with a drafted reply. You keep your inbox, and Clerova never needs your password."
+            : "Forward emails to your Clerova address. Each one becomes a request with a suggested next step. You keep your inbox, and Clerova never needs your password."}
         </p>
       </header>
 
@@ -412,14 +416,15 @@ export function EmailSetupPage({
           ))}
         </ol>
         <p className="setup-tip">
-          Only want some emails? Instead of forwarding everything, create a
-          filter (for example, mail sent to maintenance@ or from your tenant
-          portal) and choose "Forward it to" your Clerova address.
+          {trucking
+            ? 'Only want some emails? Instead of forwarding everything, create a filter (for example, mail sent to dispatch@ or with "rate con" in the subject) and choose "Forward it to" your Clerova address.'
+            : 'Only want some emails? Instead of forwarding everything, create a filter (for example, mail sent to maintenance@ or from your tenant portal) and choose "Forward it to" your Clerova address.'}
         </p>
         <p className="setup-tip">
-          Just one email? Click Forward and send it to your Clerova address.
-          Clerova uses the original sender, so your reply goes to the resident,
-          not back to you.
+          Just one email? Click Forward and send it to your Clerova address.{" "}
+          {trucking
+            ? "Clerova uses the original sender, so your reply goes to the broker, not back to you."
+            : "Clerova uses the original sender, so your reply goes to the resident, not back to you."}
         </p>
         <p className="setup-tip">
           Company Google Workspace account and no "Add a forwarding address"
@@ -444,7 +449,7 @@ export function EmailSetupPage({
         </p>
       </section>
 
-      {settings.sendingEnabled && (
+      {settings.sendingEnabled && !trucking && (
         <ReplyCopySection
           current={settings.replyCopyEmail ?? null}
           userEmail={userEmail}
@@ -455,13 +460,15 @@ export function EmailSetupPage({
       <section className="setup-section">
         <h2>Try it now</h2>
         <p>
-          Send an email to {address} from any account, for example "The kitchen
-          sink at 12 Oak St is leaking." It appears in Requests within a
-          minute.
+          {trucking
+            ? `Forward a broker's rate con email, with its PDF attached, to ${address}. It appears in Loads within a minute, with anything to check before you sign.`
+            : `Send an email to ${address} from any account, for example "The kitchen sink at 12 Oak St is leaking." It appears in Requests within a minute.`}
         </p>
         <p className="setup-tip">
           {settings.sendingEnabled
-            ? "Approved replies are sent from this address with your company name. When the sender replies, the conversation continues on the same request."
+            ? trucking
+              ? "Approved replies are sent from this address with your company name. When the broker answers, it lands on the same load."
+              : "Approved replies are sent from this address with your company name. When the sender replies, the conversation continues on the same request."
             : "Sending replies from Clerova is not turned on yet. Copy approved replies and send them from your own email."}
         </p>
       </section>

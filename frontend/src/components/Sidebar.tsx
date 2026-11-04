@@ -7,7 +7,16 @@ export type AppView =
   | "jobs"
   | "inbox"
   | "email-setup"
-  | "settings";
+  | "settings"
+  | "loads"
+  | "brokers";
+
+export interface SidebarItem {
+  view: AppView;
+  label: string;
+  count?: number;
+  badge?: boolean;
+}
 
 interface SidebarProps {
   activeView: AppView;
@@ -18,6 +27,10 @@ interface SidebarProps {
   onNavigate: (view: AppView) => void;
   onSignOut: () => void;
   onManageBilling: () => void;
+  /** Another set of screens, like a trucking workspace's. */
+  items?: SidebarItem[];
+  /** What the monthly allowance counts, like "rate cons". */
+  usageLabel?: string;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -76,8 +89,10 @@ export function Sidebar({
   onNavigate,
   onSignOut,
   onManageBilling,
+  items: customItems,
+  usageLabel = "requests",
 }: SidebarProps) {
-  const items: { view: AppView; label: string; count?: number; badge?: boolean }[] = [
+  const items: SidebarItem[] = customItems ?? [
     { view: "today", label: "Today" },
     { view: "requests", label: "Requests", count: reviewCount, badge: true },
     { view: "jobs", label: "Jobs", count: openJobCount },
@@ -127,7 +142,7 @@ export function Sidebar({
             {planStatus(organization)}
             <br />
             {organization.aiRequestsUsedThisMonth} / {organization.aiMonthlyLimit}{" "}
-            requests this month
+            {usageLabel} this month
           </p>
         )}
 

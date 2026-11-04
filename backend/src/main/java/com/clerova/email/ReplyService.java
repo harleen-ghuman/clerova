@@ -310,7 +310,7 @@ public class ReplyService {
         );
     }
 
-    static String replySubject(String subject) {
+    public static String replySubject(String subject) {
         if (subject == null || subject.isBlank()) {
             return "Re: Your request";
         }
@@ -322,7 +322,7 @@ public class ReplyService {
      * Ends the reply with the company's name, as the drafts leave it out.
      * Skipped when the reply already ends with that name.
      */
-    static String withSignOff(String body, String companyName) {
+    public static String withSignOff(String body, String companyName) {
         String trimmed = body.stripTrailing();
 
         if (companyName == null || companyName.isBlank()) {

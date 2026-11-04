@@ -115,4 +115,14 @@ public interface InboundMessageRepository
     /** Attachment names, read without loading the message's collection. */
     @Query("select a.fileName from InboundAttachment a where a.inboundMessage.id = :messageId")
     List<String> findAttachmentNames(@Param("messageId") UUID messageId);
+
+    /** A trucking email's thread: earlier emails already filed under a load. */
+    List<InboundMessage> findByOrganizationIdAndMessageIdHeaderInAndLoadIdIsNotNull(
+            UUID organizationId,
+            Collection<String> messageIdHeaders
+    );
+
+    List<InboundMessage> findByLoadIdOrderByReceivedAtAsc(UUID loadId);
+
+    long countByLoadIdAndReceivedAtAfter(UUID loadId, Instant after);
 }

@@ -10,6 +10,8 @@ interface InboxPageProps {
   refreshKey: number;
   onOpenWorkItem: (workItemId: string) => void;
   onOpenEmailSetup: () => void;
+  /** A trucking workspace: emails become loads. */
+  onOpenLoad?: (loadId: string) => void;
 }
 
 const STATUS_LABELS: Record<InboundMessageStatus, string> = {
@@ -55,6 +57,7 @@ function isSetAside(message: InboundMessage): boolean {
 export function InboxPage({
   refreshKey,
   onOpenWorkItem,
+  onOpenLoad,
   onOpenEmailSetup,
 }: InboxPageProps) {
   const [messages, setMessages] = useState<InboundMessage[]>([]);
@@ -211,7 +214,11 @@ export function InboxPage({
                     ? "From Clerova"
                     : isSetAside(message)
                       ? "Gmail setup"
-                      : STATUS_LABELS[message.status]}
+                      : onOpenLoad && message.status === "PROCESSED"
+                        ? "New load"
+                        : onOpenLoad && message.status === "ATTACHED"
+                          ? "On a load"
+                          : STATUS_LABELS[message.status]}
                 </span>
               </div>
 
@@ -243,6 +250,16 @@ export function InboxPage({
                   })}
                   {message.statusReason && ` · ${message.statusReason}`}
                 </span>
+
+                {message.loadId && onOpenLoad && (
+                  <button
+                    type="button"
+                    className="secondary-action-button"
+                    onClick={() => onOpenLoad(message.loadId!)}
+                  >
+                    Open load
+                  </button>
+                )}
 
                 {message.workItemId && (
                   <button

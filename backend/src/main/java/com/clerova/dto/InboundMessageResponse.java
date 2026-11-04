@@ -18,6 +18,8 @@ public record InboundMessageResponse(
         InboundMessageStatus status,
         String statusReason,
         UUID workItemId,
+        /** The load it's filed under, in a trucking workspace. */
+        UUID loadId,
         List<String> attachments,
         List<AttachmentFile> files
 ) {
@@ -39,6 +41,7 @@ public record InboundMessageResponse(
                 message.getStatus(),
                 message.getStatusReason(),
                 message.getWorkItemId(),
+                message.getLoadId(),
                 message.getAttachments().stream()
                         .map(InboundAttachment::getFileName)
                         .toList(),

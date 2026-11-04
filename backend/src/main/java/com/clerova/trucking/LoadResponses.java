@@ -31,19 +31,45 @@ public final class LoadResponses {
 
     public record LoadSummary(
             UUID id, String loadNumber, LoadStatus status, String brokerName,
-            String origin, String destination, Long rateCents, int openFlags, Instant createdAt
+            String origin, String destination, String pickupAppointment, String deliveryAppointment,
+            Long rateCents, int openFlags, int fixFlags, int draftReplies, String statusNote,
+            Instant createdAt, Instant updatedAt
     ) {
+    }
+
+    /** One email on a load, in or out, oldest first in the conversation. */
+    public record ConversationEntry(
+            UUID id, boolean incoming, String from, String to, String subject, String body,
+            Instant at, List<FileInfo> files
+    ) {
+    }
+
+    public record FileInfo(UUID id, String name, String contentType, Long sizeBytes, boolean stored) {
+    }
+
+    public record ReplyInfo(
+            UUID id, String toEmail, String subject, ReplyKind kind, String summary, String body,
+            ReplyStatus status, Instant createdAt, Instant sentAt
+    ) {
+        static ReplyInfo of(LoadReply reply) {
+            return new ReplyInfo(reply.getId(), reply.getToEmail(), reply.getSubject(), reply.getKind(),
+                    reply.getSummary(), reply.getBody(), reply.getStatus(), reply.getCreatedAt(), reply.getSentAt());
+        }
+    }
+
+    public record BrokerSummary(BrokerInfo broker, int loads, int openLoads) {
     }
 
     public record LoadDetail(
             UUID id, String loadNumber, LoadStatus status, BrokerInfo broker, String equipment,
             Long rateCents, Long agreedRateCents, Integer detentionFreeMinutes, Long detentionRateCents,
             String detentionRule, Long tonuCents, String paymentTerms, String paperworkRule, String rateConFile,
-            List<StopInfo> stops, List<FlagInfo> flags, Instant createdAt, Instant updatedAt
+            List<StopInfo> stops, List<FlagInfo> flags, String statusNote, ReplyInfo draft,
+            List<ConversationEntry> conversation, Instant createdAt, Instant updatedAt
     ) {
     }
 
-    static LoadSummary summary(Load load) {
+    static LoadSummary summary(Load load, int draftReplies) {
         List<LoadStop> stops = load.getStops();
 
         return new LoadSummary(
@@ -53,13 +79,20 @@ public final class LoadResponses {
                 load.getBroker() != null ? load.getBroker().getName() : null,
                 stops.isEmpty() ? null : stops.getFirst().getPlace(),
                 stops.size() < 2 ? null : stops.getLast().getPlace(),
+                stops.isEmpty() ? null : stops.getFirst().getAppointment(),
+                stops.size() < 2 ? null : stops.getLast().getAppointment(),
                 load.getRateCents(),
                 (int) load.getFlags().stream().filter(flag -> flag.getResolvedAt() == null).count(),
-                load.getCreatedAt()
+                (int) load.getFlags().stream()
+                        .filter(flag -> flag.getResolvedAt() == null && flag.getLevel() == FlagLevel.FIX).count(),
+                draftReplies,
+                load.getStatusNote(),
+                load.getCreatedAt(),
+                load.getUpdatedAt()
         );
     }
 
-    static LoadDetail detail(Load load) {
+    static LoadDetail detail(Load load, ReplyInfo draft, List<ConversationEntry> conversation) {
         return new LoadDetail(
                 load.getId(), load.getLoadNumber(), load.getStatus(), BrokerInfo.of(load.getBroker()),
                 load.getEquipment(), load.getRateCents(), load.getAgreedRateCents(),
@@ -69,6 +102,7 @@ public final class LoadResponses {
                 load.getFlags().stream().map(f -> new FlagInfo(
                         f.getId(), f.getCode(), f.getLevel(), f.getTitle(), f.getDetail(), f.getSourceText(),
                         f.getResolvedAt())).toList(),
+                load.getStatusNote(), draft, conversation,
                 load.getCreatedAt(), load.getUpdatedAt()
         );
     }

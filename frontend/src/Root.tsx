@@ -10,6 +10,7 @@ import { AuthPage } from "./pages/AuthPage";
 import { rememberAccount } from "./auth/referral";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { PlanPage } from "./pages/PlanPage";
+import { TruckingApp } from "./trucking/TruckingApp";
 import type { Me } from "./types/Account";
 
 /** Stripe Checkout sends the user back with ?checkout=success|cancelled. */
@@ -227,6 +228,18 @@ export function Root() {
                 : "Confirming your card with Stripe. This takes a few seconds."
               : null
         }
+        onSignOut={handleSignOut}
+      />
+    );
+  }
+
+  if (currentMe.organization.industry === "TRUCKING") {
+    return (
+      <TruckingApp
+        organization={currentMe.organization}
+        userEmail={currentMe.email}
+        fullName={currentMe.fullName}
+        onAccountUpdated={setMe}
         onSignOut={handleSignOut}
       />
     );
