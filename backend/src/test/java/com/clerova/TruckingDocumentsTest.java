@@ -337,7 +337,8 @@ class TruckingDocumentsTest {
         processor.processDue();
 
         RateConResult corrected = rateCon("CCFS15310");
-        corrected.brokerName = "CrossCountry Freight Solutions";
+        // The AI wrote the name a little differently this time
+        corrected.brokerName = "CrossCountry Freight Solutions, Inc.";
         corrected.brokerMcNumber = "1667020";
         corrected.carrierMcNumber = "1667020";
         when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(corrected);

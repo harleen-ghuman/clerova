@@ -342,11 +342,17 @@ public class TruckingIntakeService {
      * a new copy of the rate con is read with a corrected MC number.
      */
     private Optional<Load> sameLoadOtherBrokerRecord(UUID organizationId, Broker broker, String loadNumber) {
-        String name = broker.getName() == null ? "" : broker.getName().trim();
+        // "CrossCountry Freight Solutions, Inc." and "CrossCountry Freight Solutions" are one broker
+        String name = RateConChecks.normalize(broker.getName());
+
+        if (name.isEmpty()) {
+            return Optional.empty();
+        }
+
         return loadRepository.findForOrganization(organizationId).stream()
                 .filter(load -> loadNumber.equalsIgnoreCase(load.getLoadNumber()))
-                .filter(load -> load.getBroker() != null && load.getBroker().getName() != null
-                        && load.getBroker().getName().trim().equalsIgnoreCase(name))
+                .filter(load -> load.getBroker() != null
+                        && RateConChecks.normalize(load.getBroker().getName()).equals(name))
                 .findFirst();
     }
 

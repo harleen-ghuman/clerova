@@ -133,7 +133,8 @@ public class TruckingAiService {
                                   a short phrase. latePaperworkFine: a deduction or fine for
                                   late or missing paperwork. paperworkQuote: the exact wording.
                                 - paymentTerms: like "Net 30". quickPayFeePercent: the fee for
-                                  quick pay, if offered. paymentQuote: the exact wording.
+                                  quick pay, if offered (not a fuel advance, EFS, Comchek or
+                                  factoring fee printed nearby). paymentQuote: the exact wording.
 
                                 Quotes are copied word for word from the document, at most
                                 about 250 characters each.
