@@ -10,6 +10,7 @@ import com.clerova.trucking.FmcsaStatus;
 import com.clerova.trucking.LoadService;
 import com.clerova.trucking.RateConResult;
 import com.clerova.trucking.TruckingAiService;
+import com.clerova.trucking.TruckingIntakeService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -276,6 +277,92 @@ class TruckingDocumentsTest {
     }
 
     @Test
+    void paperworkThatCameFirstIsFiledWhenItsRateConArrives() throws Exception {
+        // The BOL carries the shipper's number, not the broker's load number
+        RateConResult bol = new RateConResult();
+        bol.documentKind = "BOL";
+        bol.referenceNumbers = new ArrayList<>(List.of("ABF 553780", "4/17/25"));
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(bol);
+        deliver("me@gmail.com", "<bol-first@x>", "Ely to Hanford", "", "bol.pdf", scannedPdf());
+        processor.processDue();
+        assertThat(json(mockMvc.perform(get("/api/inbox").with(user))).get(0).get("status").asText()).isEqualTo("IGNORED");
+
+        RateConResult rateCon = rateCon("3466426-1");
+        rateCon.referenceNumbers = new ArrayList<>(List.of("3466426-1", "ABF553780"));
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(rateCon);
+        deliver("<rc-later@x>", "Rate Confirmation 3466426-1", "Attached.", "ratecon.pdf", scannedPdf());
+        processor.processDue();
+
+        String loadId = json(mockMvc.perform(get("/api/loads").with(user))).get(0).get("id").asText();
+        JsonNode bolEmail = json(mockMvc.perform(get("/api/inbox").with(user))).get(1);
+        assertThat(bolEmail.get("status").asText()).isEqualTo("ATTACHED");
+        assertThat(bolEmail.get("loadId").asText()).isEqualTo(loadId);
+        assertThat(bolEmail.get("statusReason").asText()).isEqualTo(TruckingIntakeService.PAPERWORK_FILED_REASON);
+        assertThat(kinds(json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user))))).contains("BOL");
+
+        // A later POD with only the shipper's number finds the load too
+        RateConResult pod = new RateConResult();
+        pod.documentKind = "POD";
+        pod.referenceNumbers = new ArrayList<>(List.of("ABF553780"));
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(pod);
+        mockMvc.perform(upload("pod.jpg", "image/jpeg", photo()).with(user))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.loadId").value(loadId));
+    }
+
+    @Test
+    void theCarriersOwnMcIsNotCheckedAsTheBrokers() throws Exception {
+        RateConResult read = rateCon("CCFS15310");
+        read.brokerMcNumber = "1667020";
+        read.carrierMcNumber = "1667020";
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(read);
+        deliver("<ccfs@x>", "Rate Confirmation for Shipment CCFS15310", "", "rc.pdf", scannedPdf());
+        processor.processDue();
+
+        verify(fmcsaClient, never()).check("1667020");
+        String loadId = json(mockMvc.perform(get("/api/loads").with(user))).get(0).get("id").asText();
+        JsonNode load = json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user)));
+        List<String> codes = new ArrayList<>();
+        load.get("flags").forEach(flag -> codes.add(flag.get("code").asText()));
+        assertThat(codes).contains("MC_MISSING").doesNotContain("BROKER_NOT_AUTHORIZED");
+    }
+
+    @Test
+    void aNewCopyReadWithACorrectedMcUpdatesTheSameLoad() throws Exception {
+        RateConResult first = rateCon("CCFS15310");
+        first.brokerName = "CrossCountry Freight Solutions";
+        first.brokerMcNumber = "1667020";
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(first);
+        deliver("<v1@x>", "Rate Confirmation for Shipment CCFS15310", "", "rc.pdf", scannedPdf());
+        processor.processDue();
+
+        RateConResult corrected = rateCon("CCFS15310");
+        corrected.brokerName = "CrossCountry Freight Solutions";
+        corrected.brokerMcNumber = "1667020";
+        corrected.carrierMcNumber = "1667020";
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(corrected);
+        deliver("<v2@x>", "Rate Confirmation for Shipment CCFS15310", "", "rc.pdf", scannedPdf());
+        processor.processDue();
+
+        assertThat(json(mockMvc.perform(get("/api/loads").with(user)))).hasSize(1);
+        JsonNode brokers = json(mockMvc.perform(get("/api/brokers").with(user)));
+        assertThat(brokers).hasSize(1);
+        assertThat(brokers.get(0).get("broker").get("mcNumber").isNull()).isTrue();
+        assertThat(json(mockMvc.perform(get("/api/inbox").with(user))).get(0).get("statusReason").asText())
+                .isEqualTo(TruckingIntakeService.REVISED_REASON);
+    }
+
+    @Test
+    void aRateConReadyEmailWithoutTheFileSaysToDownloadIt() throws Exception {
+        deliver("eber@flockfreight.example", "<flock@x>", "Your Rate Confirmation is ready for Load 9Y-ZDH-T93",
+                "View it in the portal.", null, null);
+        processor.processDue();
+        JsonNode email = json(mockMvc.perform(get("/api/inbox").with(user))).get(0);
+        assertThat(email.get("statusReason").asText()).isEqualTo(TruckingIntakeService.NO_RATE_CON_ATTACHED_REASON);
+        verify(truckingAiService, never()).readRateCon(anyString(), anyString(), anyList());
+    }
+
+    @Test
     void uploadsAreCheckedBeforeAnythingIsKept() throws Exception {
         mockMvc.perform(upload("notes.txt", "text/plain", "hello".getBytes()).with(user))
                 .andExpect(status().isBadRequest())
@@ -370,10 +457,14 @@ class TruckingDocumentsTest {
         root.put("Subject", subject);
         root.put("TextBody", body);
         root.putArray("Headers").addObject().put("Name", "Message-ID").put("Value", messageId);
-        root.putArray("Attachments").addObject()
-                .put("Name", fileName)
-                .put("ContentType", "application/pdf")
-                .put("Content", pdfBase64);
+        var attachments = root.putArray("Attachments");
+
+        if (pdfBase64 != null) {
+            attachments.addObject()
+                    .put("Name", fileName)
+                    .put("ContentType", "application/pdf")
+                    .put("Content", pdfBase64);
+        }
 
         mockMvc.perform(post("/api/inbound/postmark")
                         .header("Authorization", WEBHOOK_AUTH)

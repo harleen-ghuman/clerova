@@ -36,6 +36,9 @@ public class LoadDocument {
 
     private UUID uploadedBy;
 
+    @Column(length = 1000)
+    private String referenceNumbers;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -64,6 +67,8 @@ public class LoadDocument {
     public String getStoragePath() { return storagePath; }
     public void setStoragePath(String storagePath) { this.storagePath = storagePath; }
     public UUID getUploadedBy() { return uploadedBy; }
+    public String getReferenceNumbers() { return referenceNumbers; }
+    public void setReferenceNumbers(String referenceNumbers) { this.referenceNumbers = referenceNumbers; }
     public void setUploadedBy(UUID uploadedBy) { this.uploadedBy = uploadedBy; }
     public Instant getCreatedAt() { return createdAt; }
 }

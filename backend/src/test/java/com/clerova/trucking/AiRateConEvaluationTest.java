@@ -181,6 +181,41 @@ class AiRateConEvaluationTest {
         assertThat(String.join(" ", read.referenceNumbers)).contains("5520194");
     }
 
+    /** A TMS-style rate con: the only MC printed is the carrier's, in the truck and driver row. */
+    private static final String CARRIER_MC_ONLY = """
+            Shipment # NWFS20418 Rate Confirmation
+            FROM                                   DATE        TIME
+            Lena Ortiz                             05/12/2026  20:00
+            lortiz@northwind.example
+            Northwind Freight Solutions            TO: SIERRA RUN LLC   ATT: Sam Ortiz
+            2210 Harbor Rd, Fargo, ND 58102            PHONE (559) 555-0148
+            MC #      DOT #     TRUCK #  TRAILER #  DRIVER   DRIVER CELL
+            1048817   3299110   212      V7714      Mario    (559) 555-0177
+            SIZE & TYPE   DESCRIPTION   TOTAL WEIGHT   MILES
+            Van 53 FT     FAK           35,000 LB      186
+            Pickup Location (Stop # 1)
+            Name: Northwind Freight - RNO   Address: 985 Glendale Avenue, SPARKS, NV 89431
+            Appt Date/Time: 05/12/2026 20:00
+            Drop Location (Stop # 2)
+            Name: DDP   Address: 2800 S El Dorado ST, STOCKTON, CA 95206
+            Appt Date/Time: 05/13/2026 00:30
+            CHARGES
+            Freight Charge $500.00
+            TOTAL RATE $500.00 US Dollars
+            PLEASE EMAIL A COPY OF THE RATE CONFIRMATION, POD & INVOICE TO: ap@northwind.example
+            """;
+
+    @Test
+    void neverTakesTheCarriersMcForTheBrokers() {
+        RateConResult read = truckingAiService.readRateCon(
+                "Subject: Rate Confirmation for Shipment NWFS20418\n\n", CARRIER_MC_ONLY);
+
+        assertThat(read.isRateConfirmation).isTrue();
+        assertThat(read.brokerName).containsIgnoringCase("Northwind");
+        assertThat(TruckingIntakeService.brokerMc(read)).isNull();
+        assertThat(Money.cents(read.lineHaulRate)).isEqualTo(50000L);
+    }
+
     @Test
     void readsADryVanRateCon() {
         RateConResult read = truckingAiService.readRateCon(

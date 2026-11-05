@@ -55,6 +55,10 @@ public class Load {
     /** The dispatcher's latest update, like "Loaded, ETA Phoenix 6 AM". */
     private String statusNote;
 
+    /** Normalized numbers from the rate con (PO, pickup, BOL...), space-separated. */
+    @Column(length = 1000)
+    private String referenceNumbers;
+
     @OneToMany(mappedBy = "load", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("position")
     private List<LoadStop> stops = new ArrayList<>();
@@ -135,6 +139,8 @@ public class Load {
     public String getRateConFile() { return rateConFile; }
     public void setRateConFile(String rateConFile) { this.rateConFile = rateConFile; }
     public String getStatusNote() { return statusNote; }
+    public String getReferenceNumbers() { return referenceNumbers; }
+    public void setReferenceNumbers(String referenceNumbers) { this.referenceNumbers = referenceNumbers; }
     public void setStatusNote(String statusNote) { this.statusNote = statusNote; }
     public List<LoadStop> getStops() { return stops; }
     public List<LoadFlag> getFlags() { return flags; }

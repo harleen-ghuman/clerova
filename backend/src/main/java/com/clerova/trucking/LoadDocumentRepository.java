@@ -16,4 +16,6 @@ public interface LoadDocumentRepository extends JpaRepository<LoadDocument, UUID
     List<LoadDocument> findByOrganizationIdAndLoadIdIsNullOrderByCreatedAtDesc(UUID organizationId);
 
     long countByOrganizationIdAndCreatedAtAfter(UUID organizationId, Instant after);
+
+    List<LoadDocument> findByOrganizationIdAndLoadIdIsNullAndCreatedAtAfter(UUID organizationId, Instant after);
 }

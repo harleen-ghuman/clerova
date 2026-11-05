@@ -95,7 +95,8 @@ public class TruckingAiService {
                                 LUMPER_RECEIPT, SCALE_TICKET, INVOICE, or OTHER. And list
                                 referenceNumbers: every load, order, PO, BOL, pickup and
                                 confirmation number printed on the document, copied exactly
-                                (empty list if none is readable).
+                                (empty list if none is readable). Never MC or DOT numbers,
+                                phone numbers, dates, weights or amounts.
 
                                 Copy what the document states. Never guess or fill in a value
                                 that isn't written there; leave it as an empty string. Amounts
@@ -103,8 +104,13 @@ public class TruckingAiService {
                                 digits only, like 5.
 
                                 - brokerName: the broker company (not the carrier, shipper or
-                                  receiver). brokerMcNumber: the broker's MC number, digits
-                                  only. brokerEmail and brokerPhone: the broker's contact.
+                                  receiver). brokerMcNumber: the broker's own MC number, digits
+                                  only, printed with the broker's name or company details.
+                                  Rate cons also print the carrier's MC and DOT (in the carrier
+                                  section, or a row with truck, trailer and driver): that is
+                                  carrierMcNumber, never brokerMcNumber. If the broker's MC
+                                  isn't printed, leave brokerMcNumber empty.
+                                  brokerEmail and brokerPhone: the broker's contact.
                                 - loadNumber: the broker's load or order number.
                                 - equipment: like "Dry van 53'" or "Reefer".
                                 - lineHaulRate: the total the carrier is paid for the load

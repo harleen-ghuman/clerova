@@ -124,5 +124,9 @@ public interface InboundMessageRepository
 
     List<InboundMessage> findByLoadIdOrderByReceivedAtAsc(UUID loadId);
 
+    /** Emails set aside for a reason (like "couldn't tell which load") since a time, to file later. */
+    List<InboundMessage> findByOrganizationIdAndStatusAndStatusReasonAndReceivedAtAfter(
+            UUID organizationId, com.clerova.domain.InboundMessageStatus status, String statusReason, Instant after);
+
     long countByLoadIdAndReceivedAtAfter(UUID loadId, Instant after);
 }
