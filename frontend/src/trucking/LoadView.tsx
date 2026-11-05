@@ -111,10 +111,7 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
     setError(null);
 
     try {
-      const result = await action();
-      setLoad(result);
-      setNote(result.statusNote ?? "");
-      setDraft(result.draft?.body ?? "");
+      apply(await action());
       onChanged();
       return true;
     } catch (err) {
@@ -125,11 +122,26 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
     }
   }
 
+  /**
+   * Shows the load as the server sent it, keeping what the dispatcher is
+   * typing: the update box and the draft reply only change when they changed
+   * on the server (a new draft, or a saved update).
+   */
+  function apply(result: LoadDetail) {
+    if (!load || result.statusNote !== load.statusNote) {
+      setNote(result.statusNote ?? "");
+    }
+
+    if (!load || result.draft?.id !== load.draft?.id) {
+      setDraft(result.draft?.body ?? "");
+    }
+
+    setLoad(result);
+  }
+
   async function reload() {
     const result = await getLoad(loadId);
-    setLoad(result);
-    setNote(result.statusNote ?? "");
-    setDraft(result.draft?.body ?? "");
+    apply(result);
     onChanged();
   }
 
@@ -272,7 +284,9 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
 
           <StopsPanel load={load} sendingEnabled={sendingEnabled} busy={busy} run={run} />
 
-          {["DELIVERED", "INVOICED", "PAID"].includes(load.status) || load.invoice ? (
+          {["DELIVERED", "INVOICED", "PAID"].includes(load.status) ||
+          load.invoice ||
+          (load.status === "CANCELLED" && load.charges.some((charge) => charge.status === "APPROVED")) ? (
             <InvoicePanel load={load} sendingEnabled={sendingEnabled} onChanged={reload} onOpenSettings={onOpenSettings} />
           ) : null}
 

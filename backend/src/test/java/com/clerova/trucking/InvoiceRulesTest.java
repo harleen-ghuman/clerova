@@ -30,7 +30,9 @@ class InvoiceRulesTest {
     @Test
     void invoiceTextKeepsWhatTheFontCanDraw() {
         assertThat(InvoicePdf.safe("Fresno → Phoenix – “dock 4” 🚚"))
-                .isEqualTo("Fresno  to  Phoenix - \"dock 4\" ");
+                .isEqualTo("Fresno to Phoenix - \"dock 4\" ");
+        assertThat(InvoicePdf.safe("Se\u00F1or Freight \u2728 LLC")).isEqualTo("Se\u00F1or Freight LLC");
+        assertThat(InvoicePdf.safe("Total  $5")).isEqualTo("Total  $5");
         assertThat(InvoicePdf.safe("Café Line 1\nLine 2")).isEqualTo("Café Line 1\nLine 2");
     }
 

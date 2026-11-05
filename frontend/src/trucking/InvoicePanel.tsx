@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { errorMessage } from "../api/client";
 import {
   createInvoice,
@@ -35,10 +35,12 @@ function defaultMessage(load: LoadDetail, invoice: Invoice): string {
 /** Lines being edited, as text so a half-typed amount isn't lost. */
 type EditLine = { description: string; amount: string };
 
-function LinesEditor({ invoice, busy, onSave }: {
+function LinesEditor({ invoice, busy, onSave, onDirtyChange }: {
   invoice: Invoice;
   busy: boolean;
   onSave: (lines: InvoiceLine[]) => Promise<boolean>;
+  /** Unsaved edits: the invoice can't go out until they're saved or undone. */
+  onDirtyChange: (dirty: boolean) => void;
 }) {
   const [lines, setLines] = useState<EditLine[]>(
     invoice.lines.map((line) => ({ description: line.description, amount: centsInput(line.amountCents) }))
@@ -49,6 +51,10 @@ function LinesEditor({ invoice, busy, onSave }: {
   );
   const changed = JSON.stringify(lines) !== original;
   const total = lines.reduce((sum, line) => sum + (parseCents(line.amount) ?? 0), 0);
+
+  useEffect(() => {
+    onDirtyChange(changed);
+  }, [changed, onDirtyChange]);
 
   function update(index: number, change: Partial<EditLine>) {
     setLines((current) => current.map((line, i) => (i === index ? { ...line, ...change } : line)));
@@ -153,6 +159,7 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
   const [emailing, setEmailing] = useState<{ to: string; message: string } | null>(null);
   const [paying, setPaying] = useState<string | null>(null);
   const [confirmVoid, setConfirmVoid] = useState(false);
+  const [linesDirty, setLinesDirty] = useState(false);
 
   async function act(key: string, action: () => Promise<Invoice | void>, fallback: string): Promise<boolean> {
     setBusy(key);
@@ -175,11 +182,8 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
     }
   }
 
-  const delivered = ["DELIVERED", "INVOICED", "PAID"].includes(load.status);
+  const delivered = ["DELIVERED", "INVOICED", "PAID", "CANCELLED"].includes(load.status);
 
-  if (load.status === "CANCELLED" && !invoice) {
-    return null;
-  }
 
   const errorBox = error && (
     <div className="action-error tk-error" role="alert">
@@ -197,9 +201,11 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
       <section className="tk-panel" aria-label="Invoice">
         <h2>Invoice</h2>
         <p className="tk-sub">
-          {delivered
-            ? "Make the invoice from the rate and approved extra pay. You can change the lines before it goes out."
-            : "Once the load is delivered, make the invoice here."}
+          {load.status === "CANCELLED"
+            ? "Bill the approved charges on this cancelled load, like a TONU."
+            : delivered
+              ? "Make the invoice from the rate and approved extra pay. You can change the lines before it goes out."
+              : "Once the load is delivered, make the invoice here."}
         </p>
         {errorBox}
         <div className="tk-actions">
@@ -217,6 +223,8 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
   }
 
   const draft = invoice.status === "DRAFT";
+  // Unsaved line edits hold back anything that uses the saved invoice
+  const held = busy !== null || (draft && linesDirty);
   const due = invoice.totalCents - (invoice.quickPayFeeCents ?? 0);
   const overdue = isOverdue(invoice);
   const missing = invoice.status === "PAID" ? [] : (invoice.missingPaperwork ?? []);
@@ -247,7 +255,7 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
                     type="button"
                     className={`tk-chip ${invoice.sendTo === option ? "active" : ""}`}
                     aria-pressed={invoice.sendTo === option}
-                    disabled={busy !== null}
+                    disabled={held}
                     onClick={() =>
                       invoice.sendTo !== option &&
                       void act("sendto", () => updateInvoice(invoice.id, { sendTo: option }), "Couldn't change it.")
@@ -265,12 +273,13 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
             invoice={invoice}
             busy={busy !== null}
             onSave={(lines) => act("lines", () => updateInvoice(invoice.id, { lines }), "Couldn't save the lines.")}
+            onDirtyChange={setLinesDirty}
           />
 
           <button
             type="button"
             className="tk-link tk-link-small"
-            disabled={busy !== null}
+            disabled={held}
             onClick={() =>
               void act("rebuild", () => updateInvoice(invoice.id, { rebuild: true }), "Couldn't update the lines.")
             }
@@ -283,7 +292,7 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
               <input
                 type="checkbox"
                 checked={invoice.quickPay}
-                disabled={busy !== null}
+                disabled={held}
                 onChange={(event) =>
                   void act("quickpay", () => updateInvoice(invoice.id, { quickPay: event.target.checked }), "Couldn't change it.")
                 }
@@ -356,7 +365,7 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
           <button
             type="button"
             className="rq-button rq-button-small"
-            disabled={busy !== null}
+            disabled={held}
             onClick={() => void act("pdf", () => openPdf(`/api/invoices/${invoice.id}/pdf`), "Couldn't open the invoice.")}
           >
             View invoice
@@ -364,7 +373,7 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
           <button
             type="button"
             className="rq-button rq-button-small"
-            disabled={busy !== null}
+            disabled={held}
             onClick={() =>
               void act(
                 "packet",
@@ -433,12 +442,13 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
                   ? "Upload the packet on your factoring company's website, then mark it sent. Or email it, if your factor takes email."
                   : "Email the packet to the broker, or send it your own way and mark it sent."}
               </p>
+              {linesDirty && <p className="tk-callout">Save or undo your line changes first.</p>}
               <div className="tk-actions">
                 {toFactor && (
                   <button
                     type="button"
                     className="rq-button rq-button-small rq-button-primary"
-                    disabled={busy !== null}
+                    disabled={held}
                     onClick={() => void act("sent", () => markInvoiceSent(invoice.id), "Couldn't update the invoice.")}
                   >
                     I uploaded it
@@ -448,7 +458,7 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
                   <button
                     type="button"
                     className={`rq-button rq-button-small ${toFactor ? "" : "rq-button-primary"}`}
-                    disabled={busy !== null}
+                    disabled={held}
                     onClick={() => setEmailing({ to: invoice.suggestedEmail ?? "", message: defaultMessage(load, invoice) })}
                   >
                     {toFactor ? "Email it instead" : "Email to broker"}
@@ -458,7 +468,7 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
                   <button
                     type="button"
                     className="rq-button rq-button-small rq-button-quiet"
-                    disabled={busy !== null}
+                    disabled={held}
                     onClick={() => void act("sent", () => markInvoiceSent(invoice.id), "Couldn't update the invoice.")}
                   >
                     I sent it myself

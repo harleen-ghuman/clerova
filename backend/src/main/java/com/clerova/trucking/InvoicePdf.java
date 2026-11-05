@@ -68,8 +68,11 @@ final class InvoicePdf {
             float width = page.getMediaBox().getWidth();
             float right = width - MARGIN;
 
-            try (PDPageContentStream out = new PDPageContentStream(document, page)) {
-                float y = page.getMediaBox().getHeight() - MARGIN;
+            float top = page.getMediaBox().getHeight() - MARGIN;
+            PDPageContentStream out = new PDPageContentStream(document, page);
+
+            try {
+                float y = top;
 
                 // Carrier on the left, invoice facts on the right
                 float leftY = text(out, BOLD, 16, INK, MARGIN, y, content.carrierName(), 300);
@@ -146,6 +149,17 @@ final class InvoicePdf {
                 y -= 28;
 
                 for (InvoiceLine line : content.lines()) {
+                    // A long invoice goes on to a new page
+                    if (y < MARGIN + 60) {
+                        out.close();
+                        page = new PDPage(PDRectangle.LETTER);
+                        document.addPage(page);
+                        out = new PDPageContentStream(document, page);
+                        y = top;
+                        text(out, BOLD, 10, GREY, MARGIN, y, "Invoice " + content.number() + " (continued)", 300);
+                        y -= 28;
+                    }
+
                     float lineY = lines(out, REGULAR, 10.5f, INK, MARGIN + 8, y, line.getDescription(),
                             right - MARGIN - 140);
                     right(out, REGULAR, 10.5f, INK, right - 8, y, Money.dollars(line.getAmountCents()));
@@ -153,6 +167,17 @@ final class InvoicePdf {
                     float ruleY = lineY + 10.5f * 1.35f - 8;
                     rule(out, MARGIN, right, ruleY);
                     y = ruleY - 17;
+                }
+
+                // The total, quick pay and the notice of assignment stay together
+                float footer = 40 + (content.quickPayFeeCents() != null ? 16 : 0) + (content.factorName() != null ? 90 : 0);
+
+                if (y - footer < MARGIN + 20) {
+                    out.close();
+                    page = new PDPage(PDRectangle.LETTER);
+                    document.addPage(page);
+                    out = new PDPageContentStream(document, page);
+                    y = top;
                 }
 
                 y -= 4;
@@ -187,6 +212,8 @@ final class InvoicePdf {
                 }
 
                 text(out, REGULAR, 9, GREY, MARGIN, MARGIN, "Thank you for your business.", 300);
+            } finally {
+                out.close();
             }
 
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -201,20 +228,24 @@ final class InvoicePdf {
     static Packet packet(byte[] invoice, List<PacketFile> files) {
         List<String> skipped = new ArrayList<>();
 
+        // The added documents stay open until the packet is saved: their pages are shared, not copied
+        List<PDDocument> sources = new ArrayList<>();
+
         try (PDDocument packet = Loader.loadPDF(invoice)) {
             PDFMergerUtility merger = new PDFMergerUtility();
 
             for (PacketFile file : files) {
                 try {
                     if (PdfText.isPdf(file.name(), file.contentType())) {
-                        try (PDDocument source = Loader.loadPDF(file.content())) {
-                            if (source.isEncrypted()) {
-                                skipped.add(file.name());
-                                continue;
-                            }
+                        PDDocument source = Loader.loadPDF(file.content());
+                        sources.add(source);
 
-                            merger.appendDocument(packet, source);
+                        if (source.isEncrypted()) {
+                            skipped.add(file.name());
+                            continue;
                         }
+
+                        merger.appendDocument(packet, source);
                     } else {
                         addImage(packet, file.content());
                     }
@@ -229,6 +260,14 @@ final class InvoicePdf {
             return new Packet(bytes.toByteArray(), skipped);
         } catch (IOException e) {
             throw new IllegalStateException("Couldn't make the packet", e);
+        } finally {
+            for (PDDocument source : sources) {
+                try {
+                    source.close();
+                } catch (IOException e) {
+                    // Nothing more to do with it
+                }
+            }
         }
     }
 
@@ -365,11 +404,12 @@ final class InvoicePdf {
         }
 
         String text = value
-                .replace("\u2192", " to ").replace('\u2013', '-').replace('\u2014', '-')
+                .replace("\u2192", "to").replace('\u2013', '-').replace('\u2014', '-')
                 .replace('‘', '\'').replace('’', '\'')
                 .replace('“', '"').replace('”', '"')
                 .replace(' ', ' ').replace('\t', ' ').replace("\r", "");
         StringBuilder out = new StringBuilder();
+        boolean dropped = false;
 
         for (int i = 0; i < text.length(); ) {
             int codePoint = text.codePointAt(i);
@@ -378,6 +418,12 @@ final class InvoicePdf {
 
             if (character.equals("\n")) {
                 out.append('\n');
+                dropped = false;
+                continue;
+            }
+
+            // Where a character was left out, its space isn't doubled ("Freight ✨ LLC")
+            if (dropped && character.equals(" ") && (out.isEmpty() || out.charAt(out.length() - 1) == ' ')) {
                 continue;
             }
 
@@ -385,8 +431,10 @@ final class InvoicePdf {
                 REGULAR.encode(character);
                 BOLD.encode(character);
                 out.append(character);
+                dropped = false;
             } catch (IOException | IllegalArgumentException e) {
                 // Not in the font: leave it out
+                dropped = true;
             }
         }
 

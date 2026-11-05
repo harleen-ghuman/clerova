@@ -175,6 +175,12 @@ export function StopsPanel({ load, sendingEnabled, busy, run }: StopsPanelProps)
                     </span>
                   )}
 
+                  {stop.leftAt && detention && detention.billableMinutes > 0 && detention.amountCents === null && (
+                    <span className="tk-stop-log">
+                      The rate con has no detention rate. Add the amount under Extra pay.
+                    </span>
+                  )}
+
                   {!locked && (
                     <div className="tk-actions tk-stop-actions">
                       {!stop.arrivedAt && previousLeft && (

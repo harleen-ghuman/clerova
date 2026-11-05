@@ -413,6 +413,101 @@ class TruckingInvoiceTest {
         assertThat(json(mockMvc.perform(get("/api/invoices").with(other)))).isEmpty();
     }
 
+    @Test
+    void aCancelledLoadCanBeBilledItsTonu() throws Exception {
+        saveCarrier(false);
+        String loadId = load("88213");
+        mockMvc.perform(patch("/api/loads/{id}", loadId).with(user).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"CANCELLED\"}")).andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/loads/{id}/invoice", loadId).with(user))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(
+                        "This load is cancelled. To bill a TONU, add it under Extra pay as approved first."));
+
+        mockMvc.perform(post("/api/loads/{id}/charges", loadId).with(user).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"kind\":\"TONU\",\"amountCents\":15000,\"status\":\"APPROVED\"}")).andExpect(status().isOk());
+        JsonNode invoice = json(mockMvc.perform(post("/api/loads/{id}/invoice", loadId).with(user)).andExpect(status().isOk()));
+        assertThat(invoice.get("lines")).hasSize(1);
+        assertThat(invoice.get("lines").get(0).get("description").asText()).isEqualTo("Truck ordered, not used");
+        assertThat(invoice.get("totalCents").asLong()).isEqualTo(15000);
+        assertThat(invoice.get("missingPaperwork").toString()).doesNotContain("BOL");
+
+        mockMvc.perform(post("/api/invoices/{id}/mark-sent", invoice.get("id").asText()).with(user)).andExpect(status().isOk());
+        mockMvc.perform(post("/api/invoices/{id}/paid", invoice.get("id").asText()).with(user)).andExpect(status().isOk());
+        assertThat(json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user))).get("status").asText())
+                .isEqualTo("CANCELLED");
+    }
+
+    @Test
+    void aDoubleTapMakesOneInvoiceAndTheFactorNeedsItsDetails() throws Exception {
+        saveCarrier(false);
+        String loadId = load("88213");
+
+        // Two taps at once: one invoice, one number used
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        List<java.util.concurrent.Future<String>> taps = new ArrayList<>();
+
+        for (int i = 0; i < 2; i++) {
+            taps.add(pool.submit(() -> mockMvc.perform(post("/api/loads/{id}/invoice", loadId).with(user))
+                    .andReturn().getResponse().getContentAsString()));
+        }
+
+        List<String> ids = new ArrayList<>();
+
+        for (var tap : taps) {
+            ids.add(objectMapper.readTree(tap.get()).get("id").asText());
+        }
+
+        pool.shutdown();
+        assertThat(ids.get(0)).isEqualTo(ids.get(1));
+        assertThat(json(mockMvc.perform(get("/api/carrier").with(user))).get("nextInvoiceNumber").asInt()).isEqualTo(1002);
+
+        // Factoring is off, so the invoice can't go to a factor
+        mockMvc.perform(patch("/api/invoices/{id}", ids.get(0)).with(user).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sendTo\":\"FACTOR\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Add your factoring company's name and payment address in Settings first."));
+
+        // A changed company name reaches the draft
+        mockMvc.perform(put("/api/carrier").with(user).contentType(MediaType.APPLICATION_JSON)
+                .content(carrierJson(false).replace("Sierra Run Transport LLC", "Sierra Run Freight LLC"))).andExpect(status().isOk());
+        assertThat(json(mockMvc.perform(patch("/api/invoices/{id}", ids.get(0)).with(user)
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))).get("remitTo").asText())
+                .startsWith("Sierra Run Freight LLC");
+    }
+
+    @Test
+    void detentionStaysPutOnceTheInvoiceIsSent() throws Exception {
+        saveCarrier(false);
+        String loadId = load("88213");
+        String delivery = json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user)))
+                .get("stops").get(1).get("id").asText();
+        Instant arrived = Instant.now().minus(8, ChronoUnit.HOURS);
+        times(loadId, delivery, arrived, arrived.plus(4, ChronoUnit.HOURS)).andExpect(status().isOk());
+        String invoiceId = json(mockMvc.perform(post("/api/loads/{id}/invoice", loadId).with(user))).get("id").asText();
+        mockMvc.perform(post("/api/invoices/{id}/mark-sent", invoiceId).with(user)).andExpect(status().isOk());
+
+        JsonNode after = json(times(loadId, delivery, arrived, arrived.plus(6, ChronoUnit.HOURS)).andExpect(status().isOk()));
+        assertThat(after.get("charges").get(0).get("amountCents").asLong()).isEqualTo(10000);
+    }
+
+    @Test
+    void aWorkspaceCantSendMoreThanItsHourlyEmails() throws Exception {
+        String loadId = load("88213");
+        String body = "{\"subject\":\"Hi\",\"body\":\"Checking in.\"}";
+
+        for (int i = 0; i < com.clerova.trucking.InvoiceService.MAX_EMAILS_PER_HOUR; i++) {
+            mockMvc.perform(post("/api/loads/{id}/messages", loadId).with(user).contentType(MediaType.APPLICATION_JSON)
+                    .content(body)).andExpect(status().isOk());
+        }
+
+        mockMvc.perform(post("/api/loads/{id}/messages", loadId).with(user).contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.error").value("EMAIL_LIMIT"));
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private RequestPostProcessor signUp(String company) throws Exception {

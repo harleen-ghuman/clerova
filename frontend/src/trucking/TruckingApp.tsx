@@ -81,6 +81,7 @@ export function TruckingApp({
   const [loadsLoading, setLoadsLoading] = useState(true);
   const [loadsError, setLoadsError] = useState<string | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoicesError, setInvoicesError] = useState<string | null>(null);
   const [focusCarrier, setFocusCarrier] = useState(false);
   const [emailSettings, setEmailSettings] = useState<EmailSettings | null>(null);
   const [emailSettingsError, setEmailSettingsError] = useState<string | null>(null);
@@ -95,8 +96,14 @@ export function TruckingApp({
   function loadLoads() {
     // Invoices change with loads (sent, paid), so they're fetched together
     getInvoices()
-      .then(setInvoices)
-      .catch((err) => console.error("Failed to load invoices:", err));
+      .then((result) => {
+        setInvoices(result);
+        setInvoicesError(null);
+      })
+      .catch((err) => {
+        console.error("Failed to load invoices:", err);
+        setInvoicesError(errorMessage(err, "Couldn't load your invoices. Refresh to try again."));
+      });
 
     return getLoads()
       .then((result) => {
@@ -313,7 +320,7 @@ export function TruckingApp({
             loads={loads}
             invoices={invoices}
             loading={loadsLoading}
-            error={loadsError}
+            error={loadsError ?? invoicesError}
             onOpenLoad={openLoad}
             onRetry={() => void loadLoads()}
           />

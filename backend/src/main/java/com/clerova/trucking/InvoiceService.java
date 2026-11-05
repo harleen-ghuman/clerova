@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -67,6 +68,9 @@ public class InvoiceService {
             DocumentKind.RATE_CON, DocumentKind.BOL, DocumentKind.POD, DocumentKind.LUMPER_RECEIPT,
             DocumentKind.SCALE_TICKET);
 
+    /** Emails one workspace may send about its loads in an hour, so the address can't be used for spam. */
+    public static final int MAX_EMAILS_PER_HOUR = 100;
+
     private static final Pattern EMAIL = Pattern.compile("[A-Za-z0-9._%+'-]+@[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)+");
     private static final Pattern NET_DAYS = Pattern.compile("(?i)\\bnet\\s*-?\\s*(\\d{1,3})\\b|\\b(\\d{1,3})\\s*(?:calendar\\s+|business\\s+)?days?\\b");
 
@@ -82,6 +86,10 @@ public class InvoiceService {
     private final EmailProperties emailProperties;
     private final EmailSender emailSender;
     private final FileStorage fileStorage;
+    private final TransactionTemplate transactionTemplate;
+
+    /** Invoices being emailed right now: a double tap doesn't send twice. */
+    private final Set<UUID> sending = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public InvoiceService(
             InvoiceRepository invoiceRepository,
@@ -95,8 +103,10 @@ public class InvoiceService {
             InboundAddressService inboundAddressService,
             EmailProperties emailProperties,
             EmailSender emailSender,
-            FileStorage fileStorage
+            FileStorage fileStorage,
+            TransactionTemplate transactionTemplate
     ) {
+        this.transactionTemplate = transactionTemplate;
         this.invoiceRepository = invoiceRepository;
         this.carrierRepository = carrierRepository;
         this.loadRepository = loadRepository;
@@ -159,17 +169,19 @@ public class InvoiceService {
         Load load = loadRepository.findByIdAndOrganizationId(loadId, organizationId)
                 .orElseThrow(() -> new NotFoundException("Load not found"));
 
-        if (load.getStatus() == LoadStatus.CANCELLED) {
-            throw new ConflictException("This load is cancelled, so it can't be invoiced.");
-        }
-
+        // One at a time per workspace: a double tap returns the first invoice, and numbers never repeat
+        CarrierProfile carrier = carrierRepository.findForUpdate(organizationId)
+                .orElseGet(() -> CarrierService.blank(organizationId));
         LoadResponses.InvoiceInfo existing = forLoad(load);
 
         if (existing != null) {
             return existing;
         }
 
-        CarrierProfile carrier = carrierRepository.findById(organizationId).orElseGet(() -> CarrierService.blank(organizationId));
+        if (load.getStatus() == LoadStatus.CANCELLED && approvedCharges(load).isEmpty()) {
+            throw new ConflictException("This load is cancelled. To bill a TONU, add it under Extra pay as approved first.");
+        }
+
         List<String> missing = CarrierService.missing(carrier);
 
         if (!missing.isEmpty()) {
@@ -226,13 +238,16 @@ public class InvoiceService {
         if (request.sendTo() != null && request.sendTo() != invoice.getSendTo()) {
             CarrierProfile carrier = carrierRepository.findById(organizationId).orElseGet(() -> CarrierService.blank(organizationId));
 
-            if (request.sendTo() == Invoice.SendTo.FACTOR && !carrier.isUsesFactoring()) {
-                throw new ConflictException("Turn on factoring in Settings first.");
+            if (request.sendTo() == Invoice.SendTo.FACTOR
+                    && (!carrier.isUsesFactoring() || !CarrierService.missing(carrier).isEmpty())) {
+                throw new ApiException(HttpStatus.CONFLICT, "CARRIER_DETAILS_MISSING",
+                        "Add your factoring company's name and payment address in Settings first.");
             }
 
             invoice.setSendTo(request.sendTo());
-            invoice.setRemitTo(remitTo(carrier, request.sendTo()));
         }
+
+        refreshParties(invoice, load);
 
         if (request.quickPay() != null) {
             invoice.setQuickPay(request.quickPay());
@@ -248,34 +263,42 @@ public class InvoiceService {
 
     // ----------------------------------------------------------------- files
 
-    @Transactional(readOnly = true)
-    public FileDownload pdf(UUID organizationId, UUID invoiceId) {
-        Invoice invoice = require(organizationId, invoiceId);
-        Load load = loadRepository.findById(invoice.getLoadId()).orElseThrow();
-        return new FileDownload("Invoice " + fileSafe(invoice.getNumber()) + ".pdf", invoicePdf(invoice, load));
+    /** What an invoice's files are made from, read in one short transaction. */
+    private record Snapshot(UUID invoiceId, UUID loadId, String number, InvoiceStatus status,
+                            InvoicePdf.Content content, List<Paper> papers) {
     }
 
-    @Transactional(readOnly = true)
+    /** Reads the invoice for its files; a draft first takes the latest details from Settings. */
+    private Snapshot snapshot(UUID organizationId, UUID invoiceId) {
+        return transactionTemplate.execute(status -> {
+            Invoice invoice = require(organizationId, invoiceId);
+            Load load = loadRepository.findById(invoice.getLoadId()).orElseThrow();
+
+            if (invoice.getStatus() == InvoiceStatus.DRAFT) {
+                refreshParties(invoice, load);
+                invoiceRepository.save(invoice);
+            }
+
+            return new Snapshot(invoice.getId(), load.getId(), invoice.getNumber(), invoice.getStatus(),
+                    pdfContent(invoice, load), papers(load));
+        });
+    }
+
+    // Files are read and drawn outside a transaction: storage can be slow, and database connections are few
+    public FileDownload pdf(UUID organizationId, UUID invoiceId) {
+        Snapshot snapshot = snapshot(organizationId, invoiceId);
+        return new FileDownload("Invoice " + fileSafe(snapshot.number()) + ".pdf", InvoicePdf.invoice(snapshot.content()));
+    }
+
     public FileDownload packet(UUID organizationId, UUID invoiceId) {
-        Invoice invoice = require(organizationId, invoiceId);
-        Load load = loadRepository.findById(invoice.getLoadId()).orElseThrow();
-        return new FileDownload("Invoice " + fileSafe(invoice.getNumber()) + " packet.pdf",
-                packetFor(invoice, load).pdf());
+        Snapshot snapshot = snapshot(organizationId, invoiceId);
+        return new FileDownload("Invoice " + fileSafe(snapshot.number()) + " packet.pdf", packetFor(snapshot).pdf());
     }
 
     // --------------------------------------------------------------- sending
 
     /** Emails the packet to the factor or broker, as the dispatcher approved it. */
-    @Transactional
     public LoadResponses.InvoiceInfo send(UUID organizationId, UUID invoiceId, String to, String message) {
-        Invoice invoice = require(organizationId, invoiceId);
-        Load load = loadRepository.findById(invoice.getLoadId()).orElseThrow();
-
-        if (invoice.getStatus() == InvoiceStatus.VOID || invoice.getStatus() == InvoiceStatus.PAID) {
-            throw new ConflictException("This invoice is " + invoice.getStatus().name().toLowerCase(Locale.ROOT)
-                    + ", so it can't be sent.");
-        }
-
         String address = to == null ? "" : to.strip();
 
         if (!isEmail(address)) {
@@ -293,59 +316,95 @@ public class InvoiceService {
                     "Sending email isn't set up yet. Download the packet and send it from your own email.");
         }
 
-        InvoicePdf.Packet packet = packetFor(invoice, load);
-
-        if (packet.pdf().length > MAX_EMAILED_PACKET_BYTES) {
-            throw new ApiException(HttpStatus.CONFLICT, "PACKET_TOO_BIG",
-                    "The packet is too big to email (over 7 MB). Download it and upload it to the factor's website instead.");
+        if (!sending.add(invoiceId)) {
+            throw new ConflictException("This invoice is being sent. Wait a moment, then refresh.");
         }
-
-        Organization organization = organizationRepository.findById(organizationId).orElseThrow();
-        CarrierProfile carrier = carrierRepository.findById(organizationId).orElseGet(() -> CarrierService.blank(organizationId));
-        String token = inboundAddressService.getOrCreateToken(organization);
-        String sender = carrier.getLegalName() != null ? carrier.getLegalName() : organization.getName();
-        String subject = "Invoice " + invoice.getNumber()
-                + (load.getLoadNumber() != null ? " - Load " + load.getLoadNumber() : "")
-                + " - " + sender;
-
-        OutgoingEmail email = new OutgoingEmail(
-                "\"" + sender.replaceAll("[\"\\r\\n<>]", "").trim() + " via Clerova\" <"
-                        + emailProperties.forwardingAddress(token) + ">",
-                carrier.getEmail() != null ? carrier.getEmail() : emailProperties.loadReplyAddress(token, load.getId()),
-                address,
-                subject,
-                text,
-                null,
-                null,
-                null,
-                List.of(new OutgoingEmail.Attachment("Invoice " + fileSafe(invoice.getNumber()) + " packet.pdf",
-                        "application/pdf", packet.pdf()))
-        );
-
-        String providerId;
 
         try {
-            providerId = emailSender.send(email);
-        } catch (EmailSendException e) {
-            log.warn("Couldn't send invoice {}: {}", invoice.getId(), e.getMessage());
-            throw new ApiException(HttpStatus.BAD_GATEWAY, "EMAIL_NOT_SENT",
-                    e.isRejected() ? e.getMessage() : "The email couldn't be sent. Please try again in a minute.");
+            Snapshot snapshot = snapshot(organizationId, invoiceId);
+
+            if (snapshot.status() == InvoiceStatus.VOID || snapshot.status() == InvoiceStatus.PAID) {
+                throw new ConflictException("This invoice is " + snapshot.status().name().toLowerCase(Locale.ROOT)
+                        + ", so it can't be sent.");
+            }
+
+            requireEmailAllowance(organizationId);
+            InvoicePdf.Packet packet = packetFor(snapshot);
+
+            if (packet.pdf().length > MAX_EMAILED_PACKET_BYTES) {
+                throw new ApiException(HttpStatus.CONFLICT, "PACKET_TOO_BIG",
+                        "The packet is too big to email (over 7 MB). Download it and upload it to the factor's website instead.");
+            }
+
+            OutgoingEmail email = transactionTemplate.execute(status -> {
+                Load load = loadRepository.findById(snapshot.loadId()).orElseThrow();
+                Organization organization = organizationRepository.findById(organizationId).orElseThrow();
+                CarrierProfile carrier = carrierRepository.findById(organizationId)
+                        .orElseGet(() -> CarrierService.blank(organizationId));
+                String token = inboundAddressService.getOrCreateToken(organization);
+                String sender = carrier.getLegalName() != null ? carrier.getLegalName() : organization.getName();
+
+                return new OutgoingEmail(
+                        "\"" + sender.replaceAll("[\"\\r\\n<>]", "").trim() + " via Clerova\" <"
+                                + emailProperties.forwardingAddress(token) + ">",
+                        carrier.getEmail() != null ? carrier.getEmail() : emailProperties.loadReplyAddress(token, load.getId()),
+                        address,
+                        "Invoice " + snapshot.number()
+                                + (load.getLoadNumber() != null ? " - Load " + load.getLoadNumber() : "")
+                                + " - " + sender,
+                        text,
+                        null,
+                        null,
+                        null,
+                        List.of(new OutgoingEmail.Attachment("Invoice " + fileSafe(snapshot.number()) + " packet.pdf",
+                                "application/pdf", packet.pdf())));
+            });
+
+            String providerId;
+
+            try {
+                providerId = emailSender.send(email);
+            } catch (EmailSendException e) {
+                log.warn("Couldn't send invoice {}: {}", invoiceId, e.getMessage());
+                throw new ApiException(HttpStatus.BAD_GATEWAY, "EMAIL_NOT_SENT",
+                        e.isRejected() ? e.getMessage() : "The email couldn't be sent. Please try again in a minute.");
+            }
+
+            return transactionTemplate.execute(status -> {
+                Invoice invoice = require(organizationId, invoiceId);
+                Load load = loadRepository.findById(invoice.getLoadId()).orElseThrow();
+
+                LoadReply record = new LoadReply();
+                record.setLoadId(load.getId());
+                record.setToEmail(address);
+                record.setSubject(email.subject());
+                record.setKind(ReplyKind.INVOICE);
+                record.setSummary("Invoice " + invoice.getNumber() + " sent");
+                record.setBody(text + "\n\n[Attached: Invoice " + invoice.getNumber() + " packet.pdf]");
+                record.setStatus(ReplyStatus.SENT);
+                record.setSentAt(Instant.now());
+                record.setProviderMessageId(providerId);
+                replyRepository.save(record);
+
+                if (invoice.getStatus() != InvoiceStatus.PAID && invoice.getStatus() != InvoiceStatus.VOID) {
+                    markSent(invoice, load, Invoice.SentVia.EMAIL, address);
+                }
+
+                return info(invoice, load, true);
+            });
+        } finally {
+            sending.remove(invoiceId);
         }
+    }
 
-        LoadReply record = new LoadReply();
-        record.setLoadId(load.getId());
-        record.setToEmail(address);
-        record.setSubject(subject);
-        record.setKind(ReplyKind.INVOICE);
-        record.setSummary("Invoice " + invoice.getNumber() + " sent");
-        record.setBody(text + "\n\n[Attached: Invoice " + invoice.getNumber() + " packet.pdf]");
-        record.setStatus(ReplyStatus.SENT);
-        record.setSentAt(Instant.now());
-        record.setProviderMessageId(providerId);
-        replyRepository.save(record);
-
-        markSent(invoice, load, Invoice.SentVia.EMAIL, address);
-        return info(invoice, load, true);
+    /** Stops a workspace from sending more than {@link #MAX_EMAILS_PER_HOUR} emails about loads in an hour. */
+    @Transactional(readOnly = true)
+    public void requireEmailAllowance(UUID organizationId) {
+        if (replyRepository.countSentSince(organizationId, Instant.now().minus(java.time.Duration.ofHours(1)))
+                >= MAX_EMAILS_PER_HOUR) {
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "EMAIL_LIMIT",
+                    "You've sent " + MAX_EMAILS_PER_HOUR + " emails in the last hour. Please wait a little, then try again.");
+        }
     }
 
     /** The dispatcher uploaded the packet to the factor's website (or sent it some other way). */
@@ -387,8 +446,11 @@ public class InvoiceService {
         invoice.setStatus(InvoiceStatus.PAID);
         invoice.setPaidAt(Instant.now());
         invoice.setPaidCents(paidCents != null ? paidCents : expected);
-        load.setStatus(LoadStatus.PAID);
-        loadRepository.save(load);
+
+        if (load.getStatus() != LoadStatus.CANCELLED) {
+            load.setStatus(LoadStatus.PAID);
+            loadRepository.save(load);
+        }
         return info(invoiceRepository.save(invoice), load, true);
     }
 
@@ -509,7 +571,8 @@ public class InvoiceService {
         invoice.setSentEmail(email);
         invoiceRepository.save(invoice);
 
-        if (load.getStatus() != LoadStatus.PAID && load.getStatus() != LoadStatus.INVOICED) {
+        if (load.getStatus() != LoadStatus.PAID && load.getStatus() != LoadStatus.INVOICED
+                && load.getStatus() != LoadStatus.CANCELLED) {
             load.setStatus(LoadStatus.INVOICED);
             loadRepository.save(load);
         }
@@ -588,16 +651,42 @@ public class InvoiceService {
     /** The line haul, then each approved charge. */
     private List<InvoiceLine> startingLines(Load load) {
         List<InvoiceLine> lines = new ArrayList<>();
-        lines.add(new InvoiceLine("Line haul" + (load.getLoadNumber() != null ? ", load " + load.getLoadNumber() : ""),
-                load.getRateCents() != null ? load.getRateCents() : 0));
 
-        for (LoadCharge charge : chargeRepository.findByLoadIdOrderByCreatedAtAsc(load.getId())) {
-            if (charge.getStatus() == ChargeStatus.APPROVED) {
-                lines.add(new InvoiceLine(chargeLine(charge), charge.getAmountCents()));
-            }
+        // A cancelled load is billed only for its charges, like a TONU
+        if (load.getStatus() != LoadStatus.CANCELLED) {
+            lines.add(new InvoiceLine("Line haul" + (load.getLoadNumber() != null ? ", load " + load.getLoadNumber() : ""),
+                    load.getRateCents() != null ? load.getRateCents() : 0));
+        }
+
+        for (LoadCharge charge : approvedCharges(load)) {
+            lines.add(new InvoiceLine(chargeLine(charge), charge.getAmountCents()));
+        }
+
+        if (lines.isEmpty()) {
+            lines.add(new InvoiceLine("Truck ordered, not used" + (load.getLoadNumber() != null ? ", load " + load.getLoadNumber() : ""),
+                    load.getTonuCents() != null ? load.getTonuCents() : 0));
         }
 
         return lines;
+    }
+
+    private List<LoadCharge> approvedCharges(Load load) {
+        return chargeRepository.findByLoadIdOrderByCreatedAtAsc(load.getId()).stream()
+                .filter(charge -> charge.getStatus() == ChargeStatus.APPROVED)
+                .toList();
+    }
+
+    /** A draft follows the latest carrier details from Settings and the broker on the load. */
+    private void refreshParties(Invoice invoice, Load load) {
+        CarrierProfile carrier = carrierRepository.findById(invoice.getOrganizationId())
+                .orElseGet(() -> CarrierService.blank(invoice.getOrganizationId()));
+
+        if (invoice.getSendTo() == Invoice.SendTo.FACTOR && carrier.getFactorName() == null) {
+            invoice.setSendTo(Invoice.SendTo.BROKER);
+        }
+
+        invoice.setBillTo(billTo(load));
+        invoice.setRemitTo(remitTo(carrier, invoice.getSendTo()));
     }
 
     /** True once the load's invoice went out: its charges are then fixed. */
@@ -613,7 +702,7 @@ public class InvoiceService {
                 : charge.getKind().label();
     }
 
-    private byte[] invoicePdf(Invoice invoice, Load load) {
+    private InvoicePdf.Content pdfContent(Invoice invoice, Load load) {
         CarrierProfile carrier = carrierRepository.findById(invoice.getOrganizationId())
                 .orElseGet(() -> CarrierService.blank(invoice.getOrganizationId()));
         List<String[]> stops = new ArrayList<>();
@@ -638,15 +727,16 @@ public class InvoiceService {
                         .limit(8)
                         .collect(Collectors.joining(", "));
 
-        return InvoicePdf.invoice(new InvoicePdf.Content(
+        return new InvoicePdf.Content(
                 invoice.getNumber(), date, due, load.getPaymentTerms(),
                 carrier.getLegalName(), carrier.getAddress(), carrier.getPhone(), carrier.getEmail(),
                 carrier.getMcNumber(), carrier.getDotNumber(),
                 invoice.getBillTo(), invoice.getRemitTo(),
                 invoice.getSendTo() == Invoice.SendTo.FACTOR ? carrier.getFactorName() : null,
                 load.getLoadNumber(), references == null || references.isBlank() ? null : references, stops,
-                invoice.getLines(), invoice.getTotalCents(), invoice.getQuickPayFeeCents(),
-                load.getQuickPayPercent() == null ? null : load.getQuickPayPercent().stripTrailingZeros().toPlainString()));
+                invoice.getLines().stream().map(line -> new InvoiceLine(line.getDescription(), line.getAmountCents())).toList(),
+                invoice.getTotalCents(), invoice.getQuickPayFeeCents(),
+                load.getQuickPayPercent() == null ? null : load.getQuickPayPercent().stripTrailingZeros().toPlainString());
     }
 
     /** A document of the load that can go in a packet. */
@@ -700,14 +790,15 @@ public class InvoiceService {
         return kept;
     }
 
-    private InvoicePdf.Packet packetFor(Invoice invoice, Load load) {
+    /** Reads the paperwork from storage and joins it after the invoice. Run outside a transaction. */
+    private InvoicePdf.Packet packetFor(Snapshot snapshot) {
         List<InvoicePdf.PacketFile> files = new ArrayList<>();
-        List<String> skipped = new ArrayList<>();
+        int skipped = 0;
         long read = 0;
 
-        for (Paper paper : papers(load)) {
+        for (Paper paper : snapshot.papers()) {
             if (read + paper.size() > MAX_PACKET_SOURCE_BYTES) {
-                skipped.add(paper.name());
+                skipped++;
                 continue;
             }
 
@@ -716,15 +807,15 @@ public class InvoiceService {
                 read += content.length;
                 files.add(new InvoicePdf.PacketFile(orEmpty(paper.name()), paper.contentType(), content));
             } catch (RuntimeException e) {
-                log.warn("Couldn't read {} for invoice {}: {}", paper.name(), invoice.getId(), e.getMessage());
-                skipped.add(paper.name());
+                log.warn("Couldn't read {} for invoice {}: {}", paper.name(), snapshot.invoiceId(), e.getMessage());
+                skipped++;
             }
         }
 
-        InvoicePdf.Packet packet = InvoicePdf.packet(invoicePdf(invoice, load), files);
+        InvoicePdf.Packet packet = InvoicePdf.packet(InvoicePdf.invoice(snapshot.content()), files);
 
-        if (!skipped.isEmpty() || !packet.skipped().isEmpty()) {
-            log.info("Invoice {} packet left out {} file(s)", invoice.getId(), skipped.size() + packet.skipped().size());
+        if (skipped > 0 || !packet.skipped().isEmpty()) {
+            log.info("Invoice {} packet left out {} file(s)", snapshot.invoiceId(), skipped + packet.skipped().size());
         }
 
         return packet;
@@ -747,7 +838,9 @@ public class InvoiceService {
                 missing.add("rate con");
             }
 
-            if (!kinds.contains(DocumentKind.BOL) && !kinds.contains(DocumentKind.POD)) {
+            // A cancelled load (a TONU) was never delivered, so it has no BOL or POD
+            if (load.getStatus() != LoadStatus.CANCELLED
+                    && !kinds.contains(DocumentKind.BOL) && !kinds.contains(DocumentKind.POD)) {
                 missing.add("signed BOL or POD");
             }
 
@@ -844,7 +937,7 @@ public class InvoiceService {
             String cell = cells[i] == null ? "" : cells[i].replace("\r", " ").replace("\n", " ");
 
             // A cell that starts like a formula is read as text by spreadsheets
-            if (!cell.isEmpty() && "=+-@".indexOf(cell.charAt(0)) >= 0) {
+            if (!cell.isEmpty() && "=+-@\t".indexOf(cell.charAt(0)) >= 0) {
                 cell = "'" + cell;
             }
 

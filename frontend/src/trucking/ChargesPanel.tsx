@@ -70,14 +70,17 @@ function detentionClaim(load: LoadDetail, charge: LoadCharge): MessageDraft {
   };
 }
 
-function AddChargeForm({ busy, onAdd, onCancel }: {
+function AddChargeForm({ busy, tonuCents, cancelled, onAdd, onCancel }: {
   busy: boolean;
+  /** The TONU on the rate con, filled in when TONU is picked. */
+  tonuCents: number | null;
+  cancelled: boolean;
   onAdd: (charge: { kind: ChargeKind; description: string; amountCents: number; status: ChargeStatus }) => void;
   onCancel: () => void;
 }) {
   const id = useId();
-  const [kind, setKind] = useState<ChargeKind>("LUMPER");
-  const [amount, setAmount] = useState("");
+  const [kind, setKind] = useState<ChargeKind>(cancelled ? "TONU" : "LUMPER");
+  const [amount, setAmount] = useState(cancelled && tonuCents !== null ? (tonuCents / 100).toFixed(2) : "");
   const [note, setNote] = useState("");
   const [status, setStatus] = useState<ChargeStatus>("APPROVED");
   const [problem, setProblem] = useState<string | null>(null);
@@ -98,7 +101,14 @@ function AddChargeForm({ busy, onAdd, onCancel }: {
   return (
     <form className="tk-charge-form" onSubmit={submit}>
       <label htmlFor={`${id}-kind`}>Charge</label>
-      <select id={`${id}-kind`} value={kind} onChange={(event) => setKind(event.target.value as ChargeKind)} disabled={busy}>
+      <select id={`${id}-kind`} value={kind} onChange={(event) => {
+          const next = event.target.value as ChargeKind;
+          setKind(next);
+
+          if (next === "TONU" && tonuCents !== null && !amount.trim()) {
+            setAmount((tonuCents / 100).toFixed(2));
+          }
+        }} disabled={busy}>
         {KINDS.map((item) => (
           <option key={item.kind} value={item.kind}>
             {item.label}
@@ -158,12 +168,10 @@ export function ChargesPanel({ load, sendingEnabled, busy, run }: ChargesPanelPr
   const [adding, setAdding] = useState(false);
   const [claiming, setClaiming] = useState<{ chargeId: string; draft: MessageDraft } | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
-  const locked = load.status === "CANCELLED" || (load.invoice !== null && load.invoice.status !== "DRAFT");
+  // A cancelled load can still carry a TONU; only a sent invoice fixes the charges
+  const locked = load.invoice !== null && load.invoice.status !== "DRAFT";
+  const cancelled = load.status === "CANCELLED";
   const approved = load.charges.filter((charge) => charge.status === "APPROVED");
-
-  if (load.status === "CANCELLED" && load.charges.length === 0) {
-    return null;
-  }
 
   return (
     <section className="tk-panel" aria-label="Extra pay">
@@ -289,6 +297,8 @@ export function ChargesPanel({ load, sendingEnabled, busy, run }: ChargesPanelPr
         (adding ? (
           <AddChargeForm
             busy={busy !== null}
+            tonuCents={load.tonuCents}
+            cancelled={cancelled}
             onAdd={(charge) =>
               void run("add-charge", () => addCharge(load.id, charge), "Couldn't add the charge.").then(
                 (added) => added && setAdding(false)
@@ -303,6 +313,12 @@ export function ChargesPanel({ load, sendingEnabled, busy, run }: ChargesPanelPr
             </button>
           </div>
         ))}
+      {!locked && load.invoice?.status === "DRAFT" && (
+        <p className="tk-hint">
+          Changed extra pay after making the invoice? Use "Start over from the rate and approved extra pay" on the
+          invoice to bring it in.
+        </p>
+      )}
       {locked && load.invoice && (
         <p className="tk-hint">The invoice was sent, so these can't change. Void it on the invoice to make changes.</p>
       )}

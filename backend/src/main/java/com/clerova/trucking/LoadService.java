@@ -172,6 +172,8 @@ public class LoadService {
                     "Sending email isn't set up yet. Copy the reply and send it from your own email.");
         }
 
+        invoiceService.requireEmailAllowance(organizationId);
+
         InboundMessage answered = reply.getInboundMessageId() == null ? null
                 : inboundMessageRepository.findById(reply.getInboundMessageId()).orElse(null);
         Sent sent = sendToBroker(organizationId, load, reply.getToEmail(),
@@ -296,7 +298,8 @@ public class LoadService {
                 .findFirst()
                 .orElse(null);
 
-        if (charge != null && charge.getStatus() != ChargeStatus.TO_CLAIM) {
+        // A claimed charge, or one already on a sent invoice, stays as it is
+        if ((charge != null && charge.getStatus() != ChargeStatus.TO_CLAIM) || invoiceService.invoiceSent(load.getId())) {
             return;
         }
 
@@ -416,6 +419,7 @@ public class LoadService {
                     "Sending email isn't set up yet. Copy the message and send it from your own email.");
         }
 
+        invoiceService.requireEmailAllowance(organizationId);
         Sent sent = sendToBroker(organizationId, load, address, title, text, null);
 
         LoadReply record = new LoadReply();
