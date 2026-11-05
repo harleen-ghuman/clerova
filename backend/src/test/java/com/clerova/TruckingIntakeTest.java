@@ -38,6 +38,7 @@ import java.util.UUID;
 import static com.clerova.WorkItemWorkflowTest.onboardNewUser;
 import static com.clerova.WorkItemWorkflowTest.userToken;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -99,14 +100,14 @@ class TruckingIntakeTest {
 
     @Test
     void rateConBecomesALoadWithThingsToCheck() throws Exception {
-        when(truckingAiService.readRateCon(anyString(), anyString())).thenReturn(rateCon("2150.00", "2250.00"));
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(rateCon("2150.00", "2250.00"));
 
         deliver("<rc-1@x>", "Rate Confirmation 88213", "Confirming 88213, $2,250 all in.", TruckingIntakeTestPdf.pdf("RATE CONFIRMATION 88213"));
         processor.processDue();
 
         // The AI read the PDF's own text
         ArgumentCaptor<String> document = ArgumentCaptor.forClass(String.class);
-        verify(truckingAiService).readRateCon(anyString(), document.capture());
+        verify(truckingAiService).readRateCon(anyString(), document.capture(), anyList());
         assertThat(document.getValue()).contains("RATE CONFIRMATION 88213");
 
         JsonNode loads = json(mockMvc.perform(get("/api/loads").with(user)).andExpect(status().isOk()));
@@ -146,7 +147,7 @@ class TruckingIntakeTest {
 
     @Test
     void correctedRateConUpdatesTheSameLoad() throws Exception {
-        when(truckingAiService.readRateCon(anyString(), anyString()))
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList()))
                 .thenReturn(rateCon("2150.00", "2250.00"), rateCon("2250.00", ""));
 
         deliver("<rc-a@x>", "Rate Confirmation 88213", "Rate con attached.", TruckingIntakeTestPdf.pdf("RATE CONFIRMATION 88213"));
@@ -179,7 +180,7 @@ class TruckingIntakeTest {
         deliver("<status@x>", "Where's the truck on LX-5521?", "Receiver is asking.", null);
         processor.processDue();
 
-        verify(truckingAiService, never()).readRateCon(anyString(), anyString());
+        verify(truckingAiService, never()).readRateCon(anyString(), anyString(), anyList());
         JsonNode inbox = json(mockMvc.perform(get("/api/inbox").with(user)));
         assertThat(inbox.get(0).get("status").asText()).isEqualTo("IGNORED");
         assertThat(inbox.get(0).get("statusReason").asText()).isEqualTo(TruckingIntakeService.NOT_MATCHED_REASON);
@@ -192,12 +193,12 @@ class TruckingIntakeTest {
     void aPdfThatIsntARateConIsNotCounted() throws Exception {
         RateConResult notARateCon = new RateConResult();
         notARateCon.isRateConfirmation = false;
-        when(truckingAiService.readRateCon(anyString(), anyString())).thenReturn(notARateCon);
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(notARateCon);
 
         deliver("<inv@x>", "Invoice 1042", "Invoice attached.", TruckingIntakeTestPdf.pdf("INVOICE 1042"));
         processor.processDue();
 
-        verify(truckingAiService, times(1)).readRateCon(anyString(), anyString());
+        verify(truckingAiService, times(1)).readRateCon(anyString(), anyString(), anyList());
         assertThat(json(mockMvc.perform(get("/api/loads").with(user)))).isEmpty();
         assertThat(usedThisMonth()).isZero();
     }
@@ -208,7 +209,7 @@ class TruckingIntakeTest {
                 .thenReturn(Optional.of(new BrokerCheck(FmcsaStatus.ACTIVE, "SOMEONE ELSE LOGISTICS INC", null)));
         RateConResult read = rateCon("1890.00", "");
         read.brokerMcNumber = "MC# 1610032";
-        when(truckingAiService.readRateCon(anyString(), anyString())).thenReturn(read);
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(read);
 
         deliver("<rc-n@x>", "RC 0457", "Please sign.", TruckingIntakeTestPdf.pdf("RATE CONFIRMATION 0457"));
         processor.processDue();
@@ -221,7 +222,7 @@ class TruckingIntakeTest {
 
     @Test
     void loadsBelongToTheirOwnWorkspace() throws Exception {
-        when(truckingAiService.readRateCon(anyString(), anyString())).thenReturn(rateCon("2150.00", ""));
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(rateCon("2150.00", ""));
         deliver("<rc-t@x>", "Rate Confirmation 88213", "Attached.", TruckingIntakeTestPdf.pdf("RATE CONFIRMATION"));
         processor.processDue();
         JsonNode load = json(mockMvc.perform(get("/api/loads/{id}",
@@ -237,7 +238,7 @@ class TruckingIntakeTest {
     }
 
     private String bookLoad() throws Exception {
-        when(truckingAiService.readRateCon(anyString(), anyString())).thenReturn(rateCon("2150.00", ""));
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(rateCon("2150.00", ""));
         deliver("<rc-book@x>", "Rate Confirmation 88213", "Rate con attached.", TruckingIntakeTestPdf.pdf("RATE CONFIRMATION 88213"));
         processor.processDue();
         return json(mockMvc.perform(get("/api/loads").with(user))).get(0).get("id").asText();
@@ -345,7 +346,7 @@ class TruckingIntakeTest {
         // A second Crestline load makes "from Crestline" ambiguous
         RateConResult second = rateCon("1800.00", "");
         second.loadNumber = "99001";
-        when(truckingAiService.readRateCon(anyString(), anyString())).thenReturn(second);
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(second);
         deliver("<rc-2@x>", "Rate Confirmation 99001", "Attached.", TruckingIntakeTestPdf.pdf("RATE CONFIRMATION 99001"));
         deliver("billing@crestline.example", forwardingAddress, "<b-2@x>", null, "Paperwork", "Please send the POD.", null);
         processor.processDue();

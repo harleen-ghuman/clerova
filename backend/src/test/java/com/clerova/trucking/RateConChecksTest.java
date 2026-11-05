@@ -80,6 +80,21 @@ class RateConChecksTest {
                 .getFirst().getDetail()).contains("A CARRIER ONLY");
     }
 
+    @Test
+    void aDetentionConditionWithoutARateIsOneFlagNotTwo() {
+        Load load = load(105750L, null, null, null);
+        RateConResult read = new RateConResult();
+        read.detentionCondition = "Detention isn't paid unless the broker is told.";
+        read.detentionQuote = "Detention pay is not applicable if the broker is not notified";
+
+        List<LoadFlag> flags = RateConChecks.flags(read, load, null, null);
+        assertThat(flags.stream().map(LoadFlag::getCode).toList())
+                .contains("NO_DETENTION").doesNotContain("DETENTION_CONDITION");
+        LoadFlag detention = flags.stream().filter(flag -> flag.getCode().equals("NO_DETENTION")).findFirst().orElseThrow();
+        assertThat(detention.getTitle()).isEqualTo("Detention rate isn't on the rate con");
+        assertThat(detention.getDetail()).contains("broker is told").contains("Ask the broker for the detention rate");
+    }
+
     private static Load load(Long rate, Long agreed, Integer freeMinutes, Long detentionRate) {
         Load load = new Load();
         Broker broker = new Broker();

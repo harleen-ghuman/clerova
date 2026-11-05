@@ -34,7 +34,10 @@ export async function apiRequest<T>(
     headers.Authorization = `Bearer ${data.session.access_token}`;
   }
 
-  if (options.body !== undefined) {
+  // A file upload sets its own multipart content type
+  const upload = options.body instanceof FormData;
+
+  if (options.body !== undefined && !upload) {
     headers["Content-Type"] = "application/json";
   }
 
@@ -44,7 +47,9 @@ export async function apiRequest<T>(
     body:
       options.body === undefined
         ? undefined
-        : JSON.stringify(options.body),
+        : upload
+          ? (options.body as FormData)
+          : JSON.stringify(options.body),
   });
 
   if (response.status === 401 && data.session) {

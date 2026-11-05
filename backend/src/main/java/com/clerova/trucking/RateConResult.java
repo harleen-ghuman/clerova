@@ -13,6 +13,11 @@ public class RateConResult {
 
     public boolean isRateConfirmation;
 
+    /** What the document is, as a DocumentKind name (RATE_CON, BOL, POD...). */
+    public String documentKind;
+    /** Load, order, PO, BOL and pickup numbers printed on the document. */
+    public List<String> referenceNumbers = new ArrayList<>();
+
     public String brokerName;
     public String brokerMcNumber;
     public String brokerEmail;

@@ -1,5 +1,7 @@
 package com.clerova.trucking;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -79,6 +81,105 @@ class AiRateConEvaluationTest {
             Line haul $650.00
             Total due: $650.00   Terms: Net 30
             """;
+
+    /** A signed, scanned rate con whose text layer came out garbled (names and numbers made up). */
+    private static final String GARBLED_SCAN = """
+            FOR LOAD INFORMATION: Carrier Rate Confirmation
+            NORTHPASS load #5520194-1
+            LOGISTICS OROUP Dana Rul.:.
+            Phone: 530-555-01◄2 Rate: $1,212.00 USD
+            Email: druiz@northpass.example
+            SIERRA RUN LLC MC: 1048817 I DOT: 0329911 INVOICIINSTRUCTIONS
+            QulcllPay vii TrtumpflP,y llt ,11111t 2.5%.. Haw your tund9 wllflln two_.,,,_ dep.
+            Equlipmlft VS3,53'\\Wl M lf1VOlcfnl .ubmltted WM emlll Ind mall wtl,,. paid In fl«
+            3 t-dlly term,,
+            RATE DETAILS
+            Rate per Unit (50 per net ton) USD $50.00 • 24.24 = $1,212.00
+            Total: USD $1,212.00
+            NorthPass Logistics MC:771204
+            STOPS
+            4/17/2026 Pine Flat Ranch 8-3 FCFS
+            Plcbp HC 12 Box 410
+            Ely,HV,89301
+            lnstrvctlons: Driver « Disf)Moh must notfy Dana O 530-555-0172 when the truck is loaded and unloaded. failur
+            notficatlon wil reail In a $25 fee.
+            Note: Detention pay is not appblble If the broker Is not notified °'
+            POD~ be turned in by the f<llowing Tuesday eftw ~. I f POO !$late~ wi1 be a $25 Fee for each~ it~
+            4/18/2026 Valley Oak Ranch 7--4 FCFS
+            Dropoff 8749 Lone Oak Ave
+            Hanford, CA, 93230
+            """;
+
+    @Test
+    void doesNotGuessAtGarbledValues() {
+        RateConResult read = truckingAiService.readRateCon("Subject: Fwd:\n\n", GARBLED_SCAN);
+
+        assertThat(read.isRateConfirmation).isTrue();
+        assertThat(read.loadNumber).contains("5520194");
+        assertThat(Money.cents(read.lineHaulRate)).isEqualTo(121200L);
+        assertThat(TruckingIntakeService.mcNumber(read.brokerMcNumber)).isEqualTo("771204");
+        // "net 3 t-day terms" is cut off: never "3" or "Net 3"
+        assertThat(read.paymentTerms == null ? "" : read.paymentTerms.strip())
+                .doesNotMatch("(?i)(net\\s*)?3(\\s*days?)?");
+        assertThat(Money.cents(read.detentionRatePerHour)).isNull();
+        // The $25 notification fee isn't a detention rule
+        assertThat(read.detentionCondition == null ? "" : read.detentionCondition).doesNotContain("$25");
+    }
+
+    /** Draws text as a slightly crooked gray "scan", like a phone photo of paper. */
+    private static List<String> scan(String text) throws Exception {
+        String[] lines = text.strip().split("\n");
+        java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(1275, 1650, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        java.awt.Graphics2D g = image.createGraphics();
+        g.setColor(new java.awt.Color(238, 236, 230));
+        g.fillRect(0, 0, image.getWidth(), image.getHeight());
+        g.rotate(Math.toRadians(0.8), 600, 800);
+        g.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g.setColor(new java.awt.Color(40, 40, 45));
+        g.setFont(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 19));
+        int y = 90;
+        for (String line : lines) {
+            g.drawString(line, 70, y);
+            y += 27;
+        }
+        g.dispose();
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(image, "png", out);
+        return DocumentImages.dataUrls(out.toByteArray(), "scan.png", "image/png");
+    }
+
+    @Test
+    void readsAScannedRateConFromItsPicture() throws Exception {
+        // No text layer at all: only the picture
+        RateConResult read = truckingAiService.readRateCon("Subject: Fwd:\n\n", "", scan(DRY_VAN));
+
+        assertThat(read.isRateConfirmation).isTrue();
+        assertThat(DocumentKind.parse(read.documentKind)).isEqualTo(DocumentKind.RATE_CON);
+        assertThat(read.loadNumber).contains("88213");
+        assertThat(TruckingIntakeService.mcNumber(read.brokerMcNumber)).isEqualTo("845210");
+        assertThat(Money.cents(read.lineHaulRate)).isEqualTo(215000L);
+        assertThat(read.stops).hasSize(2);
+        assertThat(read.stops.get(0).place).contains("Fresno");
+        assertThat(Money.cents(read.detentionRatePerHour)).isEqualTo(5000L);
+    }
+
+    @Test
+    void readsABolAndTheNumbersOnIt() throws Exception {
+        String bol = """
+                BILL OF LADING                         Date: 04/17/2026
+                Shipper: Pine Flat Ranch, HC 12 Box 410, Ely, NV 89301
+                Consignee: Valley Oak Ranch, 8749 Lone Oak Ave, Hanford, CA 93230
+                Carrier: Sierra Run LLC        Trailer #: V5327
+                Broker load #: 5520194-1       PO #: 7781-A
+                Product: Alfalfa hay, 24 tons, 32 bales
+                Shipper signature: ______      Driver signature: ______
+                """;
+        RateConResult read = truckingAiService.readRateCon("Subject: Ely to Hanford\n\n", "", scan(bol));
+
+        assertThat(read.isRateConfirmation).isFalse();
+        assertThat(DocumentKind.parse(read.documentKind)).isEqualTo(DocumentKind.BOL);
+        assertThat(String.join(" ", read.referenceNumbers)).contains("5520194");
+    }
 
     @Test
     void readsADryVanRateCon() {

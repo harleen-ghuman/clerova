@@ -57,14 +57,21 @@ final class RateConChecks {
                     read.rateQuote));
         }
 
-        if (load.getDetentionFreeMinutes() == null && load.getDetentionRateCents() == null) {
+        boolean noDetentionTerms = load.getDetentionFreeMinutes() == null && load.getDetentionRateCents() == null;
+
+        if (noDetentionTerms && hasText(read.detentionCondition)) {
+            // It mentions detention but gives no rate: one flag, not two that read as opposites
+            flags.add(flag(NO_DETENTION, FlagLevel.NOTE,
+                    "Detention rate isn't on the rate con",
+                    "It only says: " + read.detentionCondition.strip()
+                            + " Ask the broker for the detention rate and free time before you sign.",
+                    read.detentionQuote));
+        } else if (noDetentionTerms) {
             flags.add(flag(NO_DETENTION, FlagLevel.NOTE,
                     "No detention pay on this rate con",
                     "If the driver waits at a dock, there's nothing to bill. Ask the broker to add detention terms before you sign.",
                     null));
-        }
-
-        if (hasText(read.detentionCondition)) {
+        } else if (hasText(read.detentionCondition)) {
             flags.add(flag(DETENTION_CONDITION, FlagLevel.NOTE,
                     "Detention pay has a condition",
                     "To get paid for detention: " + read.detentionCondition.strip(),

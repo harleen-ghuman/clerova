@@ -1,5 +1,7 @@
 package com.clerova.trucking;
 
+import com.clerova.storage.FileStorage;
+import com.clerova.storage.FileStorageException;
 import com.clerova.config.AiRateLimitInterceptor;
 import com.clerova.domain.InboundAttachment;
 import com.clerova.domain.InboundMessage;
@@ -39,7 +41,7 @@ public class TruckingIntakeService {
     public static final String NOT_A_RATE_CON_REASON =
             "Not a rate con. Clerova reads rate cons for now; other trucking emails come next.";
     public static final String SCANNED_REASON =
-            "The PDF looks like a scan, so Clerova couldn't read its text. Check this rate con yourself.";
+            "Clerova couldn't read the attached file. Check it yourself, or upload it to the load.";
     public static final String REVISED_REASON = "A new copy of this load's rate con. The load was updated.";
 
     /** FMCSA results are reused for a day. */
@@ -71,6 +73,7 @@ public class TruckingIntakeService {
     private final InboundMessageRepository inboundMessageRepository;
     private final LoadReplyRepository loadReplyRepository;
     private final AiRateLimitInterceptor aiRateLimiter;
+    private final FileStorage fileStorage;
 
     public TruckingIntakeService(
             OrganizationRepository organizationRepository,
@@ -83,8 +86,10 @@ public class TruckingIntakeService {
             TransactionTemplate transactionTemplate,
             InboundMessageRepository inboundMessageRepository,
             LoadReplyRepository loadReplyRepository,
-            AiRateLimitInterceptor aiRateLimiter
+            AiRateLimitInterceptor aiRateLimiter,
+            FileStorage fileStorage
     ) {
+        this.fileStorage = fileStorage;
         this.inboundMessageRepository = inboundMessageRepository;
         this.loadReplyRepository = loadReplyRepository;
         this.aiRateLimiter = aiRateLimiter;
@@ -113,39 +118,149 @@ public class TruckingIntakeService {
     public Result handle(InboundMessage message) {
         UUID organizationId = message.getOrganizationId();
         Optional<Load> threadLoad = threadLoad(message);
-        List<InboundAttachment> pdfs = attachmentRepository.findByInboundMessageId(message.getId()).stream()
-                .filter(attachment -> attachment.getExtractedText() != null)
-                .toList();
+        Optional<InboundAttachment> document = mainDocument(attachmentRepository.findByInboundMessageId(message.getId()));
 
-        if (!pdfs.isEmpty()) {
-            // The document with the most text is the rate con; the rest are often terms or logos
-            InboundAttachment document = pdfs.stream()
-                    .max(Comparator.comparingInt(attachment -> attachment.getExtractedText().length()))
-                    .orElseThrow();
+        if (document.isPresent()) {
+            InboundAttachment file = document.get();
+            String text = file.getExtractedText() == null ? "" : file.getExtractedText();
+            List<String> pages = pageImages(file.getStoragePath(), file.getFileName(), file.getContentType());
 
-            if (document.getExtractedText().isBlank()) {
-                // A scanned BOL or POD on a known load is still filed under it
+            if (text.isBlank() && pages.isEmpty()) {
+                // Nothing to read (the file wasn't kept); a BOL or POD on a known load is still filed under it
                 return threadLoad.or(() -> matchLoad(message))
                         .map(Result::attached)
                         .orElse(new Result(InboundMessageStatus.IGNORED, SCANNED_REASON, null));
             }
 
             aiUsageService.requireQuota(organizationId);
-            RateConResult read = truckingAiService.readRateCon(emailText(message), document.getExtractedText());
+            RateConResult read = truckingAiService.readRateCon(emailText(message), text, pages);
+            DocumentKind kind = read.isRateConfirmation ? DocumentKind.RATE_CON : DocumentKind.parse(read.documentKind);
+            file.setDocumentKind(kind.name());
+            attachmentRepository.save(file);
 
             if (read.isRateConfirmation) {
                 String mcNumber = mcNumber(read.brokerMcNumber);
-                BrokerCheck check = cachedCheck(organizationId, mcNumber)
-                        .or(() -> mcNumber == null ? Optional.empty() : fmcsaClient.check(mcNumber))
-                        .orElse(null);
+                BrokerCheck check = brokerCheck(organizationId, mcNumber);
 
-                return transactionTemplate.execute(status -> save(message, document, read, mcNumber, check));
+                return transactionTemplate.execute(status -> {
+                    SavedLoad saved = saveLoad(organizationId, file.getFileName(), read, mcNumber, check);
+                    return saved.created()
+                            ? new Result(InboundMessageStatus.PROCESSED, null, saved.load().getId())
+                            : new Result(InboundMessageStatus.ATTACHED, REVISED_REASON, saved.load().getId());
+                });
+            }
+
+            Optional<Load> byReference = threadLoad.isPresent()
+                    ? threadLoad
+                    : loadByReference(organizationId, read.referenceNumbers);
+
+            if (byReference.isPresent()) {
+                return Result.attached(byReference.get());
             }
         }
 
         return threadLoad.or(() -> matchLoad(message))
                 .map(Result::attached)
                 .orElse(new Result(InboundMessageStatus.IGNORED, NOT_MATCHED_REASON, null));
+    }
+
+    /** Small pictures are logos and signatures, not documents. */
+    static final long MIN_PHOTO_BYTES = 50 * 1024;
+
+    /**
+     * The email's document: the PDF with the most text (others are often
+     * terms or logos), else the biggest PDF (a scan), else the biggest photo.
+     */
+    static Optional<InboundAttachment> mainDocument(List<InboundAttachment> attachments) {
+        List<InboundAttachment> pdfs = attachments.stream()
+                .filter(attachment -> PdfText.isPdf(attachment.getFileName(), attachment.getContentType()))
+                .toList();
+        Comparator<InboundAttachment> bySize = Comparator.comparingLong(
+                attachment -> attachment.getSizeBytes() == null ? 0 : attachment.getSizeBytes());
+
+        if (!pdfs.isEmpty()) {
+            Optional<InboundAttachment> withText = pdfs.stream()
+                    .filter(attachment -> attachment.getExtractedText() != null && !attachment.getExtractedText().isBlank())
+                    .max(Comparator.comparingInt(attachment -> attachment.getExtractedText().length()));
+            return withText.isPresent() ? withText : pdfs.stream().max(bySize);
+        }
+
+        return attachments.stream()
+                .filter(attachment -> DocumentImages.isImage(attachment.getFileName(), attachment.getContentType()))
+                .filter(attachment -> attachment.getSizeBytes() != null && attachment.getSizeBytes() >= MIN_PHOTO_BYTES)
+                .max(bySize);
+    }
+
+    /** The kept file as pictures for the AI; empty when it wasn't kept or can't be read. */
+    List<String> pageImages(String storagePath, String fileName, String contentType) {
+        if (storagePath == null || !fileStorage.isEnabled()) {
+            return List.of();
+        }
+
+        try {
+            return DocumentImages.dataUrls(fileStorage.get(storagePath), fileName, contentType);
+        } catch (FileStorageException e) {
+            log.warn("Could not fetch {} to read it: {}", fileName, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * The one load whose number is printed on a document (a BOL or POD
+     * usually carries the broker's load number). Empty when none or several.
+     */
+    public Optional<Load> loadByReference(UUID organizationId, List<String> references) {
+        List<String> wanted = references == null ? List.of() : references.stream()
+                .map(TruckingIntakeService::reference)
+                .filter(reference -> reference.length() >= 4)
+                .toList();
+
+        if (wanted.isEmpty()) {
+            return Optional.empty();
+        }
+
+        List<Load> matches = loadRepository.findForOrganization(organizationId).stream()
+                .filter(load -> load.getStatus() != LoadStatus.CANCELLED && load.getLoadNumber() != null)
+                .filter(load -> {
+                    String number = reference(load.getLoadNumber());
+                    return number.length() >= 4 && wanted.stream().anyMatch(reference -> sameReference(number, reference));
+                })
+                .toList();
+
+        return matches.size() == 1 ? Optional.of(matches.getFirst()) : Optional.empty();
+    }
+
+    /**
+     * "#3466426-1" and "3466426" are the same load, and so is "Load 88213"
+     * for 88213 (a label in front of the number). A short number must match
+     * exactly.
+     */
+    static boolean sameReference(String loadNumber, String reference) {
+        return sameNumber(loadNumber, reference)
+                || sameNumber(withoutLabel(loadNumber), withoutLabel(reference));
+    }
+
+    /** "LOAD88213" to "88213"; "LX5521" stays, since it has no digits after a word alone. */
+    private static String withoutLabel(String reference) {
+        return reference.replaceFirst("^(LOAD|ORDER|PO|BOL|PU|PICKUP|REF|CONF|CONFIRMATION|NO|NUMBER|SHIPMENT|PRO)+(?=\\d)", "");
+    }
+
+    private static boolean sameNumber(String loadNumber, String reference) {
+        if (loadNumber.length() < 4 || reference.length() < 4) {
+            return false;
+        }
+
+        if (loadNumber.equals(reference)) {
+            return true;
+        }
+
+        String shorter = loadNumber.length() < reference.length() ? loadNumber : reference;
+        String longer = shorter == loadNumber ? reference : loadNumber;
+        return shorter.length() >= 6 && longer.startsWith(shorter) && longer.length() - shorter.length() <= 2;
+    }
+
+    static String reference(String value) {
+        return value == null ? "" : value.replaceAll("[^A-Za-z0-9]", "").toUpperCase(Locale.ROOT);
     }
 
     /** A reply to an email about a load: by the load's reply address, or the email headers. */
@@ -229,6 +344,24 @@ public class TruckingIntakeService {
         return fromBroker.size() == 1 ? Optional.of(fromBroker.getFirst()) : Optional.empty();
     }
 
+    /** From the broker's own address, or someone else at the broker's company (not a free mail domain). */
+    static boolean isFromBroker(InboundMessage message, Load load) {
+        if (load.getBroker() == null || load.getBroker().getEmail() == null || message.getFromEmail() == null) {
+            return false;
+        }
+
+        String sender = message.getFromEmail().trim().toLowerCase(Locale.ROOT);
+        String broker = load.getBroker().getEmail().trim().toLowerCase(Locale.ROOT);
+
+        if (sender.equals(broker)) {
+            return true;
+        }
+
+        int at = sender.indexOf('@');
+        String domain = at < 0 ? "" : sender.substring(at + 1);
+        return !domain.isEmpty() && !FREE_MAIL.contains(domain) && broker.endsWith("@" + domain);
+    }
+
     /** Loads a broker may still write about. */
     static final Set<LoadStatus> OPEN = Set.of(LoadStatus.BOOKED, LoadStatus.IN_TRANSIT, LoadStatus.DELIVERED, LoadStatus.INVOICED);
 
@@ -250,6 +383,16 @@ public class TruckingIntakeService {
         }
 
         UUID loadId = message.getLoadId();
+
+        // Only the broker gets a drafted answer: not the dispatcher forwarding paperwork
+        // from their own inbox, a driver, or anyone else on the load
+        boolean fromBroker = transactionTemplate.execute(status -> loadRepository.findById(loadId)
+                .map(load -> isFromBroker(message, load))
+                .orElse(false));
+
+        if (!fromBroker && threadLoad(message).isEmpty()) {
+            return;
+        }
 
         try {
             aiUsageService.requireAccess(message.getOrganizationId());
@@ -343,9 +486,23 @@ public class TruckingIntakeService {
         return value == null || value.isBlank() ? "(not known)" : value;
     }
 
-    private Result save(InboundMessage message, InboundAttachment document, RateConResult read,
-                        String mcNumber, BrokerCheck check) {
-        UUID organizationId = message.getOrganizationId();
+    /** A load made or updated from a rate con; created is false for a new copy of a known load. */
+    public record SavedLoad(Load load, boolean created) {
+    }
+
+    /**
+     * Reads the FMCSA status for a broker, reusing a recent check. Call it
+     * outside a transaction: it may wait on FMCSA.
+     */
+    public BrokerCheck brokerCheck(UUID organizationId, String mcNumber) {
+        return cachedCheck(organizationId, mcNumber)
+                .or(() -> mcNumber == null ? Optional.empty() : fmcsaClient.check(mcNumber))
+                .orElse(null);
+    }
+
+    /** Makes the load from a rate con, or updates it for a new copy. Run in a transaction. */
+    public SavedLoad saveLoad(UUID organizationId, String fileName, RateConResult read,
+                              String mcNumber, BrokerCheck check) {
         Broker broker = broker(organizationId, read, mcNumber, check);
         String loadNumber = clean(read.loadNumber, 100);
 
@@ -374,7 +531,7 @@ public class TruckingIntakeService {
         load.setTonuCents(Money.cents(read.tonuAmount));
         load.setPaymentTerms(clean(read.paymentTerms, 2000));
         load.setPaperworkRule(clean(read.paperworkDeadline, 2000));
-        load.setRateConFile(clean(document.getFileName(), 500));
+        load.setRateConFile(clean(fileName, 500));
         load.replaceStops(stops(read));
 
         List<LoadFlag> flags = RateConChecks.flags(read, load, mcNumber, check);
@@ -391,11 +548,7 @@ public class TruckingIntakeService {
             aiUsageService.consumeRequest(organizationId);
         }
 
-        Load saved = loadRepository.save(load);
-
-        return existing.isPresent()
-                ? new Result(InboundMessageStatus.ATTACHED, REVISED_REASON, saved.getId())
-                : new Result(InboundMessageStatus.PROCESSED, null, saved.getId());
+        return new SavedLoad(loadRepository.save(load), existing.isEmpty());
     }
 
     private Optional<BrokerCheck> cachedCheck(UUID organizationId, String mcNumber) {

@@ -2,6 +2,7 @@ package com.clerova.trucking;
 
 import com.clerova.domain.InboundAttachment;
 import com.clerova.domain.InboundMessage;
+import com.clerova.domain.InboundMessageStatus;
 import com.clerova.domain.Organization;
 import com.clerova.email.EmailProperties;
 import com.clerova.email.EmailSendException;
@@ -46,6 +47,7 @@ public class LoadService {
     private final InboundAddressService inboundAddressService;
     private final EmailProperties emailProperties;
     private final EmailSender emailSender;
+    private final LoadDocumentRepository loadDocumentRepository;
 
     public LoadService(
             LoadRepository loadRepository,
@@ -55,8 +57,10 @@ public class LoadService {
             OrganizationRepository organizationRepository,
             InboundAddressService inboundAddressService,
             EmailProperties emailProperties,
-            EmailSender emailSender
+            EmailSender emailSender,
+            LoadDocumentRepository loadDocumentRepository
     ) {
+        this.loadDocumentRepository = loadDocumentRepository;
         this.loadRepository = loadRepository;
         this.loadReplyRepository = loadReplyRepository;
         this.brokerRepository = brokerRepository;
@@ -226,6 +230,7 @@ public class LoadService {
     private LoadResponses.LoadDetail detail(Load load) {
         LoadReply draft = null;
         List<LoadResponses.ConversationEntry> conversation = new ArrayList<>();
+        List<LoadResponses.DocumentInfo> documents = new ArrayList<>();
 
         for (InboundMessage message : inboundMessageRepository.findByLoadIdOrderByReceivedAtAsc(load.getId())) {
             String from = message.getFromName() != null && !message.getFromName().isBlank()
@@ -236,6 +241,15 @@ public class LoadService {
             for (InboundAttachment attachment : message.getAttachments()) {
                 files.add(new LoadResponses.FileInfo(attachment.getId(), attachment.getFileName(),
                         attachment.getContentType(), attachment.getSizeBytes(), attachment.getStoragePath() != null));
+            }
+
+            for (InboundAttachment attachment : message.getAttachments()) {
+                if (isDocument(attachment)) {
+                    documents.add(new LoadResponses.DocumentInfo(attachment.getId(), LoadResponses.DocumentInfo.EMAIL,
+                            attachment.getDocumentKind() == null ? null : DocumentKind.parse(attachment.getDocumentKind()),
+                            attachment.getFileName(), attachment.getContentType(), attachment.getSizeBytes(),
+                            attachment.getStoragePath() != null, message.getReceivedAt()));
+                }
             }
 
             conversation.add(new LoadResponses.ConversationEntry(message.getId(), true, from, null,
@@ -254,7 +268,53 @@ public class LoadService {
         conversation.sort(Comparator.comparing(LoadResponses.ConversationEntry::at,
                 Comparator.nullsFirst(Comparator.naturalOrder())));
 
-        return LoadResponses.detail(load, draft == null ? null : LoadResponses.ReplyInfo.of(draft), conversation);
+        loadDocumentRepository.findByLoadIdOrderByCreatedAtAsc(load.getId())
+                .forEach(document -> documents.add(LoadResponses.DocumentInfo.of(document)));
+        documents.sort(Comparator.comparing(LoadResponses.DocumentInfo::at,
+                Comparator.nullsFirst(Comparator.naturalOrder())));
+
+        return LoadResponses.detail(load, draft == null ? null : LoadResponses.ReplyInfo.of(draft), conversation,
+                documents);
+    }
+
+    /** PDFs and photos big enough to be a document (not a logo). */
+    static boolean isDocument(InboundAttachment attachment) {
+        return PdfText.isPdf(attachment.getFileName(), attachment.getContentType())
+                || (DocumentImages.isImage(attachment.getFileName(), attachment.getContentType())
+                && attachment.getSizeBytes() != null
+                && attachment.getSizeBytes() >= TruckingIntakeService.MIN_PHOTO_BYTES);
+    }
+
+    public static final String FILED_BY_HAND_REASON = "Filed under this load by you.";
+
+    /**
+     * Files an email under a load by hand: one Clerova couldn't match, or
+     * one it put on the wrong load. An email that made a load stays put.
+     */
+    @Transactional
+    public LoadResponses.LoadDetail fileEmail(UUID organizationId, UUID loadId, UUID messageId) {
+        Load load = require(organizationId, loadId);
+        InboundMessage message = inboundMessageRepository.findByIdAndOrganizationId(messageId, organizationId)
+                .orElseThrow(() -> new NotFoundException("Email not found"));
+
+        if (load.getStatus() == LoadStatus.CANCELLED) {
+            throw new ConflictException("This load is cancelled. Pick another load.");
+        }
+
+        if (message.getStatus() == InboundMessageStatus.PROCESSED && message.getLoadId() != null) {
+            throw new ConflictException("This email's rate con made its own load, so it can't be moved.");
+        }
+
+        if (message.getStatus() != InboundMessageStatus.IGNORED && message.getStatus() != InboundMessageStatus.ATTACHED) {
+            throw new ConflictException("Clerova is still reading this email. Try again in a minute.");
+        }
+
+        message.setLoadId(load.getId());
+        message.setStatus(InboundMessageStatus.ATTACHED);
+        message.setStatusReason(FILED_BY_HAND_REASON);
+        inboundMessageRepository.save(message);
+
+        return detail(load);
     }
 
     private Load require(UUID organizationId, UUID loadId) {

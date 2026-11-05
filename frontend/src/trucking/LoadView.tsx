@@ -4,8 +4,9 @@ import { errorMessage } from "../api/client";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { ConfirmInline } from "../components/ConfirmInline";
 import { FileList } from "../components/FileList";
+import { DocumentsSection } from "./DocumentsSection";
 import type { LoadDetail, LoadStatus } from "../types/Load";
-import { STATUS_LABELS, city, hours, money, when } from "./format";
+import { STATUS_LABELS, city, detention, money, when } from "./format";
 
 interface LoadViewProps {
   loadId: string;
@@ -255,6 +256,11 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadView
             </section>
           )}
 
+          <DocumentsSection
+            load={load}
+            onChanged={() => void run("documents", () => getLoad(loadId), "Couldn't refresh this load.")}
+          />
+
           <section className="tk-panel" aria-label="Emails">
             <h2>Emails</h2>
             <div className="tk-thread">
@@ -312,9 +318,7 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadView
               )}
               <dt>Detention</dt>
               <dd>
-                {load.detentionRateCents !== null || load.detentionFreeMinutes !== null
-                  ? `${money(load.detentionRateCents) || "Rate not stated"}/hour after ${hours(load.detentionFreeMinutes) || "?"} free`
-                  : "None on the rate con"}
+                {detention(load.detentionRateCents, load.detentionFreeMinutes)}
                 {load.detentionRule && <div className="tk-sub">{load.detentionRule}</div>}
               </dd>
               {load.tonuCents !== null && (

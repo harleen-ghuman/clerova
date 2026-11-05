@@ -164,6 +164,24 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    /** A file over the upload limit (multipart settings in application.properties). */
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiError> handleTooBig(Exception e) {
+        return ResponseEntity
+                .status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(new ApiError("FILE_TOO_BIG", "Files can be up to 10 MB."));
+    }
+
+    @ExceptionHandler({
+            org.springframework.web.multipart.MultipartException.class,
+            org.springframework.web.multipart.support.MissingServletRequestPartException.class
+    })
+    public ResponseEntity<ApiError> handleBadUpload(Exception e) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ApiError("INVALID_UPLOAD", "Pick a file to upload, then try again."));
+    }
+
     /** Spring's own errors (unknown route, wrong method) keep their status. */
     @ExceptionHandler(ErrorResponseException.class)
     public ResponseEntity<ApiError> handleSpringError(ErrorResponseException e) {

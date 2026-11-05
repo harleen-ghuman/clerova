@@ -4,6 +4,8 @@ import { errorMessage } from "../api/client";
 import { getInbox, reprocessEmail } from "../api/email";
 import { FileList } from "../components/FileList";
 import type { InboundMessage, InboundMessageStatus } from "../types/Email";
+import type { LoadSummary } from "../types/Load";
+import { LoadPicker } from "../trucking/LoadPicker";
 
 interface InboxPageProps {
   /** Changes when the app refreshes, so new emails show up. */
@@ -12,6 +14,9 @@ interface InboxPageProps {
   onOpenEmailSetup: () => void;
   /** A trucking workspace: emails become loads. */
   onOpenLoad?: (loadId: string) => void;
+  /** A trucking workspace's loads, to file an email under one by hand. */
+  loads?: LoadSummary[];
+  onFileEmail?: (messageId: string, loadId: string) => Promise<unknown>;
 }
 
 const STATUS_LABELS: Record<InboundMessageStatus, string> = {
@@ -59,6 +64,8 @@ export function InboxPage({
   onOpenWorkItem,
   onOpenLoad,
   onOpenEmailSetup,
+  loads = [],
+  onFileEmail,
 }: InboxPageProps) {
   const [messages, setMessages] = useState<InboundMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,6 +74,7 @@ export function InboxPage({
   const [filter, setFilter] = useState<"all" | "attention">("all");
   const [showSetAside, setShowSetAside] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [filingId, setFilingId] = useState<string | null>(null);
   const [initialRefreshKey] = useState(refreshKey);
 
   useEffect(() => {
@@ -111,6 +119,33 @@ export function InboxPage({
       setItemError({
         id: message.id,
         message: errorMessage(err, "Couldn't process this email. Please try again."),
+      });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleFile(message: InboundMessage, loadId: string) {
+    if (!onFileEmail) {
+      return;
+    }
+
+    try {
+      setBusyId(message.id);
+      setItemError(null);
+      await onFileEmail(message.id, loadId);
+      setMessages((current) =>
+        current.map((item) =>
+          item.id === message.id
+            ? { ...item, status: "ATTACHED", loadId, statusReason: "Filed under this load by you." }
+            : item
+        )
+      );
+      setFilingId(null);
+    } catch (err) {
+      setItemError({
+        id: message.id,
+        message: errorMessage(err, "Couldn't file this email. Please try again."),
       });
     } finally {
       setBusyId(null);
@@ -261,6 +296,21 @@ export function InboxPage({
                   </button>
                 )}
 
+                {onFileEmail &&
+                  filingId !== message.id &&
+                  (message.status === "IGNORED" || message.status === "ATTACHED") && (
+                    <button
+                      type="button"
+                      className="secondary-action-button"
+                      onClick={() => {
+                        setFilingId(message.id);
+                        setItemError(null);
+                      }}
+                    >
+                      {message.loadId ? "Move to another load" : "File under a load"}
+                    </button>
+                  )}
+
                 {message.workItemId && (
                   <button
                     type="button"
@@ -287,6 +337,17 @@ export function InboxPage({
                   </button>
                 )}
               </div>
+
+              {filingId === message.id && (
+                <LoadPicker
+                  loads={loads.filter((load) => load.id !== message.loadId)}
+                  label="Which load is this email about?"
+                  confirmLabel="File it"
+                  busy={busyId === message.id}
+                  onPick={(loadId) => void handleFile(message, loadId)}
+                  onCancel={() => setFilingId(null)}
+                />
+              )}
 
               {itemError?.id === message.id && (
                 <p className="action-error" role="alert">

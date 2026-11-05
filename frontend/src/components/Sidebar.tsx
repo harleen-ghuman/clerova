@@ -31,6 +31,8 @@ interface SidebarProps {
   items?: SidebarItem[];
   /** What the monthly allowance counts, like "rate cons". */
   usageLabel?: string;
+  /** Off where Settings has no billing yet (trucking until its plans exist). */
+  showBilling?: boolean;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -91,6 +93,7 @@ export function Sidebar({
   onManageBilling,
   items: customItems,
   usageLabel = "requests",
+  showBilling = true,
 }: SidebarProps) {
   const items: SidebarItem[] = customItems ?? [
     { view: "today", label: "Today" },
@@ -146,7 +149,7 @@ export function Sidebar({
           </p>
         )}
 
-        {organization.billingEnabled && organization.subscriptionStatus && (
+        {showBilling && organization.billingEnabled && organization.subscriptionStatus && (
           <button type="button" className="sidebar-billing" onClick={onManageBilling}>
             Plan and billing
           </button>

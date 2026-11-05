@@ -47,6 +47,30 @@ public final class LoadResponses {
     public record FileInfo(UUID id, String name, String contentType, Long sizeBytes, boolean stored) {
     }
 
+    /**
+     * A document on a load: a file from an email filed under it, or one
+     * uploaded by hand. kind is null when Clerova didn't read the file.
+     */
+    public record DocumentInfo(
+            UUID id, String source, DocumentKind kind, String name, String contentType, Long sizeBytes,
+            boolean stored, Instant at
+    ) {
+        public static final String EMAIL = "EMAIL";
+        public static final String UPLOAD = "UPLOAD";
+
+        public static DocumentInfo of(LoadDocument document) {
+            return new DocumentInfo(document.getId(), UPLOAD, document.getKind(), document.getFileName(),
+                    document.getContentType(), document.getSizeBytes(), true, document.getCreatedAt());
+        }
+    }
+
+    /** An uploaded document, filed or not. */
+    public record UploadedDocument(
+            UUID id, UUID loadId, DocumentKind kind, String name, String contentType,
+            long sizeBytes, Instant at, boolean newLoad
+    ) {
+    }
+
     public record ReplyInfo(
             UUID id, String toEmail, String subject, ReplyKind kind, String summary, String body,
             ReplyStatus status, Instant createdAt, Instant sentAt
@@ -65,7 +89,7 @@ public final class LoadResponses {
             Long rateCents, Long agreedRateCents, Integer detentionFreeMinutes, Long detentionRateCents,
             String detentionRule, Long tonuCents, String paymentTerms, String paperworkRule, String rateConFile,
             List<StopInfo> stops, List<FlagInfo> flags, String statusNote, ReplyInfo draft,
-            List<ConversationEntry> conversation, Instant createdAt, Instant updatedAt
+            List<ConversationEntry> conversation, List<DocumentInfo> documents, Instant createdAt, Instant updatedAt
     ) {
     }
 
@@ -92,7 +116,8 @@ public final class LoadResponses {
         );
     }
 
-    static LoadDetail detail(Load load, ReplyInfo draft, List<ConversationEntry> conversation) {
+    static LoadDetail detail(Load load, ReplyInfo draft, List<ConversationEntry> conversation,
+                             List<DocumentInfo> documents) {
         return new LoadDetail(
                 load.getId(), load.getLoadNumber(), load.getStatus(), BrokerInfo.of(load.getBroker()),
                 load.getEquipment(), load.getRateCents(), load.getAgreedRateCents(),
@@ -102,7 +127,7 @@ public final class LoadResponses {
                 load.getFlags().stream().map(f -> new FlagInfo(
                         f.getId(), f.getCode(), f.getLevel(), f.getTitle(), f.getDetail(), f.getSourceText(),
                         f.getResolvedAt())).toList(),
-                load.getStatusNote(), draft, conversation,
+                load.getStatusNote(), draft, conversation, documents,
                 load.getCreatedAt(), load.getUpdatedAt()
         );
     }
