@@ -74,6 +74,7 @@ public class TruckingIntakeService {
     private final LoadReplyRepository loadReplyRepository;
     private final AiRateLimitInterceptor aiRateLimiter;
     private final FileStorage fileStorage;
+    private final LoadDocumentRepository loadDocumentRepository;
 
     public TruckingIntakeService(
             OrganizationRepository organizationRepository,
@@ -87,8 +88,10 @@ public class TruckingIntakeService {
             InboundMessageRepository inboundMessageRepository,
             LoadReplyRepository loadReplyRepository,
             AiRateLimitInterceptor aiRateLimiter,
-            FileStorage fileStorage
+            FileStorage fileStorage,
+            LoadDocumentRepository loadDocumentRepository
     ) {
+        this.loadDocumentRepository = loadDocumentRepository;
         this.fileStorage = fileStorage;
         this.inboundMessageRepository = inboundMessageRepository;
         this.loadReplyRepository = loadReplyRepository;
@@ -136,18 +139,23 @@ public class TruckingIntakeService {
             RateConResult read = truckingAiService.readRateCon(emailText(message), text, pages);
             DocumentKind kind = read.isRateConfirmation ? DocumentKind.RATE_CON : DocumentKind.parse(read.documentKind);
             file.setDocumentKind(kind.name());
+            file.setReferenceNumbers(referencesText(read.referenceNumbers));
             attachmentRepository.save(file);
 
             if (read.isRateConfirmation) {
-                String mcNumber = mcNumber(read.brokerMcNumber);
+                String mcNumber = brokerMc(read);
                 BrokerCheck check = brokerCheck(organizationId, mcNumber);
 
-                return transactionTemplate.execute(status -> {
-                    SavedLoad saved = saveLoad(organizationId, file.getFileName(), read, mcNumber, check);
-                    return saved.created()
-                            ? new Result(InboundMessageStatus.PROCESSED, null, saved.load().getId())
-                            : new Result(InboundMessageStatus.ATTACHED, REVISED_REASON, saved.load().getId());
-                });
+                SavedLoad saved = transactionTemplate.execute(
+                        status -> saveLoad(organizationId, file.getFileName(), read, mcNumber, check));
+
+                if (saved.created()) {
+                    fileWaitingPaperwork(organizationId, saved.load().getId());
+                }
+
+                return saved.created()
+                        ? new Result(InboundMessageStatus.PROCESSED, null, saved.load().getId())
+                        : new Result(InboundMessageStatus.ATTACHED, REVISED_REASON, saved.load().getId());
             }
 
             Optional<Load> byReference = threadLoad.isPresent()
@@ -159,9 +167,28 @@ public class TruckingIntakeService {
             }
         }
 
-        return threadLoad.or(() -> matchLoad(message))
-                .map(Result::attached)
-                .orElse(new Result(InboundMessageStatus.IGNORED, NOT_MATCHED_REASON, null));
+        Optional<Load> matched = threadLoad.or(() -> matchLoad(message));
+
+        if (matched.isPresent()) {
+            return Result.attached(matched.get());
+        }
+
+        // "Your rate confirmation is ready": a link to the broker's site, no file
+        if (document.isEmpty() && mentionsRateCon(message)) {
+            return new Result(InboundMessageStatus.IGNORED, NO_RATE_CON_ATTACHED_REASON, null);
+        }
+
+        return new Result(InboundMessageStatus.IGNORED, NOT_MATCHED_REASON, null);
+    }
+
+    public static final String NO_RATE_CON_ATTACHED_REASON =
+            "No rate con attached. Download it from the broker's site and upload it on the Loads board.";
+
+    private static final Pattern RATE_CON_WORDS = Pattern.compile(
+            "\\brate\\s*con(firmation)?s?\\b|\\bload\\s+(confirmation|tender)\\b", Pattern.CASE_INSENSITIVE);
+
+    static boolean mentionsRateCon(InboundMessage message) {
+        return RATE_CON_WORDS.matcher(message.getSubject() == null ? "" : message.getSubject()).find();
     }
 
     /** Small pictures are logos and signatures, not documents. */
@@ -220,14 +247,114 @@ public class TruckingIntakeService {
         }
 
         List<Load> matches = loadRepository.findForOrganization(organizationId).stream()
-                .filter(load -> load.getStatus() != LoadStatus.CANCELLED && load.getLoadNumber() != null)
-                .filter(load -> {
-                    String number = reference(load.getLoadNumber());
-                    return number.length() >= 4 && wanted.stream().anyMatch(reference -> sameReference(number, reference));
-                })
+                .filter(load -> load.getStatus() != LoadStatus.CANCELLED)
+                .filter(load -> loadReferences(load).stream()
+                        .anyMatch(number -> wanted.stream().anyMatch(reference -> sameReference(number, reference))))
                 .toList();
 
         return matches.size() == 1 ? Optional.of(matches.getFirst()) : Optional.empty();
+    }
+
+    /** The load number and the other numbers on its rate con (PO, pickup...). */
+    static List<String> loadReferences(Load load) {
+        List<String> numbers = new ArrayList<>();
+
+        if (load.getLoadNumber() != null && reference(load.getLoadNumber()).length() >= 4) {
+            numbers.add(reference(load.getLoadNumber()));
+        }
+
+        if (load.getReferenceNumbers() != null) {
+            for (String number : load.getReferenceNumbers().split(" ")) {
+                // Other numbers must be longer: short ones repeat across loads
+                if (number.length() >= 5 && !numbers.contains(number)) {
+                    numbers.add(number);
+                }
+            }
+        }
+
+        return numbers;
+    }
+
+    /** Numbers as stored: normalized, distinct, space-separated, or null when none. */
+    static String referencesText(List<String> references) {
+        if (references == null) {
+            return null;
+        }
+
+        StringBuilder text = new StringBuilder();
+
+        references.stream()
+                .map(TruckingIntakeService::reference)
+                .filter(reference -> reference.length() >= 4 && reference.length() <= 40)
+                .distinct()
+                .forEach(reference -> {
+                    if (text.length() + reference.length() + 1 <= 1000) {
+                        text.append(text.isEmpty() ? "" : " ").append(reference);
+                    }
+                });
+
+        return text.isEmpty() ? null : text.toString();
+    }
+
+    static List<String> splitReferences(String text) {
+        return text == null || text.isBlank() ? List.of() : List.of(text.split(" "));
+    }
+
+    public static final String PAPERWORK_FILED_REASON = "Filed under its load when the rate con came in.";
+
+    /**
+     * Paperwork that came before its rate con (a BOL forwarded first) waits
+     * as "couldn't tell which load". When the load is made, file any whose
+     * numbers point to it, and only to it. Best effort.
+     */
+    public void fileWaitingPaperwork(UUID organizationId, UUID loadId) {
+        try {
+            Instant since = Instant.now().minus(Duration.ofDays(30));
+
+            for (InboundMessage waiting : inboundMessageRepository.findByOrganizationIdAndStatusAndStatusReasonAndReceivedAtAfter(
+                    organizationId, InboundMessageStatus.IGNORED, NOT_MATCHED_REASON, since)) {
+                List<String> numbers = attachmentRepository.findByInboundMessageId(waiting.getId()).stream()
+                        .flatMap(attachment -> splitReferences(attachment.getReferenceNumbers()).stream())
+                        .toList();
+
+                if (loadByReference(organizationId, numbers).map(Load::getId).filter(loadId::equals).isPresent()) {
+                    waiting.setLoadId(loadId);
+                    waiting.setStatus(InboundMessageStatus.ATTACHED);
+                    waiting.setStatusReason(PAPERWORK_FILED_REASON);
+                    inboundMessageRepository.save(waiting);
+                }
+            }
+
+            for (LoadDocument document : loadDocumentRepository.findByOrganizationIdAndLoadIdIsNullAndCreatedAtAfter(organizationId, since)) {
+                if (loadByReference(organizationId, splitReferences(document.getReferenceNumbers()))
+                        .map(Load::getId).filter(loadId::equals).isPresent()) {
+                    document.setLoadId(loadId);
+                    loadDocumentRepository.save(document);
+                }
+            }
+        } catch (RuntimeException e) {
+            log.warn("Could not file waiting paperwork for load {}: {}", loadId, e.toString());
+        }
+    }
+
+    /**
+     * The same load filed under another record of the same broker, as when
+     * a new copy of the rate con is read with a corrected MC number.
+     */
+    private Optional<Load> sameLoadOtherBrokerRecord(UUID organizationId, Broker broker, String loadNumber) {
+        String name = broker.getName() == null ? "" : broker.getName().trim();
+        return loadRepository.findForOrganization(organizationId).stream()
+                .filter(load -> loadNumber.equalsIgnoreCase(load.getLoadNumber()))
+                .filter(load -> load.getBroker() != null && load.getBroker().getName() != null
+                        && load.getBroker().getName().trim().equalsIgnoreCase(name))
+                .findFirst();
+    }
+
+    /** The broker's MC, unless it's really the carrier's own (printed in the carrier section). */
+    static String brokerMc(RateConResult read) {
+        String broker = mcNumber(read.brokerMcNumber);
+        String carrier = mcNumber(read.carrierMcNumber);
+        return broker != null && broker.equals(carrier) ? null : broker;
     }
 
     /**
@@ -508,9 +635,11 @@ public class TruckingIntakeService {
 
         Optional<Load> existing = broker != null && loadNumber != null
                 ? loadRepository.findFirstByOrganizationIdAndBrokerAndLoadNumber(organizationId, broker, loadNumber)
+                        .or(() -> sameLoadOtherBrokerRecord(organizationId, broker, loadNumber))
                 : Optional.empty();
 
         Load load = existing.orElseGet(Load::new);
+        Broker previousBroker = load.getBroker();
         Map<String, Instant> resolved = new HashMap<>();
 
         for (LoadFlag flag : load.getFlags()) {
@@ -532,6 +661,12 @@ public class TruckingIntakeService {
         load.setPaymentTerms(clean(read.paymentTerms, 2000));
         load.setPaperworkRule(clean(read.paperworkDeadline, 2000));
         load.setRateConFile(clean(fileName, 500));
+        List<String> numbers = new ArrayList<>();
+        numbers.add(loadNumber == null ? "" : loadNumber);
+        if (read.referenceNumbers != null) {
+            numbers.addAll(read.referenceNumbers);
+        }
+        load.setReferenceNumbers(referencesText(numbers));
         load.replaceStops(stops(read));
 
         List<LoadFlag> flags = RateConChecks.flags(read, load, mcNumber, check);
@@ -548,7 +683,15 @@ public class TruckingIntakeService {
             aiUsageService.consumeRequest(organizationId);
         }
 
-        return new SavedLoad(loadRepository.save(load), existing.isEmpty());
+        Load saved = loadRepository.save(load);
+
+        // A corrected MC can move the load to a new broker record; drop the old one if it's now empty
+        if (previousBroker != null && (broker == null || !previousBroker.getId().equals(broker.getId()))
+                && loadRepository.countByBroker(previousBroker) == 0) {
+            brokerRepository.delete(previousBroker);
+        }
+
+        return new SavedLoad(saved, existing.isEmpty());
     }
 
     private Optional<BrokerCheck> cachedCheck(UUID organizationId, String mcNumber) {

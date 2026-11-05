@@ -18,4 +18,6 @@ public interface LoadRepository extends JpaRepository<Load, UUID> {
 
     /** The same load again, like a revised rate con. */
     Optional<Load> findFirstByOrganizationIdAndBrokerAndLoadNumber(UUID organizationId, Broker broker, String loadNumber);
+
+    long countByBroker(Broker broker);
 }

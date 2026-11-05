@@ -140,8 +140,15 @@ public class LoadDocumentService {
         document.setSizeBytes(upload.content().length);
         document.setStoragePath(path);
         document.setUploadedBy(userId);
+        document.setReferenceNumbers(read == null ? null : TruckingIntakeService.referencesText(read.referenceNumbers));
 
-        return uploaded(documentRepository.save(document), newLoad);
+        LoadResponses.UploadedDocument saved = uploaded(documentRepository.save(document), newLoad);
+
+        if (newLoad) {
+            intakeService.fileWaitingPaperwork(organizationId, target.getId());
+        }
+
+        return saved;
     }
 
     /** Moves a document to another load, or changes what it is. */
@@ -229,7 +236,7 @@ public class LoadDocumentService {
             return Optional.empty();
         }
 
-        String mcNumber = TruckingIntakeService.mcNumber(read.brokerMcNumber);
+        String mcNumber = TruckingIntakeService.brokerMc(read);
         BrokerCheck check = intakeService.brokerCheck(organizationId, mcNumber);
         return Optional.ofNullable(transactionTemplate.execute(
                 status -> intakeService.saveLoad(organizationId, fileName, read, mcNumber, check)));

@@ -20,6 +20,8 @@ public class RateConResult {
 
     public String brokerName;
     public String brokerMcNumber;
+    /** The carrier's own MC (the company hauling the load), so it's never taken for the broker's. */
+    public String carrierMcNumber;
     public String brokerEmail;
     public String brokerPhone;
 

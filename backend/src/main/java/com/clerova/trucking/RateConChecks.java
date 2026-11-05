@@ -118,11 +118,22 @@ final class RateConChecks {
                         "FMCSA has no company with MC " + mcNumber,
                         "Check the MC number before you sign. Fake brokers often use a wrong or borrowed number.",
                         null));
-                case NOT_AUTHORIZED -> flags.add(flag(BROKER_NOT_AUTHORIZED, FlagLevel.FIX,
-                        "MC " + mcNumber + " has no active broker authority",
-                        "FMCSA lists " + (fmcsaName != null ? fmcsaName : "this MC number")
-                                + " without active broker authority. Confirm who you're working with before you haul.",
-                        null));
+                case NOT_AUTHORIZED -> {
+                    if (load.getBroker() != null && fmcsaName != null && !sameCompany(load.getBroker().getName(), check)) {
+                        // Usually a misread number (often the carrier's own MC), not a fake broker
+                        flags.add(flag(BROKER_NAME_MISMATCH, FlagLevel.FIX,
+                                "MC " + mcNumber + " isn't " + load.getBroker().getName(),
+                                "FMCSA lists MC " + mcNumber + " as " + fmcsaName + ", which isn't a broker. "
+                                        + "Ask the broker for their MC number and check it before you sign.",
+                                null));
+                    } else {
+                        flags.add(flag(BROKER_NOT_AUTHORIZED, FlagLevel.FIX,
+                                "MC " + mcNumber + " has no active broker authority",
+                                "FMCSA lists " + (fmcsaName != null ? fmcsaName : "this MC number")
+                                        + " without active broker authority. Confirm who you're working with before you haul.",
+                                null));
+                    }
+                }
                 case ACTIVE -> {
                     if (load.getBroker() != null && !sameCompany(load.getBroker().getName(), check)) {
                         flags.add(flag(BROKER_NAME_MISMATCH, FlagLevel.FIX,

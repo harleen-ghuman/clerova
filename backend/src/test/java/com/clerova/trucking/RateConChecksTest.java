@@ -81,6 +81,32 @@ class RateConChecksTest {
     }
 
     @Test
+    void anMcBelongingToSomeoneElseIsNotCalledAFakeBroker() {
+        // The rate con's carrier MC was taken for the broker's: FMCSA names the carrier
+        LoadFlag flag = RateConChecks.flags(new RateConResult(), load(50000L, null, 120, 3500L), "1667020",
+                        new BrokerCheck(FmcsaStatus.NOT_AUTHORIZED, "AUGUST QUEST LLC", null))
+                .stream().filter(f -> f.getCode().startsWith("BROKER")).findFirst().orElseThrow();
+        assertThat(flag.getCode()).isEqualTo("BROKER_NAME_MISMATCH");
+        assertThat(flag.getTitle()).isEqualTo("MC 1667020 isn't Crestline Freight");
+        assertThat(flag.getDetail()).contains("AUGUST QUEST LLC").contains("Ask the broker for their MC");
+
+        // Same company without broker authority is still the warning
+        assertThat(RateConChecks.flags(new RateConResult(), load(50000L, null, 120, 3500L), "845210",
+                        new BrokerCheck(FmcsaStatus.NOT_AUTHORIZED, "CRESTLINE FREIGHT LLC", null))
+                .stream().map(LoadFlag::getCode).toList()).contains("BROKER_NOT_AUTHORIZED");
+    }
+
+    @Test
+    void theCarriersOwnMcIsNeverTheBrokers() {
+        RateConResult read = new RateConResult();
+        read.brokerMcNumber = "MC# 1667020";
+        read.carrierMcNumber = "1667020";
+        assertThat(TruckingIntakeService.brokerMc(read)).isNull();
+        read.brokerMcNumber = "845210";
+        assertThat(TruckingIntakeService.brokerMc(read)).isEqualTo("845210");
+    }
+
+    @Test
     void aDetentionConditionWithoutARateIsOneFlagNotTwo() {
         Load load = load(105750L, null, null, null);
         RateConResult read = new RateConResult();

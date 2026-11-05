@@ -39,6 +39,10 @@ public class InboundAttachment {
     @Column(length = 30)
     private String documentKind;
 
+    /** Normalized numbers printed on the file, space-separated. */
+    @Column(length = 1000)
+    private String referenceNumbers;
+
     public UUID getId() {
         return id;
     }
@@ -85,6 +89,14 @@ public class InboundAttachment {
 
     public String getExtractedText() {
         return extractedText;
+    }
+
+    public String getReferenceNumbers() {
+        return referenceNumbers;
+    }
+
+    public void setReferenceNumbers(String referenceNumbers) {
+        this.referenceNumbers = referenceNumbers;
     }
 
     public String getDocumentKind() {
