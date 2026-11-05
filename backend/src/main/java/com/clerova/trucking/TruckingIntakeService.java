@@ -469,6 +469,19 @@ public class TruckingIntakeService {
             return Optional.empty();
         }
 
+        // "Ely to Hanford": the email names one open load's pickup and delivery towns
+        // (stops load lazily, so read them inside a transaction)
+        List<UUID> byLane = transactionTemplate.execute(status ->
+                loadRepository.findForOrganization(message.getOrganizationId()).stream()
+                        .filter(load -> OPEN.contains(load.getStatus()))
+                        .filter(load -> namesLane(text, load))
+                        .map(Load::getId)
+                        .toList());
+
+        if (byLane != null && byLane.size() == 1) {
+            return open.stream().filter(load -> load.getId().equals(byLane.getFirst())).findFirst();
+        }
+
         String sender = message.getFromEmail() == null ? null : message.getFromEmail().trim().toLowerCase(Locale.ROOT);
 
         if (sender == null || !sender.contains("@")) {
@@ -505,6 +518,49 @@ public class TruckingIntakeService {
         int at = sender.indexOf('@');
         String domain = at < 0 ? "" : sender.substring(at + 1);
         return !domain.isEmpty() && !FREE_MAIL.contains(domain) && broker.endsWith("@" + domain);
+    }
+
+    private static final Pattern TOWN = Pattern.compile("([A-Za-z][A-Za-z .'-]*?)\\s*,\\s*([A-Z]{2})\\b");
+
+    /** "Silver Pine Ranch, HC 33 Box 3389-4, Ely, NV 89301" to "Ely". */
+    static String town(String place) {
+        if (place == null) {
+            return null;
+        }
+
+        java.util.regex.Matcher matcher = TOWN.matcher(place);
+        String town = null;
+
+        while (matcher.find()) {
+            String candidate = matcher.group(1).trim();
+            int comma = candidate.lastIndexOf(',');
+            town = comma >= 0 ? candidate.substring(comma + 1).trim() : candidate;
+        }
+
+        return town == null || town.length() < 3 ? null : town;
+    }
+
+    /** The text names both the first pickup's town and the last delivery's town, as whole words. */
+    static boolean namesLane(String text, Load load) {
+        List<LoadStop> stops = load.getStops();
+
+        if (stops.size() < 2 || text == null) {
+            return false;
+        }
+
+        String from = town(stops.getFirst().getPlace());
+        String to = town(stops.getLast().getPlace());
+
+        if (from == null || to == null || from.equalsIgnoreCase(to)) {
+            return false;
+        }
+
+        return mentions(text, from) && mentions(text, to);
+    }
+
+    private static boolean mentions(String text, String word) {
+        return Pattern.compile("(?<![A-Za-z])" + Pattern.quote(word) + "(?![A-Za-z])", Pattern.CASE_INSENSITIVE)
+                .matcher(text).find();
     }
 
     /** Loads a broker may still write about. */

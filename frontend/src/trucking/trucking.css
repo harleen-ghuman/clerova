@@ -1061,3 +1061,25 @@ label.rq-button.is-disabled {
   font-weight: 400;
   line-height: 1.45;
 }
+
+/* Emails wrap at the "@" or a dot, not in the middle of a word */
+.tk-email {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+/* Phones: the board's columns stack instead of scrolling sideways */
+@media (max-width: 640px) {
+  .tk-board-wrap {
+    overflow: visible;
+  }
+
+  .tk-board {
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+  }
+
+  .tk-column .tk-none {
+    padding: 2px 0 4px;
+  }
+}

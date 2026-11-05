@@ -5,6 +5,7 @@ import { AutoTextarea } from "../components/AutoTextarea";
 import { ConfirmInline } from "../components/ConfirmInline";
 import { FileList } from "../components/FileList";
 import { DocumentsSection } from "./DocumentsSection";
+import { Email } from "./Email";
 import type { LoadDetail, LoadStatus } from "../types/Load";
 import { STATUS_LABELS, city, detention, money, when } from "./format";
 
@@ -216,7 +217,7 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadView
               <h2>Reply to approve</h2>
               {load.draft.summary && <p className="tk-sub">{load.draft.summary}</p>}
               <label htmlFor="draft-reply">
-                To {load.draft.toEmail}. Edit it if you like. Your company name is added at the end.
+                To <Email value={load.draft.toEmail} />. Edit it if you like. Your company name is added at the end.
               </label>
               <AutoTextarea
                 id="draft-reply"
@@ -398,7 +399,9 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadView
                 {load.broker.email && (
                   <>
                     <dt>Email</dt>
-                    <dd>{load.broker.email}</dd>
+                    <dd>
+                      <Email value={load.broker.email} />
+                    </dd>
                   </>
                 )}
                 {load.broker.phone && (

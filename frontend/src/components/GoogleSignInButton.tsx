@@ -77,6 +77,12 @@ async function makeNonce(): Promise<{ raw: string; hashed: string }> {
   return { raw, hashed };
 }
 
+/** Running as the installed home-screen app rather than in a browser tab. */
+function openedFromHomeScreen(): boolean {
+  const iosStandalone = (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return iosStandalone || window.matchMedia?.("(display-mode: standalone)").matches === true;
+}
+
 interface GoogleSignInButtonProps {
   mode: "sign-up" | "sign-in";
   disabled: boolean;
@@ -90,11 +96,13 @@ interface GoogleSignInButtonProps {
  */
 export function GoogleSignInButton({ mode, disabled, onError }: GoogleSignInButtonProps) {
   const container = useRef<HTMLDivElement>(null);
-  const [useFallback, setUseFallback] = useState(!CLIENT_ID);
+  // Opened from the home screen, a phone can't hand Google's pop-up back to
+  // the app, so sign-in goes to Google and returns in the same screen instead
+  const [useFallback, setUseFallback] = useState(!CLIENT_ID || openedFromHomeScreen());
   const [rendered, setRendered] = useState(false);
 
   useEffect(() => {
-    if (!CLIENT_ID) {
+    if (!CLIENT_ID || openedFromHomeScreen()) {
       return;
     }
 
