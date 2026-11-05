@@ -21,6 +21,11 @@ public interface LoadReplyRepository extends JpaRepository<LoadReply, UUID> {
     @Query("select r.loadId, count(r) from LoadReply r where r.loadId in :loadIds and r.status = :status group by r.loadId")
     List<Object[]> countByLoad(@Param("loadIds") Collection<UUID> loadIds, @Param("status") ReplyStatus status);
 
+    /** Emails a workspace sent about its loads since a time (replies, notices, invoices). */
+    @Query("select count(r) from LoadReply r where r.status = com.clerova.trucking.ReplyStatus.SENT"
+            + " and r.sentAt > :after and r.loadId in (select l.id from Load l where l.organizationId = :organizationId)")
+    long countSentSince(@Param("organizationId") java.util.UUID organizationId, @Param("after") java.time.Instant after);
+
     /** An older draft is replaced by the newest one. */
     @Modifying
     @Query("update LoadReply r set r.status = com.clerova.trucking.ReplyStatus.DISMISSED"

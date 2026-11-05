@@ -1,5 +1,10 @@
 import type {
   BrokerSummary,
+  CarrierDetails,
+  ChargeKind,
+  ChargeStatus,
+  Invoice,
+  InvoiceLine,
   DocumentKind,
   LoadDetail,
   LoadStatus,
@@ -74,4 +79,89 @@ export function deleteDocument(id: string): Promise<void> {
 /** Uploads waiting to be filed under a load. */
 export function getUnfiledDocuments(): Promise<UploadedDocument[]> {
   return apiRequest("/api/load-documents");
+}
+
+/** Sets a broker's MC by hand; Clerova checks it with FMCSA. */
+export function setBrokerMc(brokerId: string, mcNumber: string): Promise<BrokerSummary["broker"]> {
+  return apiRequest(`/api/brokers/${brokerId}/mc-number`, { method: "PUT", body: { mcNumber } });
+}
+
+/** Logs when the truck arrived and left a stop; null clears a time. */
+export function setStopTimes(
+  loadId: string,
+  stopId: string,
+  times: { arrivedAt: string | null; leftAt: string | null }
+): Promise<LoadDetail> {
+  return apiRequest(`/api/loads/${loadId}/stops/${stopId}/times`, { method: "PUT", body: times });
+}
+
+export function addCharge(
+  loadId: string,
+  charge: { kind: ChargeKind; description?: string; amountCents: number; status?: ChargeStatus }
+): Promise<LoadDetail> {
+  return apiRequest(`/api/loads/${loadId}/charges`, { method: "POST", body: charge });
+}
+
+export function updateCharge(
+  loadId: string,
+  chargeId: string,
+  change: { description?: string; amountCents?: number; status?: ChargeStatus }
+): Promise<LoadDetail> {
+  return apiRequest(`/api/loads/${loadId}/charges/${chargeId}`, { method: "PATCH", body: change });
+}
+
+export function deleteCharge(loadId: string, chargeId: string): Promise<LoadDetail> {
+  return apiRequest(`/api/loads/${loadId}/charges/${chargeId}`, { method: "DELETE" });
+}
+
+/** Emails the broker about the load (a detention notice or claim). */
+export function sendLoadMessage(
+  loadId: string,
+  message: { to?: string; subject: string; body: string; chargeId?: string }
+): Promise<LoadDetail> {
+  return apiRequest(`/api/loads/${loadId}/messages`, { method: "POST", body: message });
+}
+
+export function getCarrier(): Promise<CarrierDetails> {
+  return apiRequest("/api/carrier");
+}
+
+export function saveCarrier(details: Omit<CarrierDetails, "missing">): Promise<CarrierDetails> {
+  return apiRequest("/api/carrier", { method: "PUT", body: details });
+}
+
+export function getInvoices(): Promise<Invoice[]> {
+  return apiRequest("/api/invoices");
+}
+
+export function createInvoice(loadId: string): Promise<Invoice> {
+  return apiRequest(`/api/loads/${loadId}/invoice`, { method: "POST" });
+}
+
+export function updateInvoice(
+  id: string,
+  change: { lines?: InvoiceLine[]; quickPay?: boolean; sendTo?: Invoice["sendTo"]; rebuild?: boolean }
+): Promise<Invoice> {
+  return apiRequest(`/api/invoices/${id}`, { method: "PATCH", body: change });
+}
+
+export function sendInvoice(id: string, to: string, message: string): Promise<Invoice> {
+  return apiRequest(`/api/invoices/${id}/send`, { method: "POST", body: { to, message } });
+}
+
+/** Uploaded to the factor's website by hand (or sent some other way). */
+export function markInvoiceSent(id: string): Promise<Invoice> {
+  return apiRequest(`/api/invoices/${id}/mark-sent`, { method: "POST" });
+}
+
+export function markInvoicePaid(id: string, paidCents?: number): Promise<Invoice> {
+  return apiRequest(`/api/invoices/${id}/paid`, { method: "POST", body: { paidCents: paidCents ?? null } });
+}
+
+export function markInvoiceUnpaid(id: string): Promise<Invoice> {
+  return apiRequest(`/api/invoices/${id}/unpaid`, { method: "POST" });
+}
+
+export function voidInvoice(id: string): Promise<Invoice> {
+  return apiRequest(`/api/invoices/${id}/void`, { method: "POST" });
 }

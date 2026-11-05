@@ -105,6 +105,19 @@ final class RateConChecks {
                     read.paymentQuote));
         }
 
+        flags.addAll(brokerFlags(load, mcNumber, check));
+
+        return flags;
+    }
+
+    /** Codes of the broker checks, replaced when the broker's MC changes. */
+    static final java.util.Set<String> BROKER_CODES = java.util.Set.of(
+            MC_MISSING, BROKER_NOT_FOUND, BROKER_NOT_AUTHORIZED, BROKER_NAME_MISMATCH);
+
+    /** The FMCSA side of the check: no MC, unknown MC, no broker authority, another company's MC. */
+    static List<LoadFlag> brokerFlags(Load load, String mcNumber, BrokerCheck check) {
+        List<LoadFlag> flags = new java.util.ArrayList<>();
+
         if (mcNumber == null) {
             flags.add(flag(MC_MISSING, FlagLevel.FIX,
                     "No MC number for the broker",

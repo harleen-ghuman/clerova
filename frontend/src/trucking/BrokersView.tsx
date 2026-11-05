@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { getBrokers } from "../api/loads";
+import { useEffect, useId, useState, type FormEvent } from "react";
+import { getBrokers, setBrokerMc } from "../api/loads";
 import { errorMessage } from "../api/client";
 import { Email } from "./Email";
 import type { BrokerSummary, FmcsaStatus } from "../types/Load";
@@ -10,7 +10,72 @@ const FMCSA: Record<FmcsaStatus, { text: string; tone: string }> = {
   NOT_FOUND: { text: "Not found", tone: "fix" },
 };
 
+/** The MC on file, with a way to add or correct it; Clerova then checks it with FMCSA. */
+function McNumber({ broker, onSaved }: { broker: BrokerSummary["broker"]; onSaved: () => void }) {
+  const inputId = useId();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(broker.mcNumber ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+
+    try {
+      await setBrokerMc(broker.id, value);
+      setEditing(false);
+      onSaved();
+    } catch (err) {
+      setError(errorMessage(err, "Couldn't save the MC number."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <span className="tk-mc">
+        <span>{broker.mcNumber ?? "Not on the rate con"}</span>
+        <button type="button" className="tk-link tk-link-small" onClick={() => setEditing(true)}>
+          {broker.mcNumber ? "Change" : "Add MC number"}
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <form className="tk-mc-form" onSubmit={(event) => void save(event)}>
+      <label htmlFor={inputId} className="visually-hidden">
+        MC number for {broker.name}
+      </label>
+      <input
+        id={inputId}
+        inputMode="numeric"
+        autoComplete="off"
+        placeholder="555609"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        disabled={busy}
+      />
+      <button type="submit" className="rq-button rq-button-small rq-button-primary" disabled={busy || !value.trim()}>
+        {busy ? "Checking..." : "Save and check"}
+      </button>
+      <button type="button" className="rq-button rq-button-small rq-button-quiet" onClick={() => setEditing(false)} disabled={busy}>
+        Cancel
+      </button>
+      {error && (
+        <p className="action-error" role="alert">
+          {error}
+        </p>
+      )}
+    </form>
+  );
+}
+
 export function BrokersView({ refreshKey }: { refreshKey: number }) {
+  const [reloads, setReloads] = useState(0);
   const [brokers, setBrokers] = useState<BrokerSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,7 +98,7 @@ export function BrokersView({ refreshKey }: { refreshKey: number }) {
     return () => {
       current = false;
     };
-  }, [refreshKey]);
+  }, [refreshKey, reloads]);
 
   return (
     <div className="tk-page">
@@ -69,7 +134,11 @@ export function BrokersView({ refreshKey }: { refreshKey: number }) {
                   <td data-label="Broker">
                     <strong>{broker.name}</strong>
                   </td>
-                  <td data-label="MC number">{broker.mcNumber ?? "Missing"}</td>
+                  <td data-label="MC number">
+                    <div>
+                      <McNumber broker={broker} onSaved={() => setReloads((count) => count + 1)} />
+                    </div>
+                  </td>
                   <td data-label="FMCSA check">
                     <div>
                     {broker.fmcsaStatus ? (

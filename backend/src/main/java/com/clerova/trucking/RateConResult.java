@@ -41,6 +41,8 @@ public class RateConResult {
     /** A condition for getting paid, like notice within 30 minutes or written approval. */
     public String detentionCondition;
     public String detentionQuote;
+    /** The most detention pays (per stop or per load), if capped. */
+    public String detentionMaxAmount;
 
     public String tonuAmount;
 
@@ -51,6 +53,8 @@ public class RateConResult {
     public String paymentTerms;
     public String quickPayFeePercent;
     public String paymentQuote;
+    /** The email address the broker wants invoices and paperwork sent to, if printed. */
+    public String invoiceEmail;
 
     public static class Stop {
         /** PICKUP or DELIVERY. */

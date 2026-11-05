@@ -98,3 +98,82 @@ export function emailBreaks(email: string): string[] {
   const at = email.indexOf("@");
   return at < 0 ? [email] : [email.slice(0, at + 1), ...email.slice(at + 1).split(/(?=\.)/)];
 }
+
+/** "6:52 AM" today, or "Nov 5, 6:52 AM" on another day. */
+export function clock(value: string | null): string {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  const today = new Date().toDateString() === date.toDateString();
+  return date.toLocaleString([], today
+    ? { hour: "numeric", minute: "2-digit" }
+    : { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+/** A time for an email to the broker, with the time zone: "Nov 5, 6:52 AM PST". */
+export function emailTime(value: string): string {
+  return new Date(value).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+}
+
+/** 135 minutes as "2h 15m". */
+export function duration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  return h === 0 ? `${m}m` : m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+/** The facility from a stop's place: its first line, before the street. */
+export function placeName(place: string | null): string {
+  if (!place) {
+    return "the stop";
+  }
+
+  const first = place.trim().split(/\r?\n/)[0].trim();
+  const comma = first.indexOf(",");
+  return comma > 3 ? first.slice(0, comma).trim() : first;
+}
+
+/** An ISO time as a datetime-local input value, in the viewer's time zone. */
+export function toLocalInput(value: string | null): string {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/** A datetime-local value back to ISO; null when empty or not a time. */
+export function fromLocalInput(value: string): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+/** "75.00" or "$1,250" to cents; null when it isn't an amount. */
+export function parseCents(value: string): number | null {
+  const cleaned = value.replace(/[$,\s]/g, "");
+
+  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) {
+    return null;
+  }
+
+  return Math.round(Number(cleaned) * 100);
+}
+
+/** Cents as a plain amount for an input: 7500 to "75.00". */
+export function centsInput(cents: number): string {
+  return (cents / 100).toFixed(2);
+}

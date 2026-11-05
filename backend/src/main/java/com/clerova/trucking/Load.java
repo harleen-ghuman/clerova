@@ -44,6 +44,16 @@ public class Load {
 
     private Long tonuCents;
 
+    /** The most detention pays per stop, if the rate con caps it. */
+    private Long detentionMaxCents;
+
+    /** The quick pay fee, like 2.5 (percent), if the broker offers quick pay. */
+    @Column(precision = 5, scale = 2)
+    private java.math.BigDecimal quickPayPercent;
+
+    /** Where the broker wants invoices, if the rate con names an address. */
+    private String invoiceEmail;
+
     @Column(columnDefinition = "TEXT")
     private String paymentTerms;
 
@@ -132,6 +142,12 @@ public class Load {
     public void setDetentionRule(String detentionRule) { this.detentionRule = detentionRule; }
     public Long getTonuCents() { return tonuCents; }
     public void setTonuCents(Long tonuCents) { this.tonuCents = tonuCents; }
+    public Long getDetentionMaxCents() { return detentionMaxCents; }
+    public void setDetentionMaxCents(Long detentionMaxCents) { this.detentionMaxCents = detentionMaxCents; }
+    public java.math.BigDecimal getQuickPayPercent() { return quickPayPercent; }
+    public void setQuickPayPercent(java.math.BigDecimal quickPayPercent) { this.quickPayPercent = quickPayPercent; }
+    public String getInvoiceEmail() { return invoiceEmail; }
+    public void setInvoiceEmail(String invoiceEmail) { this.invoiceEmail = invoiceEmail; }
     public String getPaymentTerms() { return paymentTerms; }
     public void setPaymentTerms(String paymentTerms) { this.paymentTerms = paymentTerms; }
     public String getPaperworkRule() { return paperworkRule; }

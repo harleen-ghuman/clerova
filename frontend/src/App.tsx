@@ -73,6 +73,12 @@ function App({
     return state?.clerova ? state : null;
   });
   const [activeView, setActiveView] = useState<AppView>(restoredNav?.view ?? "today");
+  const mobileNav = useRef<HTMLElement>(null);
+
+  // On phones the tab bar scrolls sideways: keep the current tab in view
+  useEffect(() => {
+    mobileNav.current?.querySelector(".active")?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [activeView]);
   const [requestFilter, setRequestFilter] = useState<RequestFilter>("review");
   // Opened from Today to send a reminder: the request starts with a draft
   const [remindFor, setRemindFor] = useState<string | null>(null);
@@ -432,7 +438,7 @@ function App({
         onManageBilling={() => navigate("settings")}
       />
 
-      <nav className="mobile-nav" aria-label="Mobile navigation">
+      <nav className="mobile-nav" aria-label="Mobile navigation" ref={mobileNav}>
         {MOBILE_NAV.map((item) => (
           <button
             key={item.view}

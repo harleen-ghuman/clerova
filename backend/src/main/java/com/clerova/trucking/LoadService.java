@@ -48,6 +48,10 @@ public class LoadService {
     private final EmailProperties emailProperties;
     private final EmailSender emailSender;
     private final LoadDocumentRepository loadDocumentRepository;
+    private final TruckingIntakeService intakeService;
+    private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
+    private final LoadChargeRepository chargeRepository;
+    private final InvoiceService invoiceService;
 
     public LoadService(
             LoadRepository loadRepository,
@@ -58,8 +62,16 @@ public class LoadService {
             InboundAddressService inboundAddressService,
             EmailProperties emailProperties,
             EmailSender emailSender,
-            LoadDocumentRepository loadDocumentRepository
+            LoadDocumentRepository loadDocumentRepository,
+            TruckingIntakeService intakeService,
+            org.springframework.transaction.support.TransactionTemplate transactionTemplate,
+            LoadChargeRepository chargeRepository,
+            InvoiceService invoiceService
     ) {
+        this.chargeRepository = chargeRepository;
+        this.invoiceService = invoiceService;
+        this.intakeService = intakeService;
+        this.transactionTemplate = transactionTemplate;
         this.loadDocumentRepository = loadDocumentRepository;
         this.loadRepository = loadRepository;
         this.loadReplyRepository = loadReplyRepository;
@@ -160,35 +172,15 @@ public class LoadService {
                     "Sending email isn't set up yet. Copy the reply and send it from your own email.");
         }
 
-        Organization organization = organizationRepository.findById(organizationId).orElseThrow();
-        String token = inboundAddressService.getOrCreateToken(organization);
+        invoiceService.requireEmailAllowance(organizationId);
+
         InboundMessage answered = reply.getInboundMessageId() == null ? null
                 : inboundMessageRepository.findById(reply.getInboundMessageId()).orElse(null);
-        String inReplyTo = answered != null ? answered.getMessageIdHeader() : null;
-        String references = answered == null ? null
-                : ((answered.getReferences() == null ? "" : answered.getReferences() + " ")
-                        + (inReplyTo == null ? "" : inReplyTo)).strip();
-
-        OutgoingEmail email = new OutgoingEmail(
-                "\"" + organization.getName().replaceAll("[\"\\r\\n<>]", "").trim() + " via Clerova\" <"
-                        + emailProperties.forwardingAddress(token) + ">",
-                emailProperties.loadReplyAddress(token, loadId),
-                reply.getToEmail(),
+        Sent sent = sendToBroker(organizationId, load, reply.getToEmail(),
                 reply.getSubject() != null ? reply.getSubject() : ReplyService.replySubject("Load " + orEmpty(load.getLoadNumber())),
-                ReplyService.withSignOff(text, organization.getName()),
-                inReplyTo,
-                references == null || references.isEmpty() ? null : references
-        );
-
-        String providerId;
-
-        try {
-            providerId = emailSender.send(email);
-        } catch (EmailSendException e) {
-            log.warn("Couldn't send the reply on load {}: {}", loadId, e.getMessage());
-            throw new ApiException(HttpStatus.BAD_GATEWAY, "EMAIL_NOT_SENT",
-                    "The email couldn't be sent. Please try again in a minute.");
-        }
+                text, answered);
+        OutgoingEmail email = sent.email();
+        String providerId = sent.providerId();
 
         reply.setBody(email.textBody());
         reply.setStatus(ReplyStatus.SENT);
@@ -209,6 +201,306 @@ public class LoadService {
         }
 
         return detail(load);
+    }
+
+    private record Sent(OutgoingEmail email, String providerId) {
+    }
+
+    /** Sends an email about a load from the workspace's Clerova address; replies come back to the load. */
+    private Sent sendToBroker(UUID organizationId, Load load, String to, String subject, String text,
+                              InboundMessage answered) {
+        Organization organization = organizationRepository.findById(organizationId).orElseThrow();
+        String token = inboundAddressService.getOrCreateToken(organization);
+        String inReplyTo = answered != null ? answered.getMessageIdHeader() : null;
+        String references = answered == null ? null
+                : ((answered.getReferences() == null ? "" : answered.getReferences() + " ")
+                        + (inReplyTo == null ? "" : inReplyTo)).strip();
+
+        OutgoingEmail email = new OutgoingEmail(
+                "\"" + organization.getName().replaceAll("[\"\\r\\n<>]", "").trim() + " via Clerova\" <"
+                        + emailProperties.forwardingAddress(token) + ">",
+                emailProperties.loadReplyAddress(token, load.getId()),
+                to,
+                subject,
+                ReplyService.withSignOff(text, organization.getName()),
+                inReplyTo,
+                references == null || references.isEmpty() ? null : references
+        );
+
+        try {
+            return new Sent(email, emailSender.send(email));
+        } catch (EmailSendException e) {
+            log.warn("Couldn't send an email on load {}: {}", load.getId(), e.getMessage());
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "EMAIL_NOT_SENT",
+                    "The email couldn't be sent. Please try again in a minute.");
+        }
+    }
+
+    // ------------------------------------------------------------ detention
+
+    /** Logs when the truck got to a stop and left it; null clears a time. */
+    @Transactional
+    public LoadResponses.LoadDetail setStopTimes(UUID organizationId, UUID loadId, UUID stopId,
+                                                 Instant arrivedAt, Instant leftAt) {
+        Load load = require(organizationId, loadId);
+        LoadStop stop = load.getStops().stream()
+                .filter(candidate -> candidate.getId().equals(stopId))
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("Stop not found"));
+        Instant latest = Instant.now().plus(java.time.Duration.ofMinutes(10));
+
+        if (leftAt != null && arrivedAt == null) {
+            throw invalidTimes("Log when the truck arrived first.");
+        }
+
+        if ((arrivedAt != null && arrivedAt.isAfter(latest)) || (leftAt != null && leftAt.isAfter(latest))) {
+            throw invalidTimes("That time is in the future.");
+        }
+
+        if (arrivedAt != null && arrivedAt.isBefore(load.getCreatedAt().minus(java.time.Duration.ofDays(30)))) {
+            throw invalidTimes("That time is long before this load was booked. Check the date.");
+        }
+
+        if (leftAt != null && leftAt.isBefore(arrivedAt)) {
+            throw invalidTimes("The truck can't leave before it arrived. Check the times.");
+        }
+
+        if (leftAt != null && java.time.Duration.between(arrivedAt, leftAt).toHours() > 72) {
+            throw invalidTimes("That's more than 3 days at one stop. Check the dates.");
+        }
+
+        stop.setArrivedAt(arrivedAt);
+        stop.setLeftAt(leftAt);
+
+        // Leaving a pickup means the truck is loaded; leaving the last stop means delivered
+        if (leftAt != null && stop.getKind() == StopKind.PICKUP && load.getStatus() == LoadStatus.BOOKED) {
+            load.setStatus(LoadStatus.IN_TRANSIT);
+        }
+
+        if (leftAt != null && stop == load.getStops().getLast() && stop.getKind() == StopKind.DELIVERY
+                && (load.getStatus() == LoadStatus.BOOKED || load.getStatus() == LoadStatus.IN_TRANSIT)) {
+            load.setStatus(LoadStatus.DELIVERED);
+        }
+
+        loadRepository.save(load);
+        syncDetention(load, stop);
+        return detail(load);
+    }
+
+    /**
+     * Keeps the stop's detention charge in step with its times: made once the
+     * truck left with time past the free time, updated or removed while it's
+     * still waiting to be claimed. A claimed charge is left alone.
+     */
+    private void syncDetention(Load load, LoadStop stop) {
+        LoadCharge charge = chargeRepository.findByLoadIdOrderByCreatedAtAsc(load.getId()).stream()
+                .filter(candidate -> candidate.getKind() == ChargeKind.DETENTION && stop.getId().equals(candidate.getStopId()))
+                .findFirst()
+                .orElse(null);
+
+        // A claimed charge, or one already on a sent invoice, stays as it is
+        if ((charge != null && charge.getStatus() != ChargeStatus.TO_CLAIM) || invoiceService.invoiceSent(load.getId())) {
+            return;
+        }
+
+        Detention.Result detention = stop.getLeftAt() == null ? null : Detention.at(stop, load, Instant.now());
+
+        if (detention == null || detention.billableMinutes() == 0 || detention.amountCents() == null) {
+            if (charge != null) {
+                chargeRepository.delete(charge);
+            }
+
+            return;
+        }
+
+        if (charge == null) {
+            charge = new LoadCharge();
+            charge.setLoadId(load.getId());
+            charge.setStopId(stop.getId());
+            charge.setKind(ChargeKind.DETENTION);
+        }
+
+        charge.setAmountCents(detention.amountCents());
+        charge.setDescription(clip(placeName(stop.getPlace()) + ", " + hours(detention.minutesOnSite())
+                + " on site, " + hours(detention.freeMinutes()) + " free", 255));
+        chargeRepository.save(charge);
+    }
+
+    @Transactional
+    public LoadResponses.LoadDetail addCharge(UUID organizationId, UUID loadId, ChargeKind kind, String description,
+                                              Long amountCents, ChargeStatus status) {
+        Load load = require(organizationId, loadId);
+        requireChargesOpen(load);
+
+        if (kind == null) {
+            throw invalidCharge("Pick what the charge is for.");
+        }
+
+        LoadCharge charge = new LoadCharge();
+        charge.setLoadId(load.getId());
+        charge.setKind(kind);
+        charge.setDescription(chargeDescription(description));
+        charge.setAmountCents(chargeAmount(amountCents));
+        charge.setStatus(status != null ? status : ChargeStatus.TO_CLAIM);
+        chargeRepository.save(charge);
+        return detail(load);
+    }
+
+    @Transactional
+    public LoadResponses.LoadDetail updateCharge(UUID organizationId, UUID loadId, UUID chargeId, String description,
+                                                 Long amountCents, ChargeStatus status) {
+        Load load = require(organizationId, loadId);
+        requireChargesOpen(load);
+        LoadCharge charge = chargeRepository.findByIdAndLoadId(chargeId, loadId)
+                .orElseThrow(() -> new NotFoundException("Charge not found"));
+
+        if (description != null) {
+            charge.setDescription(chargeDescription(description));
+        }
+
+        if (amountCents != null) {
+            charge.setAmountCents(chargeAmount(amountCents));
+        }
+
+        if (status != null) {
+            if (status == ChargeStatus.CLAIMED && charge.getClaimedAt() == null) {
+                charge.setClaimedAt(Instant.now());
+            }
+
+            charge.setStatus(status);
+        }
+
+        chargeRepository.save(charge);
+        return detail(load);
+    }
+
+    @Transactional
+    public LoadResponses.LoadDetail deleteCharge(UUID organizationId, UUID loadId, UUID chargeId) {
+        Load load = require(organizationId, loadId);
+        requireChargesOpen(load);
+        chargeRepository.findByIdAndLoadId(chargeId, loadId).ifPresent(chargeRepository::delete);
+        return detail(load);
+    }
+
+    /**
+     * Emails the broker from the detention panel: an arrival notice, a
+     * "detention started" heads-up, or the claim. A claim marks its charge claimed.
+     */
+    @Transactional
+    public LoadResponses.LoadDetail sendMessage(UUID organizationId, UUID loadId, String to, String subject,
+                                                String body, UUID chargeId) {
+        Load load = require(organizationId, loadId);
+        String address = to == null || to.isBlank()
+                ? (load.getBroker() != null ? load.getBroker().getEmail() : null)
+                : to.strip();
+
+        if (!InvoiceService.isEmail(address)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_EMAIL", "Enter the broker's email address.");
+        }
+
+        String text = body == null ? "" : body.strip();
+
+        if (text.isEmpty()) {
+            throw new ConflictException("The message is empty. Add a message before sending.");
+        }
+
+        if (text.length() > MAX_REPLY) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "REPLY_TOO_LONG", "The message is too long.");
+        }
+
+        String title = subject == null || subject.isBlank()
+                ? "Load " + orEmpty(load.getLoadNumber())
+                : clip(subject.strip().replaceAll("[\\r\\n]+", " "), 200);
+        LoadCharge charge = chargeId == null ? null : chargeRepository.findByIdAndLoadId(chargeId, loadId)
+                .orElseThrow(() -> new NotFoundException("Charge not found"));
+
+        if (!emailProperties.isSendingEnabled()) {
+            throw new ApiException(HttpStatus.CONFLICT, "EMAIL_SENDING_DISABLED",
+                    "Sending email isn't set up yet. Copy the message and send it from your own email.");
+        }
+
+        invoiceService.requireEmailAllowance(organizationId);
+        Sent sent = sendToBroker(organizationId, load, address, title, text, null);
+
+        LoadReply record = new LoadReply();
+        record.setLoadId(load.getId());
+        record.setToEmail(address);
+        record.setSubject(title);
+        record.setKind(ReplyKind.DETENTION);
+        record.setSummary(clip(title, 500));
+        record.setBody(sent.email().textBody());
+        record.setStatus(ReplyStatus.SENT);
+        record.setSentAt(Instant.now());
+        record.setProviderMessageId(sent.providerId());
+        loadReplyRepository.save(record);
+
+        if (charge != null && charge.getStatus() == ChargeStatus.TO_CLAIM) {
+            charge.setStatus(ChargeStatus.CLAIMED);
+            charge.setClaimedAt(Instant.now());
+            chargeRepository.save(charge);
+        }
+
+        return detail(load);
+    }
+
+    static final long MAX_CHARGE_CENTS = 10_000_000L;
+
+    private void requireChargesOpen(Load load) {
+        if (invoiceService.invoiceSent(load.getId())) {
+            throw new ConflictException("The invoice was already sent, so its charges can't change. Void the invoice first.");
+        }
+    }
+
+    private static long chargeAmount(Long cents) {
+        if (cents == null || cents <= 0 || cents > MAX_CHARGE_CENTS) {
+            throw invalidCharge("Enter the amount, like 75.00.");
+        }
+
+        return cents;
+    }
+
+    private static String chargeDescription(String description) {
+        if (description == null || description.isBlank()) {
+            return null;
+        }
+
+        String text = description.strip();
+
+        if (text.length() > 255) {
+            throw invalidCharge("Keep the note under 255 characters.");
+        }
+
+        return text;
+    }
+
+    private static ApiException invalidCharge(String message) {
+        return new ApiException(HttpStatus.BAD_REQUEST, "INVALID_CHARGE", message);
+    }
+
+    private static ApiException invalidTimes(String message) {
+        return new ApiException(HttpStatus.BAD_REQUEST, "INVALID_STOP_TIMES", message);
+    }
+
+    /** The facility name from a stop's place: its first line. */
+    static String placeName(String place) {
+        if (place == null || place.isBlank()) {
+            return "the stop";
+        }
+
+        String first = place.strip().split("\\R")[0].strip();
+        int comma = first.indexOf(',');
+        return comma > 3 ? first.substring(0, comma).strip() : first;
+    }
+
+    /** 135 minutes as "2h 15m", 120 as "2h". */
+    static String hours(long minutes) {
+        long h = minutes / 60;
+        long m = minutes % 60;
+        return h == 0 ? m + "m" : m == 0 ? h + "h" : h + "h " + m + "m";
+    }
+
+    private static String clip(String value, int max) {
+        return value.length() <= max ? value : value.substring(0, max - 1) + "\u2026";
     }
 
     @Transactional(readOnly = true)
@@ -273,8 +565,12 @@ public class LoadService {
         documents.sort(Comparator.comparing(LoadResponses.DocumentInfo::at,
                 Comparator.nullsFirst(Comparator.naturalOrder())));
 
+        List<LoadResponses.ChargeInfo> charges = chargeRepository.findByLoadIdOrderByCreatedAtAsc(load.getId()).stream()
+                .map(LoadResponses.ChargeInfo::of)
+                .toList();
+
         return LoadResponses.detail(load, draft == null ? null : LoadResponses.ReplyInfo.of(draft), conversation,
-                documents);
+                documents, charges, invoiceService.forLoad(load));
     }
 
     /** PDFs and photos big enough to be a document (not a logo). */
@@ -286,6 +582,52 @@ public class LoadService {
     }
 
     public static final String FILED_BY_HAND_REASON = "Filed under this load by you.";
+
+    /**
+     * Sets a broker's MC by hand (the rate con didn't print it, or printed
+     * the wrong one), checks it with FMCSA and redoes the broker checks on
+     * the broker's open loads.
+     */
+    public LoadResponses.BrokerInfo setBrokerMc(UUID organizationId, UUID brokerId, String value) {
+        String mcNumber = TruckingIntakeService.mcNumber(value);
+
+        if (mcNumber == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "MC_INVALID", "Enter the MC number, like 555609.");
+        }
+
+        Broker found = brokerRepository.findById(brokerId)
+                .filter(broker -> broker.getOrganizationId().equals(organizationId))
+                .orElseThrow(() -> new NotFoundException("Broker not found"));
+
+        // FMCSA can be slow: ask before the transaction
+        BrokerCheck check = intakeService.brokerCheck(organizationId, mcNumber);
+
+        return transactionTemplate.execute(status -> {
+            Broker broker = brokerRepository.findById(found.getId()).orElseThrow();
+            broker.setMcNumber(mcNumber);
+            broker.setFmcsaStatus(check == null ? null : check.status());
+            broker.setFmcsaName(check == null ? null
+                    : check.legalName() != null ? check.legalName() : check.dbaName());
+            broker.setFmcsaCheckedAt(check == null ? null : Instant.now());
+            brokerRepository.save(broker);
+
+            for (Load load : loadRepository.findForOrganization(organizationId)) {
+                if (load.getBroker() == null || !load.getBroker().getId().equals(broker.getId())
+                        || !TruckingIntakeService.OPEN.contains(load.getStatus())) {
+                    continue;
+                }
+
+                List<LoadFlag> kept = new ArrayList<>(load.getFlags().stream()
+                        .filter(flag -> !RateConChecks.BROKER_CODES.contains(flag.getCode()))
+                        .toList());
+                kept.addAll(RateConChecks.brokerFlags(load, mcNumber, check));
+                load.replaceFlags(kept);
+                loadRepository.save(load);
+            }
+
+            return LoadResponses.BrokerInfo.of(broker);
+        });
+    }
 
     /**
      * Files an email under a load by hand: one Clerova couldn't match, or

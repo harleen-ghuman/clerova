@@ -732,6 +732,10 @@ public class TruckingIntakeService {
         load.setDetentionRateCents(Money.cents(read.detentionRatePerHour));
         load.setDetentionRule(clean(read.detentionCondition, 2000));
         load.setTonuCents(Money.cents(read.tonuAmount));
+        load.setDetentionMaxCents(Money.cents(read.detentionMaxAmount));
+        load.setQuickPayPercent(Money.percent(read.quickPayFeePercent));
+        String invoiceEmail = clean(read.invoiceEmail, 320);
+        load.setInvoiceEmail(invoiceEmail != null && InvoiceService.isEmail(invoiceEmail) ? invoiceEmail : null);
         load.setPaymentTerms(clean(read.paymentTerms, 2000));
         load.setPaperworkRule(clean(read.paperworkDeadline, 2000));
         load.setRateConFile(clean(fileName, 500));
@@ -741,7 +745,23 @@ public class TruckingIntakeService {
             numbers.addAll(read.referenceNumbers);
         }
         load.setReferenceNumbers(referencesText(numbers));
-        load.replaceStops(stops(read));
+        List<LoadStop> newStops = stops(read);
+        List<LoadStop> current = load.getStops();
+        boolean sameStops = current.size() == newStops.size() && !current.isEmpty();
+
+        for (int i = 0; sameStops && i < current.size(); i++) {
+            sameStops = current.get(i).getKind() == newStops.get(i).getKind();
+        }
+
+        if (sameStops) {
+            // A new copy of the rate con keeps each stop, with the times and charges already logged there
+            for (int i = 0; i < current.size(); i++) {
+                current.get(i).setPlace(newStops.get(i).getPlace());
+                current.get(i).setAppointment(newStops.get(i).getAppointment());
+            }
+        } else {
+            load.replaceStops(newStops);
+        }
 
         List<LoadFlag> flags = RateConChecks.flags(read, load, mcNumber, check);
 

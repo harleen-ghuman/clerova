@@ -128,6 +128,8 @@ public class TruckingAiService {
                                   in a short plain sentence, such as "Tell the broker within
                                   30 minutes of arrival" or "Get written approval during the
                                   wait". detentionQuote: the exact detention wording.
+                                  detentionMaxAmount: the most detention pays, if capped
+                                  (like "200.00" for "max $200 per stop").
                                 - tonuAmount: truck ordered, not used pay, if stated.
                                 - paperworkDeadline: when signed BOL/POD paperwork is due, in
                                   a short phrase. latePaperworkFine: a deduction or fine for
@@ -135,6 +137,8 @@ public class TruckingAiService {
                                 - paymentTerms: like "Net 30". quickPayFeePercent: the fee for
                                   quick pay, if offered (not a fuel advance, EFS, Comchek or
                                   factoring fee printed nearby). paymentQuote: the exact wording.
+                                - invoiceEmail: the email address the broker says to send
+                                  invoices or billing paperwork to, if printed. Empty if none.
 
                                 Quotes are copied word for word from the document, at most
                                 about 250 characters each.

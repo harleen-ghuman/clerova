@@ -1,8 +1,10 @@
-import type { LoadSummary } from "../types/Load";
+import type { Invoice, LoadSummary } from "../types/Load";
+import { dueText, isOverdue } from "./billing";
 import { lane, money } from "./format";
 
 interface TodayViewProps {
   loads: LoadSummary[];
+  invoices: Invoice[];
   loading: boolean;
   error: string | null;
   forwardingAddress: string | null;
@@ -49,6 +51,7 @@ function Panel({ title, empty, children, count }: {
 
 export function TodayView({
   loads,
+  invoices,
   loading,
   error,
   forwardingAddress,
@@ -59,7 +62,14 @@ export function TodayView({
   const check = loads.filter((load) => load.status === "BOOKED" && load.openFlags > 0);
   const drafts = loads.filter((load) => load.draftReplies > 0);
   const onTheRoad = loads.filter((load) => load.status === "IN_TRANSIT");
-  const delivered = loads.filter((load) => load.status === "DELIVERED");
+  const invoiced = new Set(invoices.map((invoice) => invoice.loadId));
+  const delivered = loads.filter(
+    (load) =>
+      load.status === "DELIVERED" &&
+      (!invoiced.has(load.id) || invoices.some((invoice) => invoice.loadId === load.id && invoice.status === "DRAFT"))
+  );
+  const overdue = invoices.filter(isOverdue);
+  const byId = new Map(loads.map((load) => [load.id, load]));
 
   return (
     <div className="tk-page">
@@ -145,17 +155,39 @@ export function TodayView({
             ))}
           </Panel>
 
-          <Panel title="Delivered" count={delivered.length} empty="Nothing delivered yet.">
+          <Panel title="Ready to invoice" count={delivered.length} empty="No delivered loads waiting.">
             {delivered.map((load) => (
               <Row
                 key={load.id}
                 load={load}
                 onOpen={onOpenLoad}
                 sub={`${load.brokerName ?? "Broker"} · ${money(load.rateCents)}`}
-                pill={{ text: "Delivered", tone: "good" }}
+                pill={
+                  invoiced.has(load.id)
+                    ? { text: "Draft invoice", tone: "info" }
+                    : { text: "Create invoice", tone: "good" }
+                }
               />
             ))}
           </Panel>
+
+          {overdue.length > 0 && (
+            <Panel title="Overdue invoices" count={overdue.length} empty="">
+              {overdue.map((invoice) => {
+                const load = byId.get(invoice.loadId);
+
+                return load ? (
+                  <Row
+                    key={invoice.id}
+                    load={load}
+                    onOpen={onOpenLoad}
+                    sub={`${invoice.number} · ${money(invoice.totalCents)} · due ${dueText(invoice.dueDate!)}`}
+                    pill={{ text: "Overdue", tone: "fix" }}
+                  />
+                ) : null;
+              })}
+            </Panel>
+          )}
         </div>
       )}
     </div>

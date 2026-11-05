@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { fileEmail, getLoads } from "../api/loads";
+import { fileEmail, getInvoices, getLoads } from "../api/loads";
 import { getEmailSettings } from "../api/email";
 import { getMe } from "../api/account";
 import { errorMessage } from "../api/client";
@@ -11,11 +11,13 @@ import { EmailSetupPage } from "../pages/EmailSetupPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import type { EmailSettings } from "../types/Email";
 import type { Me, Organization } from "../types/Account";
-import type { LoadSummary } from "../types/Load";
+import type { Invoice, LoadSummary } from "../types/Load";
 import { TodayView } from "./TodayView";
 import { LoadsBoard } from "./LoadsBoard";
 import { LoadView } from "./LoadView";
 import { BrokersView } from "./BrokersView";
+import { InvoicesView } from "./InvoicesView";
+import { isOverdue } from "./billing";
 import "./trucking.css";
 
 interface TruckingAppProps {
@@ -33,7 +35,7 @@ interface NavState {
   selectedId: string | null;
 }
 
-const VIEWS: AppView[] = ["today", "loads", "brokers", "inbox", "email-setup", "settings"];
+const VIEWS: AppView[] = ["today", "loads", "invoices", "brokers", "inbox", "email-setup", "settings"];
 
 /**
  * Trucking plans (priced per truck) come later, so the sidebar counts the
@@ -68,10 +70,19 @@ export function TruckingApp({
     return state?.clerova && VIEWS.includes(state.view) ? state : null;
   });
   const [activeView, setActiveView] = useState<AppView>(restoredNav?.view ?? "today");
+  const mobileNav = useRef<HTMLElement>(null);
+
+  // On phones the tab bar scrolls sideways: keep the current tab in view
+  useEffect(() => {
+    mobileNav.current?.querySelector(".active")?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [activeView]);
   const [selectedId, setSelectedId] = useState<string | null>(restoredNav?.selectedId ?? null);
   const [loads, setLoads] = useState<LoadSummary[]>([]);
   const [loadsLoading, setLoadsLoading] = useState(true);
   const [loadsError, setLoadsError] = useState<string | null>(null);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoicesError, setInvoicesError] = useState<string | null>(null);
+  const [focusCarrier, setFocusCarrier] = useState(false);
   const [emailSettings, setEmailSettings] = useState<EmailSettings | null>(null);
   const [emailSettingsError, setEmailSettingsError] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -83,6 +94,17 @@ export function TruckingApp({
   }, [onAccountUpdated]);
 
   function loadLoads() {
+    // Invoices change with loads (sent, paid), so they're fetched together
+    getInvoices()
+      .then((result) => {
+        setInvoices(result);
+        setInvoicesError(null);
+      })
+      .catch((err) => {
+        console.error("Failed to load invoices:", err);
+        setInvoicesError(errorMessage(err, "Couldn't load your invoices. Refresh to try again."));
+      });
+
     return getLoads()
       .then((result) => {
         loadsLoaded.current = true;
@@ -181,6 +203,8 @@ export function TruckingApp({
   }, [restoredNav]);
 
   function navigate(view: AppView) {
+    setFocusCarrier(false);
+
     if (view === "email-setup") {
       void loadEmailSettings();
     }
@@ -205,9 +229,14 @@ export function TruckingApp({
   }
 
   const attention = loads.filter(needsYou).length;
+  const invoicedLoads = new Set(invoices.map((invoice) => invoice.loadId));
+  const invoiceWork =
+    loads.filter((load) => load.status === "DELIVERED" && !invoicedLoads.has(load.id)).length +
+    invoices.filter((invoice) => invoice.status === "DRAFT" || isOverdue(invoice)).length;
   const items: SidebarItem[] = [
     { view: "today", label: "Today" },
     { view: "loads", label: "Loads", count: attention, badge: true },
+    { view: "invoices", label: "Invoices", count: invoiceWork, badge: true },
     { view: "brokers", label: "Brokers" },
     { view: "inbox", label: "Inbox" },
     { view: "email-setup", label: "Email setup" },
@@ -231,7 +260,7 @@ export function TruckingApp({
         showBilling={false}
       />
 
-      <nav className="mobile-nav" aria-label="Mobile navigation">
+      <nav className="mobile-nav" aria-label="Mobile navigation" ref={mobileNav}>
         {items.map((item) => (
           <button
             key={item.view}
@@ -251,6 +280,7 @@ export function TruckingApp({
         {activeView === "today" && (
           <TodayView
             loads={loads}
+            invoices={invoices}
             loading={loadsLoading}
             error={loadsError}
             forwardingAddress={forwardingAddress}
@@ -268,6 +298,10 @@ export function TruckingApp({
               sendingEnabled={emailSettings?.sendingEnabled ?? false}
               onBack={closeLoad}
               onChanged={() => void loadLoads()}
+              onOpenSettings={() => {
+                navigate("settings");
+                setFocusCarrier(true);
+              }}
             />
           ) : (
             <LoadsBoard
@@ -280,6 +314,17 @@ export function TruckingApp({
               onRetry={() => void loadLoads()}
             />
           ))}
+
+        {activeView === "invoices" && (
+          <InvoicesView
+            loads={loads}
+            invoices={invoices}
+            loading={loadsLoading}
+            error={loadsError ?? invoicesError}
+            onOpenLoad={openLoad}
+            onRetry={() => void loadLoads()}
+          />
+        )}
 
         {activeView === "brokers" && <BrokersView refreshKey={refreshTick} />}
 
@@ -327,6 +372,7 @@ export function TruckingApp({
               upgrading={false}
               onSignOut={onSignOut}
               propertyManagement={false}
+              focusCompanyInfo={focusCarrier}
             />
           </div>
         )}

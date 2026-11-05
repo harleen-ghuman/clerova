@@ -75,6 +75,19 @@ public class PostmarkEmailSender implements EmailSender {
             body.put("Headers", headers);
         }
 
+        if (!email.attachments().isEmpty()) {
+            List<Map<String, String>> files = new ArrayList<>();
+
+            for (OutgoingEmail.Attachment attachment : email.attachments()) {
+                files.add(Map.of(
+                        "Name", attachment.name(),
+                        "Content", java.util.Base64.getEncoder().encodeToString(attachment.content()),
+                        "ContentType", attachment.contentType()));
+            }
+
+            body.put("Attachments", files);
+        }
+
         HttpRequest request = HttpRequest.newBuilder(apiUrl)
                 .timeout(Duration.ofSeconds(20))
                 .header("Accept", "application/json")
@@ -110,9 +123,9 @@ public class PostmarkEmailSender implements EmailSender {
 
             // Messages are shown to the person sending the reply
             throw new EmailSendException(switch (errorCode) {
-                case 300 -> "That email address doesn't look valid, so the reply wasn't sent.";
-                case 406 -> "This address bounced or blocked an earlier email, so the reply wasn't sent. Copy it and send it from your own email.";
-                default -> "The email service couldn't send this reply. Please try again in a minute.";
+                case 300 -> "That email address doesn't look valid, so the email wasn't sent.";
+                case 406 -> "This address bounced or blocked an earlier email, so the email wasn't sent. Copy it and send it from your own email.";
+                default -> "The email service couldn't send this email. Please try again in a minute.";
             }, null, true);
         }
 
