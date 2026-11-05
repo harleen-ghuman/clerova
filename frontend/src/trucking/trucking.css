@@ -295,8 +295,12 @@
   white-space: nowrap;
 }
 
-.tk-flag.done {
-  opacity: 0.6;
+/* Checked items read as done without fading below readable contrast */
+.tk-flag.done strong {
+  color: var(--text-muted);
+  font-weight: 500;
+  text-decoration: line-through;
+  text-decoration-color: var(--border-strong);
 }
 
 .tk-flag p {
@@ -644,4 +648,416 @@ label.rq-button.is-disabled {
   align-items: center;
   justify-content: space-between;
   gap: 8px 12px;
+}
+
+/* ------------------------------------------------------------------
+   Type and spacing refinements
+   One type scale (26 / 15 / 14 / 13 / 11), 1.5 line height for reading
+   text, spacing on an 8 px grid, and quiet labels so the facts lead.
+   ------------------------------------------------------------------ */
+.tk-page {
+  padding: 32px 40px 64px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.tk-page .page-header {
+  margin-bottom: 24px;
+}
+
+.tk-page .page-header h1,
+.tk-head h1 {
+  font-size: 26px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.tk-page .page-header p {
+  margin-top: 8px;
+  max-width: 62ch;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.tk-sections,
+.tk-detail,
+.tk-stack {
+  gap: 20px;
+}
+
+.tk-panel {
+  padding: 20px 22px;
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.tk-panel h2 {
+  margin-bottom: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+/* Counts sit in a small grey chip next to the heading */
+.tk-panel h2 span,
+.tk-column h2 span {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--border-faint);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.tk-sub {
+  line-height: 1.45;
+}
+
+.tk-none {
+  padding: 4px 0;
+  color: var(--text-muted);
+}
+
+.tk-pill {
+  padding: 2px 8px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+}
+
+.tk-eyebrow {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Today */
+.tk-row {
+  padding: 12px 0;
+}
+
+.tk-row-main .tk-lane {
+  font-size: 15px;
+}
+
+.tk-row-main .tk-sub {
+  margin-top: 2px;
+}
+
+/* Board */
+.tk-column {
+  gap: 10px;
+  padding: 12px;
+  background: #f0f2f5;
+}
+
+.tk-column h2 {
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tk-card {
+  gap: 6px;
+  padding: 14px;
+  border-radius: 12px;
+}
+
+.tk-card .tk-lane {
+  font-size: 15px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.tk-card-top {
+  font-size: 12px;
+}
+
+/* Load page header */
+.tk-backlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.tk-backlink:hover {
+  color: var(--text);
+}
+
+.tk-head {
+  margin-bottom: 24px;
+}
+
+.tk-head-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.tk-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 0;
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.tk-meta > span + span::before {
+  content: "·";
+  margin: 0 8px;
+  color: var(--border-strong);
+}
+
+.tk-meta .tk-money {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tk-status-in_transit {
+  border-color: var(--brand-line);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.tk-status-delivered,
+.tk-status-invoiced,
+.tk-status-paid {
+  border-color: var(--success-line);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+/* Next step */
+.tk-next p {
+  margin: 0 0 12px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.tk-note-form {
+  margin-top: 16px;
+}
+
+.tk-note-form textarea,
+.tk-draft textarea {
+  padding: 10px 12px;
+  border-radius: 10px;
+  line-height: 1.5;
+  background: var(--surface);
+}
+
+.tk-hint {
+  margin-top: 8px;
+  line-height: 1.45;
+}
+
+/* Rate con check */
+.tk-flag {
+  gap: 6px 12px;
+  padding: 16px 0;
+}
+
+.tk-flag > .tk-pill {
+  margin-top: 1px;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tk-flag strong {
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.tk-flag p {
+  margin-top: 2px;
+  line-height: 1.5;
+}
+
+.tk-flag blockquote {
+  margin-top: 4px;
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid var(--border-strong);
+  border-radius: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.tk-flag .tk-actions {
+  margin-top: 8px;
+}
+
+/* Draft reply */
+.tk-draft label {
+  margin-bottom: 8px;
+  line-height: 1.45;
+}
+
+/* Emails */
+.tk-thread {
+  gap: 12px;
+}
+
+.tk-msg {
+  padding: 14px 16px;
+  border-radius: 12px;
+}
+
+.tk-msg-head {
+  margin-bottom: 8px;
+  font-size: 12.5px;
+}
+
+.tk-msg-subject {
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.tk-msg-body {
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+/* Stops: a small timeline */
+.tk-stops {
+  gap: 16px;
+}
+
+.tk-stop {
+  display: grid;
+  gap: 2px;
+  padding-left: 16px;
+  border-left: 2px solid var(--border);
+}
+
+.tk-stop-pickup {
+  border-left-color: var(--brand);
+}
+
+.tk-stop-delivery {
+  border-left-color: var(--success);
+}
+
+.tk-stop-place {
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.tk-stop-time {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Rate and terms */
+.tk-kv {
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 10px 16px;
+  line-height: 1.45;
+}
+
+.tk-kv dt {
+  font-size: 13px;
+}
+
+/* Documents */
+.tk-docs > li {
+  padding: 12px 0;
+  border-top-color: var(--border-faint);
+}
+
+.tk-link {
+  font-weight: 500;
+  text-decoration-color: var(--brand-line);
+  text-underline-offset: 3px;
+}
+
+.tk-link:hover {
+  text-decoration-color: currentColor;
+}
+
+/* Brokers table */
+.tk-table th {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tk-table td {
+  padding-top: 14px;
+  padding-bottom: 14px;
+  line-height: 1.45;
+}
+
+@media (max-width: 900px) {
+  .tk-page {
+    padding: 20px 16px 48px;
+  }
+
+  .tk-page .page-header h1,
+  .tk-head h1 {
+    font-size: 22px;
+  }
+
+  .tk-panel {
+    padding: 16px;
+  }
+
+  .tk-sections,
+  .tk-detail,
+  .tk-stack {
+    gap: 16px;
+  }
+
+  /* Comfortable to tap */
+  .tk-page .rq-button-small {
+    height: 36px;
+    padding: 0 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .tk-table td::before {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .tk-kv {
+    grid-template-columns: 92px minmax(0, 1fr);
+  }
+}
+
+/* The small print under Latest update stays small next to the bigger next-step line */
+.tk-next .tk-hint {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
 }
