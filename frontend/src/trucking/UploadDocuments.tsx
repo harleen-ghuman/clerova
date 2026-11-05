@@ -2,7 +2,7 @@ import { useEffect, useId, useState, type ChangeEvent } from "react";
 import { deleteDocument, getUnfiledDocuments, updateDocument, uploadDocument } from "../api/loads";
 import { errorMessage } from "../api/client";
 import type { LoadSummary, UploadedDocument } from "../types/Load";
-import { ACCEPTED_FILES, openDocument } from "./documents";
+import { ACCEPTED_FILES, openDocument, uploadProblem } from "./documents";
 import { LoadPicker } from "./LoadPicker";
 import { kindLabel, loadLabel } from "./format";
 
@@ -64,6 +64,13 @@ export function UploadDocuments({ loads, refreshKey, onOpenLoad, onChanged }: Up
       setProgress(
         files.length > 1 ? `Reading ${index + 1} of ${files.length}...` : "Reading the document..."
       );
+
+      const problem = uploadProblem(file);
+
+      if (problem) {
+        failed.push(`${file.name}: ${problem}`);
+        continue;
+      }
 
       try {
         const uploaded = await uploadDocument(file);

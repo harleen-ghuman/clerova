@@ -5,6 +5,7 @@ import { friendlyError } from "../auth/friendlyError";
 import { MIN_PASSWORD_LENGTH, PASSWORD_HINT, passwordProblem } from "../auth/passwordRules";
 import { fetchGoogleSignInEnabled, supabase } from "../auth/supabase";
 import { GoogleSignInButton } from "../components/GoogleSignInButton";
+import { TRUCKING_ENABLED } from "../config";
 
 type AuthMode =
   | "sign-in"
@@ -261,8 +262,10 @@ export function AuthPage({
     "check-email": { title: "", description: "", submit: "" },
     "sign-up": {
       title: "Create your account",
-      description:
-        "Turn your property requests inbox into organized work, with replies ready for you to approve. 14 days free, and you can cancel anytime before it ends.",
+      // With trucking open at sign-up, the wording fits both kinds of business
+      description: TRUCKING_ENABLED
+        ? "Turn the emails in your inbox into organized work, with replies ready for you to approve. 14 days free, and you can cancel anytime before it ends."
+        : "Turn your property requests inbox into organized work, with replies ready for you to approve. 14 days free, and you can cancel anytime before it ends.",
       submit: "Create account",
     },
     "sign-in": {

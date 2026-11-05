@@ -16,6 +16,26 @@ interface LoadViewProps {
   onChanged: () => void;
 }
 
+/** Broker emails can be long (quoted history, signatures): show the start first. */
+const LONG_EMAIL = 900;
+
+function EmailBody({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > LONG_EMAIL;
+  const shown = long && !open ? text.slice(0, LONG_EMAIL).replace(/\s+\S*$/, "") + "…" : text;
+
+  return (
+    <>
+      <p className="tk-msg-body">{shown}</p>
+      {long && (
+        <button type="button" className="tk-msg-more" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? "Show less" : "Show the whole email"}
+        </button>
+      )}
+    </>
+  );
+}
+
 /** What the dispatcher does next, by where the load is. */
 function nextStep(load: LoadDetail): { text: string; to?: LoadStatus; label?: string } {
   const open = load.flags.filter((flag) => !flag.resolvedAt);
@@ -100,8 +120,8 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadView
   if (!load) {
     return (
       <div className="tk-page">
-        <button type="button" className="rq-button rq-button-small tk-back" onClick={onBack}>
-          Back to loads
+        <button type="button" className="tk-backlink" onClick={onBack}>
+          <span aria-hidden="true">←</span> Back to loads
         </button>
         {error ? <p className="action-error" role="alert">{error}</p> : <p className="tk-none">Loading the load...</p>}
       </div>
@@ -115,22 +135,24 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadView
 
   return (
     <div className="tk-page">
-      <button type="button" className="rq-button rq-button-small tk-back" onClick={onBack}>
-        Back to loads
+      <button type="button" className="tk-backlink" onClick={onBack}>
+        <span aria-hidden="true">←</span> Back to loads
       </button>
 
       <div className="tk-head">
-        <div>
-          <h1>
-            {city(origin)} → {city(destination)}
-          </h1>
-          <p className="tk-sub">
-            {load.loadNumber ? `Load #${load.loadNumber}` : "No load number"}
-            {load.broker ? ` · ${load.broker.name}` : ""}
-            {load.rateCents !== null ? ` · ${money(load.rateCents)}` : ""}
+        <div className="tk-head-main">
+          <div className="tk-head-title">
+            <h1>
+              {city(origin)} → {city(destination)}
+            </h1>
+            <span className={`tk-pill tk-status tk-status-${load.status.toLowerCase()}`}>{STATUS_LABELS[load.status]}</span>
+          </div>
+          <p className="tk-meta">
+            <span>{load.loadNumber ? `Load #${load.loadNumber}` : "No load number"}</span>
+            {load.broker && <span>{load.broker.name}</span>}
+            {load.rateCents !== null && <span className="tk-money">{money(load.rateCents)}</span>}
           </p>
         </div>
-        <span className="tk-pill">{STATUS_LABELS[load.status]}</span>
       </div>
 
       {error && <p className="action-error" role="alert">{error}</p>}
@@ -174,8 +196,9 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadView
               <label className="visually-hidden" htmlFor="load-note">
                 Latest update
               </label>
-              <input
+              <AutoTextarea
                 id="load-note"
+                rows={1}
                 maxLength={500}
                 placeholder="Latest update, like: Loaded 9:40, ETA Phoenix 6 AM"
                 value={note}
@@ -271,8 +294,8 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadView
                     <span>{entry.incoming ? entry.from : `You → ${entry.to}`}</span>
                     <span>{when(entry.at)}</span>
                   </div>
-                  {entry.subject && <strong style={{ fontSize: 14 }}>{entry.subject}</strong>}
-                  {entry.body && <p className="tk-msg-body">{entry.body.trim()}</p>}
+                  {entry.subject && <strong className="tk-msg-subject">{entry.subject}</strong>}
+                  {entry.body && <EmailBody text={entry.body.trim()} />}
                   {entry.files.length > 0 && (
                     <FileList
                       files={entry.files.map((file) => ({
@@ -295,10 +318,10 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadView
             <h2>Stops</h2>
             <ol className="tk-stops">
               {load.stops.map((stop, index) => (
-                <li key={index}>
-                  <strong>{stop.kind === "PICKUP" ? "Pickup" : "Delivery"}</strong>
-                  <span className="tk-sub">{stop.place}</span>
-                  {stop.appointment && <div style={{ fontSize: 14 }}>{stop.appointment}</div>}
+                <li key={index} className={`tk-stop tk-stop-${stop.kind === "PICKUP" ? "pickup" : "delivery"}`}>
+                  <span className="tk-eyebrow">{stop.kind === "PICKUP" ? "Pickup" : "Delivery"}</span>
+                  <span className="tk-stop-place">{stop.place}</span>
+                  {stop.appointment && <span className="tk-stop-time">{stop.appointment}</span>}
                 </li>
               ))}
               {load.stops.length === 0 && <li className="tk-none">The rate con's stops couldn't be read.</li>}

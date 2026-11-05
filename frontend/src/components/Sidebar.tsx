@@ -29,8 +29,8 @@ interface SidebarProps {
   onManageBilling: () => void;
   /** Another set of screens, like a trucking workspace's. */
   items?: SidebarItem[];
-  /** What the monthly allowance counts, like "rate cons". */
-  usageLabel?: string;
+  /** Replaces the plan usage line, like "3 loads this month" for trucking. */
+  usageText?: string;
   /** Off where Settings has no billing yet (trucking until its plans exist). */
   showBilling?: boolean;
 }
@@ -92,7 +92,7 @@ export function Sidebar({
   onSignOut,
   onManageBilling,
   items: customItems,
-  usageLabel = "requests",
+  usageText,
   showBilling = true,
 }: SidebarProps) {
   const items: SidebarItem[] = customItems ?? [
@@ -144,8 +144,7 @@ export function Sidebar({
           <p>
             {planStatus(organization)}
             <br />
-            {organization.aiRequestsUsedThisMonth} / {organization.aiMonthlyLimit}{" "}
-            {usageLabel} this month
+            {usageText ?? `${organization.aiRequestsUsedThisMonth} / ${organization.aiMonthlyLimit} requests this month`}
           </p>
         )}
 

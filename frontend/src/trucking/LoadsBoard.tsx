@@ -10,6 +10,7 @@ interface LoadsBoardProps {
   refreshKey: number;
   /** An upload filed a document or made a load. */
   onChanged: () => void;
+  onRetry?: () => void;
 }
 
 const COLUMNS: { title: string; statuses: LoadStatus[] }[] = [
@@ -19,7 +20,7 @@ const COLUMNS: { title: string; statuses: LoadStatus[] }[] = [
   { title: "Closed", statuses: ["INVOICED", "PAID", "CANCELLED"] },
 ];
 
-export function LoadsBoard({ loads, loading, error, onOpenLoad, refreshKey, onChanged }: LoadsBoardProps) {
+export function LoadsBoard({ loads, loading, error, onOpenLoad, refreshKey, onChanged, onRetry }: LoadsBoardProps) {
   return (
     <div className="tk-page" style={{ maxWidth: "none" }}>
       <header className="page-header">
@@ -27,11 +28,21 @@ export function LoadsBoard({ loads, loading, error, onOpenLoad, refreshKey, onCh
         <p>Every load from rate con to delivery. Open one to see its rate con check, emails and replies.</p>
       </header>
 
-      {error && <p className="action-error" role="alert">{error}</p>}
+      {error && (
+        <div className="action-error tk-error" role="alert">
+          <span>{error}</span>
+          {onRetry && (
+            <button type="button" className="rq-button rq-button-small" onClick={onRetry}>
+              Try again
+            </button>
+          )}
+        </div>
+      )}
 
       <UploadDocuments loads={loads} refreshKey={refreshKey} onOpenLoad={onOpenLoad} onChanged={onChanged} />
       {loading && loads.length === 0 && <p className="tk-none">Loading your loads...</p>}
 
+      {!(error && loads.length === 0) && (
       <div className="tk-board-wrap">
         <div className="tk-board">
           {COLUMNS.map((column) => {
@@ -70,6 +81,7 @@ export function LoadsBoard({ loads, loading, error, onOpenLoad, refreshKey, onCh
           })}
         </div>
       </div>
+      )}
     </div>
   );
 }

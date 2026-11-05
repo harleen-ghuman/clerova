@@ -65,6 +65,11 @@ public final class DocumentImages {
             }
 
             if (isImage(fileName, contentType)) {
+                if (tooManyPixels(content)) {
+                    log.warn("Skipped {}: the picture is too large to read", fileName);
+                    return List.of();
+                }
+
                 BufferedImage image = ImageIO.read(new ByteArrayInputStream(content));
 
                 if (image == null) {
@@ -81,6 +86,30 @@ public final class DocumentImages {
         }
 
         return List.of();
+    }
+
+    /** A photo bigger than a 50-megapixel camera's is refused before decoding (a "pixel bomb"). */
+    static final long MAX_PIXELS = 50_000_000L;
+
+    static boolean tooManyPixels(byte[] content) {
+        try (javax.imageio.stream.ImageInputStream input = ImageIO.createImageInputStream(new ByteArrayInputStream(content))) {
+            java.util.Iterator<javax.imageio.ImageReader> readers = ImageIO.getImageReaders(input);
+
+            if (!readers.hasNext()) {
+                return false;
+            }
+
+            javax.imageio.ImageReader reader = readers.next();
+
+            try {
+                reader.setInput(input, true, true);
+                return (long) reader.getWidth(0) * reader.getHeight(0) > MAX_PIXELS;
+            } finally {
+                reader.dispose();
+            }
+        } catch (IOException e) {
+            return true;
+        }
     }
 
     private static List<String> pdfPages(byte[] content) throws IOException {

@@ -93,6 +93,7 @@ class AiRateConEvaluationTest {
             QulcllPay vii TrtumpflP,y llt ,11111t 2.5%.. Haw your tund9 wllflln two_.,,,_ dep.
             Equlipmlft VS3,53'\\Wl M lf1VOlcfnl .ubmltted WM emlll Ind mall wtl,,. paid In fl«
             3 t-dlly term,,
+            Adv-: EFS checks wt11 be charged the larger of $5 or 4%.
             RATE DETAILS
             Rate per Unit (50 per net ton) USD $50.00 • 24.24 = $1,212.00
             Total: USD $1,212.00
@@ -122,6 +123,8 @@ class AiRateConEvaluationTest {
         assertThat(read.paymentTerms == null ? "" : read.paymentTerms.strip())
                 .doesNotMatch("(?i)(net\\s*)?3(\\s*days?)?");
         assertThat(Money.cents(read.detentionRatePerHour)).isNull();
+        // Quick pay is 2.5%; the 4% is the fuel advance (EFS) fee
+        assertThat(read.quickPayFeePercent).isIn("2.5", "2.50");
         // The $25 notification fee isn't a detention rule
         assertThat(read.detentionCondition == null ? "" : read.detentionCondition).doesNotContain("$25");
     }

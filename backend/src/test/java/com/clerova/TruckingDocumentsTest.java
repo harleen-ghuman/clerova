@@ -202,7 +202,7 @@ class TruckingDocumentsTest {
         pod.documentKind = "POD";
         when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(pod);
 
-        JsonNode uploaded = json(mockMvc.perform(upload("pod.jpg", "image/jpeg", photo()).param("loadId", loadId).with(user))
+        JsonNode uploaded = json(mockMvc.perform(upload("pod.jpg", "image/jpeg", jpeg()).param("loadId", loadId).with(user))
                 .andExpect(status().isCreated()));
         assertThat(uploaded.get("kind").asText()).isEqualTo("POD");
         assertThat(uploaded.get("loadId").asText()).isEqualTo(loadId);
@@ -305,7 +305,7 @@ class TruckingDocumentsTest {
         pod.documentKind = "POD";
         pod.referenceNumbers = new ArrayList<>(List.of("ABF553780"));
         when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(pod);
-        mockMvc.perform(upload("pod.jpg", "image/jpeg", photo()).with(user))
+        mockMvc.perform(upload("pod.jpg", "image/jpeg", jpeg()).with(user))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.loadId").value(loadId));
     }
@@ -337,7 +337,8 @@ class TruckingDocumentsTest {
         processor.processDue();
 
         RateConResult corrected = rateCon("CCFS15310");
-        corrected.brokerName = "CrossCountry Freight Solutions";
+        // The AI wrote the name a little differently this time
+        corrected.brokerName = "CrossCountry Freight Solutions, Inc.";
         corrected.brokerMcNumber = "1667020";
         corrected.carrierMcNumber = "1667020";
         when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(corrected);
@@ -350,6 +351,39 @@ class TruckingDocumentsTest {
         assertThat(brokers.get(0).get("broker").get("mcNumber").isNull()).isTrue();
         assertThat(json(mockMvc.perform(get("/api/inbox").with(user))).get(0).get("statusReason").asText())
                 .isEqualTo(TruckingIntakeService.REVISED_REASON);
+
+        // A third read, spelled the other way again: still one load and one broker
+        RateConResult again = rateCon("CCFS15310");
+        again.brokerName = "CrossCountry Freight Solutions";
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(again);
+        deliver("<v3@x>", "Rate Confirmation for Shipment CCFS15310", "", "rc.pdf", scannedPdf());
+        processor.processDue();
+        assertThat(json(mockMvc.perform(get("/api/loads").with(user)))).hasSize(1);
+        assertThat(json(mockMvc.perform(get("/api/brokers").with(user)))).hasSize(1);
+    }
+
+    @Test
+    void waitingPaperworkIsFiledWhenANewCopyAddsTheNumber() throws Exception {
+        // The first copy of the rate con had no shipper number
+        String loadId = bookLoad("3466426-1");
+
+        RateConResult bol = new RateConResult();
+        bol.documentKind = "BOL";
+        bol.referenceNumbers = new ArrayList<>(List.of("ABF553780"));
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(bol);
+        deliver("me@gmail.com", "<bol-wait@x>", "paperwork", "", "bol.pdf", scannedPdf());
+        processor.processDue();
+        assertThat(json(mockMvc.perform(get("/api/inbox").with(user))).get(0).get("status").asText()).isEqualTo("IGNORED");
+
+        RateConResult copy = rateCon("3466426-1");
+        copy.referenceNumbers = new ArrayList<>(List.of("ABF553780"));
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(copy);
+        deliver("<rc-copy@x>", "Rate Confirmation 3466426-1 (signed)", "", "signed.pdf", scannedPdf());
+        processor.processDue();
+
+        JsonNode bolEmail = json(mockMvc.perform(get("/api/inbox").with(user))).get(1);
+        assertThat(bolEmail.get("status").asText()).isEqualTo("ATTACHED");
+        assertThat(bolEmail.get("loadId").asText()).isEqualTo(loadId);
     }
 
     @Test
@@ -368,6 +402,12 @@ class TruckingDocumentsTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("FILE_TYPE"));
         mockMvc.perform(upload("empty.pdf", "application/pdf", new byte[0]).with(user))
+                .andExpect(status().isBadRequest());
+        // A web page renamed to .pdf is refused: the first bytes decide
+        mockMvc.perform(upload("invoice.pdf", "application/pdf", "<html><script>alert(1)</script></html>".getBytes()).with(user))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("FILE_TYPE"));
+        mockMvc.perform(upload("photo.jpg", "image/jpeg", photo()).with(user))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(upload("x.pdf", "application/pdf", scannedPdfBytes()).param("loadId", UUID.randomUUID().toString()).with(user))
                 .andExpect(status().isNotFound());
@@ -433,6 +473,13 @@ class TruckingDocumentsTest {
 
     private static String scannedPdf() throws Exception {
         return Base64.getEncoder().encodeToString(scannedPdfBytes());
+    }
+
+    private static byte[] jpeg() throws Exception {
+        java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(400, 300, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(image, "jpg", out);
+        return out.toByteArray();
     }
 
     private static byte[] photo() throws Exception {

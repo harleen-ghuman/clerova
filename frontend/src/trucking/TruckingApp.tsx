@@ -35,6 +35,20 @@ interface NavState {
 
 const VIEWS: AppView[] = ["today", "loads", "brokers", "inbox", "email-setup", "settings"];
 
+/**
+ * Trucking plans (priced per truck) come later, so the sidebar counts the
+ * loads added this month instead of the property management allowance.
+ */
+function loadsThisMonthText(loads: LoadSummary[]): string {
+  const now = new Date();
+  const count = loads.filter((load) => {
+    const created = new Date(load.createdAt);
+    return created.getFullYear() === now.getFullYear() && created.getMonth() === now.getMonth();
+  }).length;
+
+  return `${count} ${count === 1 ? "load" : "loads"} added this month`;
+}
+
 /** Loads that need the dispatcher: things to check or a reply to approve. */
 function needsYou(load: LoadSummary): boolean {
   return (load.status === "BOOKED" && load.openFlags > 0) || load.draftReplies > 0;
@@ -213,7 +227,7 @@ export function TruckingApp({
         onSignOut={onSignOut}
         onManageBilling={() => navigate("settings")}
         items={items}
-        usageLabel="rate cons"
+        usageText={loadsThisMonthText(loads)}
         showBilling={false}
       />
 
@@ -242,6 +256,7 @@ export function TruckingApp({
             forwardingAddress={forwardingAddress}
             onOpenLoad={openLoad}
             onOpenEmailSetup={() => navigate("email-setup")}
+            onRetry={() => void loadLoads()}
           />
         )}
 
@@ -262,6 +277,7 @@ export function TruckingApp({
               onOpenLoad={openLoad}
               refreshKey={refreshTick}
               onChanged={() => void loadLoads()}
+              onRetry={() => void loadLoads()}
             />
           ))}
 

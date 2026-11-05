@@ -149,9 +149,8 @@ public class TruckingIntakeService {
                 SavedLoad saved = transactionTemplate.execute(
                         status -> saveLoad(organizationId, file.getFileName(), read, mcNumber, check));
 
-                if (saved.created()) {
-                    fileWaitingPaperwork(organizationId, saved.load().getId());
-                }
+                // A new load, or a new copy that may carry numbers the old one didn't
+                fileWaitingPaperwork(organizationId, saved.load().getId());
 
                 return saved.created()
                         ? new Result(InboundMessageStatus.PROCESSED, null, saved.load().getId())
@@ -337,16 +336,35 @@ public class TruckingIntakeService {
         }
     }
 
+    /** A broker with no MC, by name: "Acme Freight, Inc." is the same as "Acme Freight". */
+    private Optional<Broker> brokerWithoutMc(UUID organizationId, String name) {
+        String wanted = RateConChecks.normalize(name);
+
+        if (wanted.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return brokerRepository.findByOrganizationIdOrderByNameAsc(organizationId).stream()
+                .filter(broker -> broker.getMcNumber() == null && RateConChecks.normalize(broker.getName()).equals(wanted))
+                .findFirst();
+    }
+
     /**
      * The same load filed under another record of the same broker, as when
      * a new copy of the rate con is read with a corrected MC number.
      */
     private Optional<Load> sameLoadOtherBrokerRecord(UUID organizationId, Broker broker, String loadNumber) {
-        String name = broker.getName() == null ? "" : broker.getName().trim();
+        // "CrossCountry Freight Solutions, Inc." and "CrossCountry Freight Solutions" are one broker
+        String name = RateConChecks.normalize(broker.getName());
+
+        if (name.isEmpty()) {
+            return Optional.empty();
+        }
+
         return loadRepository.findForOrganization(organizationId).stream()
                 .filter(load -> loadNumber.equalsIgnoreCase(load.getLoadNumber()))
-                .filter(load -> load.getBroker() != null && load.getBroker().getName() != null
-                        && load.getBroker().getName().trim().equalsIgnoreCase(name))
+                .filter(load -> load.getBroker() != null
+                        && RateConChecks.normalize(load.getBroker().getName()).equals(name))
                 .findFirst();
     }
 
@@ -714,7 +732,7 @@ public class TruckingIntakeService {
 
         Broker broker = (mcNumber != null
                 ? brokerRepository.findFirstByOrganizationIdAndMcNumber(organizationId, mcNumber)
-                : brokerRepository.findFirstByOrganizationIdAndMcNumberIsNullAndNameIgnoreCase(organizationId, name))
+                : brokerWithoutMc(organizationId, name))
                 .orElseGet(Broker::new);
 
         broker.setOrganizationId(organizationId);
