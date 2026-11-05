@@ -4,6 +4,7 @@ import { errorMessage } from "../api/client";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { ConfirmInline } from "../components/ConfirmInline";
 import { FileList } from "../components/FileList";
+import { DocumentsSection } from "./DocumentsSection";
 import type { LoadDetail, LoadStatus } from "../types/Load";
 import { STATUS_LABELS, city, detention, money, when } from "./format";
 
@@ -254,6 +255,11 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadView
               ))}
             </section>
           )}
+
+          <DocumentsSection
+            load={load}
+            onChanged={() => void run("documents", () => getLoad(loadId), "Couldn't refresh this load.")}
+          />
 
           <section className="tk-panel" aria-label="Emails">
             <h2>Emails</h2>

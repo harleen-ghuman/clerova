@@ -19,8 +19,17 @@ export async function fetchAttachment(id: string): Promise<Blob> {
     return demoAttachment(id);
   }
 
+  return fetchFile(`/api/attachments/${id}`);
+}
+
+/** A document uploaded to a load. */
+export function fetchLoadDocument(id: string): Promise<Blob> {
+  return fetchFile(`/api/load-documents/${id}/file`);
+}
+
+async function fetchFile(path: string): Promise<Blob> {
   const { data } = await supabase.auth.getSession();
-  const response = await fetch(`${API_BASE_URL}/api/attachments/${id}`, {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: data.session
       ? { Authorization: `Bearer ${data.session.access_token}` }
       : {},

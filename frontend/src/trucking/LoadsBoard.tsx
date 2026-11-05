@@ -1,11 +1,15 @@
 import type { LoadStatus, LoadSummary } from "../types/Load";
 import { lane, money } from "./format";
+import { UploadDocuments } from "./UploadDocuments";
 
 interface LoadsBoardProps {
   loads: LoadSummary[];
   loading: boolean;
   error: string | null;
   onOpenLoad: (id: string) => void;
+  refreshKey: number;
+  /** An upload filed a document or made a load. */
+  onChanged: () => void;
 }
 
 const COLUMNS: { title: string; statuses: LoadStatus[] }[] = [
@@ -15,7 +19,7 @@ const COLUMNS: { title: string; statuses: LoadStatus[] }[] = [
   { title: "Closed", statuses: ["INVOICED", "PAID", "CANCELLED"] },
 ];
 
-export function LoadsBoard({ loads, loading, error, onOpenLoad }: LoadsBoardProps) {
+export function LoadsBoard({ loads, loading, error, onOpenLoad, refreshKey, onChanged }: LoadsBoardProps) {
   return (
     <div className="tk-page" style={{ maxWidth: "none" }}>
       <header className="page-header">
@@ -24,6 +28,8 @@ export function LoadsBoard({ loads, loading, error, onOpenLoad }: LoadsBoardProp
       </header>
 
       {error && <p className="action-error" role="alert">{error}</p>}
+
+      <UploadDocuments loads={loads} refreshKey={refreshKey} onOpenLoad={onOpenLoad} onChanged={onChanged} />
       {loading && loads.length === 0 && <p className="tk-none">Loading your loads...</p>}
 
       <div className="tk-board-wrap">

@@ -75,6 +75,40 @@ export interface LoadReply {
   sentAt: string | null;
 }
 
+export type DocumentKind =
+  | "RATE_CON"
+  | "BOL"
+  | "POD"
+  | "LUMPER_RECEIPT"
+  | "SCALE_TICKET"
+  | "INVOICE"
+  | "OTHER";
+
+/** A document on a load: from an email filed under it, or uploaded. */
+export interface LoadDocument {
+  id: string;
+  source: "EMAIL" | "UPLOAD";
+  kind: DocumentKind | null;
+  name: string | null;
+  contentType: string | null;
+  sizeBytes: number | null;
+  stored: boolean;
+  at: string | null;
+}
+
+/** An uploaded document; loadId is null until it's filed. */
+export interface UploadedDocument {
+  id: string;
+  loadId: string | null;
+  kind: DocumentKind;
+  name: string;
+  contentType: string | null;
+  sizeBytes: number;
+  at: string;
+  /** An uploaded rate con made this load. */
+  newLoad: boolean;
+}
+
 export interface LoadDetail {
   id: string;
   loadNumber: string | null;
@@ -95,6 +129,7 @@ export interface LoadDetail {
   statusNote: string | null;
   draft: LoadReply | null;
   conversation: ConversationEntry[];
+  documents: LoadDocument[];
   createdAt: string;
   updatedAt: string;
 }

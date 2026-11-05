@@ -439,3 +439,121 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Documents: on a load page and the upload panel on the board */
+.tk-docs {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.tk-docs > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.tk-doc-main {
+  flex: 1 1 220px;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+
+.tk-doc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.tk-doc-actions select,
+.tk-picker select {
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 14px;
+  background: #fff;
+  color: inherit;
+  max-width: 100%;
+}
+
+.tk-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--brand);
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tk-picker {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.tk-picker label {
+  font-weight: 600;
+}
+
+.tk-picker-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.tk-picker-row select {
+  flex: 1 1 220px;
+}
+
+.tk-upload {
+  margin-bottom: 16px;
+}
+
+.tk-upload-top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.tk-upload-top h2 {
+  margin-bottom: 4px;
+}
+
+.tk-upload-top p {
+  max-width: 60ch;
+  margin: 0;
+}
+
+label.rq-button {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+label.rq-button.is-disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.tk-file-input:focus-visible + label {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}

@@ -35,6 +35,10 @@ public class InboundAttachment {
     @Column(columnDefinition = "TEXT")
     private String extractedText;
 
+    /** What Clerova read the file as (a DocumentKind name), for trucking workspaces. */
+    @Column(length = 30)
+    private String documentKind;
+
     public UUID getId() {
         return id;
     }
@@ -81,6 +85,14 @@ public class InboundAttachment {
 
     public String getExtractedText() {
         return extractedText;
+    }
+
+    public String getDocumentKind() {
+        return documentKind;
+    }
+
+    public void setDocumentKind(String documentKind) {
+        this.documentKind = documentKind;
     }
 
     public void setExtractedText(String extractedText) {

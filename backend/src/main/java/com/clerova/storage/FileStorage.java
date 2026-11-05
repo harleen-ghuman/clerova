@@ -11,4 +11,7 @@ public interface FileStorage {
 
     /** @throws FileStorageException if the file could not be read */
     byte[] get(String path);
+
+    /** @throws FileStorageException if the file could not be removed */
+    void delete(String path);
 }

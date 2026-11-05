@@ -1,5 +1,7 @@
 package com.clerova.trucking;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -122,6 +124,61 @@ class AiRateConEvaluationTest {
         assertThat(Money.cents(read.detentionRatePerHour)).isNull();
         // The $25 notification fee isn't a detention rule
         assertThat(read.detentionCondition == null ? "" : read.detentionCondition).doesNotContain("$25");
+    }
+
+    /** Draws text as a slightly crooked gray "scan", like a phone photo of paper. */
+    private static List<String> scan(String text) throws Exception {
+        String[] lines = text.strip().split("\n");
+        java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(1275, 1650, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        java.awt.Graphics2D g = image.createGraphics();
+        g.setColor(new java.awt.Color(238, 236, 230));
+        g.fillRect(0, 0, image.getWidth(), image.getHeight());
+        g.rotate(Math.toRadians(0.8), 600, 800);
+        g.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g.setColor(new java.awt.Color(40, 40, 45));
+        g.setFont(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 19));
+        int y = 90;
+        for (String line : lines) {
+            g.drawString(line, 70, y);
+            y += 27;
+        }
+        g.dispose();
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(image, "png", out);
+        return DocumentImages.dataUrls(out.toByteArray(), "scan.png", "image/png");
+    }
+
+    @Test
+    void readsAScannedRateConFromItsPicture() throws Exception {
+        // No text layer at all: only the picture
+        RateConResult read = truckingAiService.readRateCon("Subject: Fwd:\n\n", "", scan(DRY_VAN));
+
+        assertThat(read.isRateConfirmation).isTrue();
+        assertThat(DocumentKind.parse(read.documentKind)).isEqualTo(DocumentKind.RATE_CON);
+        assertThat(read.loadNumber).contains("88213");
+        assertThat(TruckingIntakeService.mcNumber(read.brokerMcNumber)).isEqualTo("845210");
+        assertThat(Money.cents(read.lineHaulRate)).isEqualTo(215000L);
+        assertThat(read.stops).hasSize(2);
+        assertThat(read.stops.get(0).place).contains("Fresno");
+        assertThat(Money.cents(read.detentionRatePerHour)).isEqualTo(5000L);
+    }
+
+    @Test
+    void readsABolAndTheNumbersOnIt() throws Exception {
+        String bol = """
+                BILL OF LADING                         Date: 04/17/2026
+                Shipper: Pine Flat Ranch, HC 12 Box 410, Ely, NV 89301
+                Consignee: Valley Oak Ranch, 8749 Lone Oak Ave, Hanford, CA 93230
+                Carrier: Sierra Run LLC        Trailer #: V5327
+                Broker load #: 5520194-1       PO #: 7781-A
+                Product: Alfalfa hay, 24 tons, 32 bales
+                Shipper signature: ______      Driver signature: ______
+                """;
+        RateConResult read = truckingAiService.readRateCon("Subject: Ely to Hanford\n\n", "", scan(bol));
+
+        assertThat(read.isRateConfirmation).isFalse();
+        assertThat(DocumentKind.parse(read.documentKind)).isEqualTo(DocumentKind.BOL);
+        assertThat(String.join(" ", read.referenceNumbers)).contains("5520194");
     }
 
     @Test

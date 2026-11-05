@@ -67,6 +67,16 @@ public class SupabaseFileStorage implements FileStorage {
         return send(request, "read");
     }
 
+    @Override
+    public void delete(String path) {
+        HttpRequest request = request(path)
+                .timeout(Duration.ofSeconds(30))
+                .DELETE()
+                .build();
+
+        send(request, "delete");
+    }
+
     private HttpRequest.Builder request(String path) {
         if (!isEnabled()) {
             throw new FileStorageException("File storage is not configured");

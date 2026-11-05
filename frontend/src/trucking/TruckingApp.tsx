@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { getLoads } from "../api/loads";
+import { fileEmail, getLoads } from "../api/loads";
 import { getEmailSettings } from "../api/email";
 import { getMe } from "../api/account";
 import { errorMessage } from "../api/client";
@@ -255,7 +255,14 @@ export function TruckingApp({
               onChanged={() => void loadLoads()}
             />
           ) : (
-            <LoadsBoard loads={loads} loading={loadsLoading} error={loadsError} onOpenLoad={openLoad} />
+            <LoadsBoard
+              loads={loads}
+              loading={loadsLoading}
+              error={loadsError}
+              onOpenLoad={openLoad}
+              refreshKey={refreshTick}
+              onChanged={() => void loadLoads()}
+            />
           ))}
 
         {activeView === "brokers" && <BrokersView refreshKey={refreshTick} />}
@@ -267,6 +274,8 @@ export function TruckingApp({
               onOpenWorkItem={() => navigate("loads")}
               onOpenEmailSetup={() => navigate("email-setup")}
               onOpenLoad={openLoad}
+              loads={loads}
+              onFileEmail={(messageId, loadId) => fileEmail(loadId, messageId).then(() => loadLoads())}
             />
           </div>
         )}

@@ -1,4 +1,4 @@
-import type { LoadStatus } from "../types/Load";
+import type { DocumentKind, LoadStatus, LoadSummary } from "../types/Load";
 
 export function money(cents: number | null | undefined): string {
   if (cents === null || cents === undefined) {
@@ -72,4 +72,23 @@ export function when(value: string | null): string {
   return value
     ? new Date(value).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
     : "";
+}
+
+export const DOCUMENT_KINDS: { kind: DocumentKind; label: string }[] = [
+  { kind: "RATE_CON", label: "Rate con" },
+  { kind: "BOL", label: "BOL" },
+  { kind: "POD", label: "POD" },
+  { kind: "LUMPER_RECEIPT", label: "Lumper receipt" },
+  { kind: "SCALE_TICKET", label: "Scale ticket" },
+  { kind: "INVOICE", label: "Invoice" },
+  { kind: "OTHER", label: "Other" },
+];
+
+export function kindLabel(kind: DocumentKind | null): string {
+  return DOCUMENT_KINDS.find((item) => item.kind === kind)?.label ?? "Document";
+}
+
+/** "#88213 · Fresno, CA → Phoenix, AZ", for picking a load from a list. */
+export function loadLabel(load: Pick<LoadSummary, "loadNumber" | "origin" | "destination">): string {
+  return `${load.loadNumber ? `#${load.loadNumber}` : "No load number"} · ${lane(load.origin, load.destination)}`;
 }
