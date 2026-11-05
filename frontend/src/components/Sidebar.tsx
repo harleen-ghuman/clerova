@@ -9,7 +9,8 @@ export type AppView =
   | "email-setup"
   | "settings"
   | "loads"
-  | "brokers";
+  | "brokers"
+  | "invoices";
 
 export interface SidebarItem {
   view: AppView;

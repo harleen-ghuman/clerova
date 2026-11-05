@@ -27,7 +27,7 @@ export function fetchLoadDocument(id: string): Promise<Blob> {
   return fetchFile(`/api/load-documents/${id}/file`);
 }
 
-async function fetchFile(path: string): Promise<Blob> {
+export async function fetchFile(path: string): Promise<Blob> {
   const { data } = await supabase.auth.getSession();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: data.session

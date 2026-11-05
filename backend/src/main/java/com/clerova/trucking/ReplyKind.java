@@ -6,5 +6,9 @@ public enum ReplyKind {
     APPOINTMENT,
     PAPERWORK,
     RATE,
-    OTHER
+    OTHER,
+    /** Sent by the dispatcher from the detention panel (never chosen by the AI). */
+    DETENTION,
+    /** An invoice packet sent from Clerova (never chosen by the AI). */
+    INVOICE
 }

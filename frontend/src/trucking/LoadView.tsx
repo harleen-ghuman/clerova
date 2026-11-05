@@ -4,7 +4,10 @@ import { errorMessage } from "../api/client";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { ConfirmInline } from "../components/ConfirmInline";
 import { FileList } from "../components/FileList";
+import { ChargesPanel } from "./ChargesPanel";
 import { DocumentsSection } from "./DocumentsSection";
+import { InvoicePanel } from "./InvoicePanel";
+import { StopsPanel } from "./StopsPanel";
 import { Email } from "./Email";
 import type { LoadDetail, LoadStatus } from "../types/Load";
 import { STATUS_LABELS, city, detention, money, when } from "./format";
@@ -15,6 +18,7 @@ interface LoadViewProps {
   onBack: () => void;
   /** Something changed; refresh the lists. */
   onChanged: () => void;
+  onOpenSettings: () => void;
 }
 
 /** Broker emails can be long (quoted history, signatures): show the start first. */
@@ -57,15 +61,21 @@ function nextStep(load: LoadDetail): { text: string; to?: LoadStatus; label?: st
     case "IN_TRANSIT":
       return { text: "On the way. Keep the latest update current so replies to the broker are right.", to: "DELIVERED", label: "Mark delivered" };
     case "DELIVERED":
-      return { text: "Delivered. Get the signed POD from the driver. Invoicing comes in the next update." };
+      return {
+        text: load.invoice
+          ? "Delivered. Finish the invoice below and send it."
+          : "Delivered. Add the signed BOL or POD under Documents, then create the invoice below.",
+      };
+    case "INVOICED":
+      return { text: "Invoiced. Mark it paid below when the money arrives." };
+    case "PAID":
+      return { text: "Paid. This load is done." };
     case "CANCELLED":
       return { text: "This load was cancelled." };
-    default:
-      return { text: `This load is ${STATUS_LABELS[load.status].toLowerCase()}.` };
   }
 }
 
-export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadViewProps) {
+export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSettings }: LoadViewProps) {
   const [load, setLoad] = useState<LoadDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -96,7 +106,7 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadView
     };
   }, [loadId]);
 
-  async function run(key: string, action: () => Promise<LoadDetail>, fallback: string) {
+  async function run(key: string, action: () => Promise<LoadDetail>, fallback: string): Promise<boolean> {
     setBusy(key);
     setError(null);
 
@@ -106,11 +116,21 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadView
       setNote(result.statusNote ?? "");
       setDraft(result.draft?.body ?? "");
       onChanged();
+      return true;
     } catch (err) {
       setError(errorMessage(err, fallback));
+      return false;
     } finally {
       setBusy(null);
     }
+  }
+
+  async function reload() {
+    const result = await getLoad(loadId);
+    setLoad(result);
+    setNote(result.statusNote ?? "");
+    setDraft(result.draft?.body ?? "");
+    onChanged();
   }
 
   function saveNote(event: FormEvent<HTMLFormElement>) {
@@ -250,6 +270,14 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadView
             </section>
           )}
 
+          <StopsPanel load={load} sendingEnabled={sendingEnabled} busy={busy} run={run} />
+
+          {["DELIVERED", "INVOICED", "PAID"].includes(load.status) || load.invoice ? (
+            <InvoicePanel load={load} sendingEnabled={sendingEnabled} onChanged={reload} onOpenSettings={onOpenSettings} />
+          ) : null}
+
+          <ChargesPanel load={load} sendingEnabled={sendingEnabled} busy={busy} run={run} />
+
           {load.flags.length > 0 && (
             <section className="tk-panel" aria-label="Rate con check">
               <h2>Rate con check</h2>
@@ -315,20 +343,6 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadView
         </div>
 
         <div className="tk-stack">
-          <section className="tk-panel" aria-label="Stops">
-            <h2>Stops</h2>
-            <ol className="tk-stops">
-              {load.stops.map((stop, index) => (
-                <li key={index} className={`tk-stop tk-stop-${stop.kind === "PICKUP" ? "pickup" : "delivery"}`}>
-                  <span className="tk-eyebrow">{stop.kind === "PICKUP" ? "Pickup" : "Delivery"}</span>
-                  <span className="tk-stop-place">{stop.place}</span>
-                  {stop.appointment && <span className="tk-stop-time">{stop.appointment}</span>}
-                </li>
-              ))}
-              {load.stops.length === 0 && <li className="tk-none">The rate con's stops couldn't be read.</li>}
-            </ol>
-          </section>
-
           <section className="tk-panel" aria-label="Rate and terms">
             <h2>Rate and terms</h2>
             <dl className="tk-kv">
@@ -343,6 +357,7 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadView
               <dt>Detention</dt>
               <dd>
                 {detention(load.detentionRateCents, load.detentionFreeMinutes)}
+                {load.detentionMaxCents !== null && `, up to ${money(load.detentionMaxCents)}`}
                 {load.detentionRule && <div className="tk-sub">{load.detentionRule}</div>}
               </dd>
               {load.tonuCents !== null && (
@@ -360,7 +375,18 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadView
               {load.paymentTerms && (
                 <>
                   <dt>Payment</dt>
-                  <dd>{load.paymentTerms}</dd>
+                  <dd>
+                    {load.paymentTerms}
+                    {load.quickPayPercent !== null && <div className="tk-sub">Quick pay: {load.quickPayPercent}% fee</div>}
+                  </dd>
+                </>
+              )}
+              {load.invoiceEmail && (
+                <>
+                  <dt>Invoices to</dt>
+                  <dd>
+                    <Email value={load.invoiceEmail} />
+                  </dd>
                 </>
               )}
               {load.equipment && (

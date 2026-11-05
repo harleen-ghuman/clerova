@@ -21,6 +21,16 @@ public class LoadController {
     public record SendReplyRequest(String body) {
     }
 
+    /** Both times as they should be; null clears one. */
+    public record StopTimesRequest(java.time.Instant arrivedAt, java.time.Instant leftAt) {
+    }
+
+    public record ChargeRequest(ChargeKind kind, String description, Long amountCents, ChargeStatus status) {
+    }
+
+    public record MessageRequest(String to, String subject, String body, UUID chargeId) {
+    }
+
     private final LoadService loadService;
     private final CurrentUserService currentUserService;
 
@@ -71,5 +81,36 @@ public class LoadController {
     @GetMapping("/api/brokers")
     public List<LoadResponses.BrokerSummary> brokers() {
         return loadService.brokers(currentUserService.requireOrganizationId());
+    }
+
+    @org.springframework.web.bind.annotation.PutMapping("/api/loads/{id}/stops/{stopId}/times")
+    public LoadResponses.LoadDetail setStopTimes(@PathVariable UUID id, @PathVariable UUID stopId,
+                                                 @RequestBody StopTimesRequest request) {
+        return loadService.setStopTimes(currentUserService.requireOrganizationId(), id, stopId,
+                request.arrivedAt(), request.leftAt());
+    }
+
+    @PostMapping("/api/loads/{id}/charges")
+    public LoadResponses.LoadDetail addCharge(@PathVariable UUID id, @RequestBody ChargeRequest request) {
+        return loadService.addCharge(currentUserService.requireOrganizationId(), id, request.kind(),
+                request.description(), request.amountCents(), request.status());
+    }
+
+    @PatchMapping("/api/loads/{id}/charges/{chargeId}")
+    public LoadResponses.LoadDetail updateCharge(@PathVariable UUID id, @PathVariable UUID chargeId,
+                                                 @RequestBody ChargeRequest request) {
+        return loadService.updateCharge(currentUserService.requireOrganizationId(), id, chargeId,
+                request.description(), request.amountCents(), request.status());
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/api/loads/{id}/charges/{chargeId}")
+    public LoadResponses.LoadDetail deleteCharge(@PathVariable UUID id, @PathVariable UUID chargeId) {
+        return loadService.deleteCharge(currentUserService.requireOrganizationId(), id, chargeId);
+    }
+
+    @PostMapping("/api/loads/{id}/messages")
+    public LoadResponses.LoadDetail sendMessage(@PathVariable UUID id, @RequestBody MessageRequest request) {
+        return loadService.sendMessage(currentUserService.requireOrganizationId(), id, request.to(),
+                request.subject(), request.body(), request.chargeId());
     }
 }

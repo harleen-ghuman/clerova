@@ -17,6 +17,7 @@ import { MIN_PASSWORD_LENGTH, PASSWORD_HINT, passwordProblem } from "../auth/pas
 import { supabase } from "../auth/supabase";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { isDemo } from "../demo/mode";
+import { CarrierSection } from "../trucking/CarrierSection";
 import type { Me, Organization } from "../types/Account";
 import { PLANS, planName, planPrice } from "../utils/plans";
 
@@ -203,7 +204,7 @@ export function SettingsPage({
         <h1>Settings</h1>
         <p>
           {!propertyManagement
-            ? "Your details and sign-in."
+            ? "Your details, carrier details for invoices, and sign-in."
             : hasBilling
               ? "Your details, company info, sign-in and billing."
               : "Your details, company info and sign-in."}
@@ -216,8 +217,10 @@ export function SettingsPage({
         onSaved={onSaved}
         readers={propertyManagement ? "Residents" : "Brokers"}
       />
-      {propertyManagement && (
+      {propertyManagement ? (
         <CompanyInfoSection focus={focusCompanyInfo} onFocused={onCompanyInfoFocused} />
+      ) : (
+        <CarrierSection focus={focusCompanyInfo} />
       )}
       {isDemo() ? (
         <section className="settings-section">

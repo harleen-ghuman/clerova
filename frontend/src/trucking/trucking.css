@@ -1138,3 +1138,405 @@ label.rq-button.is-disabled {
   flex-basis: 100%;
   margin: 0;
 }
+
+/* =========================================================
+   Phase 3: detention, extra pay, invoices
+   ========================================================= */
+
+.tk-stop-log {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.tk-stop-detention {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--border-faint);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.tk-stop-detention.soon {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.tk-stop-detention.over {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.tk-stop-actions {
+  margin-top: 10px;
+  align-items: center;
+}
+
+.tk-times-form,
+.tk-charge-form,
+.tk-pay-form {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  max-width: 420px;
+}
+
+.tk-times-form label {
+  display: grid;
+  gap: 4px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tk-times-form input,
+.tk-charge-form input,
+.tk-charge-form select,
+.tk-pay-form input,
+.tk-composer input,
+.tk-line input,
+.tk-month {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.tk-charge-form label,
+.tk-pay-form label,
+.tk-composer label {
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tk-times-form .tk-actions,
+.tk-charge-form .tk-actions,
+.tk-pay-form .tk-actions {
+  margin-top: 6px;
+}
+
+.tk-composer {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--brand-line);
+  border-radius: var(--radius-md);
+  background: var(--brand-soft);
+}
+
+.tk-composer-title {
+  margin-bottom: 4px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.tk-composer textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.tk-composer .tk-actions {
+  margin-top: 8px;
+}
+
+.tk-charges {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tk-charges > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border-faint);
+}
+
+.tk-charges > li > .tk-composer {
+  flex: 1 1 100%;
+}
+
+.tk-charge-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 200px;
+}
+
+.tk-charge-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tk-charge-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.tk-status-select {
+  padding: 5px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tk-status-select-good {
+  border-color: var(--success-line);
+  color: var(--success);
+}
+
+.tk-status-select-note {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.tk-status-select-info {
+  border-color: var(--brand-line);
+  color: var(--brand);
+}
+
+.tk-status-select-fix {
+  border-color: var(--danger-line);
+  color: var(--danger);
+}
+
+.tk-panel .tk-callout,
+.tk-callout {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* The invoice */
+.tk-invoice h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.tk-invoice h2 .tk-pill {
+  color: inherit;
+}
+
+.tk-sendto {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 12px;
+}
+
+.tk-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.tk-chip {
+  padding: 6px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tk-chip span {
+  margin-left: 4px;
+  color: var(--text-muted);
+}
+
+.tk-chip.active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.tk-lines {
+  display: grid;
+  gap: 6px;
+}
+
+.tk-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px 32px;
+  gap: 6px;
+  align-items: center;
+}
+
+.tk-line-amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.tk-line-remove {
+  width: 32px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tk-line-remove:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tk-lines-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 38px 4px 0;
+}
+
+.tk-lines-foot .tk-money {
+  font-size: 15px;
+}
+
+.tk-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.tk-check input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--brand);
+}
+
+.tk-invoice .tk-link-small {
+  justify-self: start;
+  margin-top: 6px;
+}
+
+.tk-packet {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-faint);
+}
+
+.tk-packet ol {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.tk-packet .tk-actions,
+.tk-invoice-send {
+  margin-top: 12px;
+}
+
+.tk-invoice-send {
+  padding-top: 12px;
+  border-top: 1px solid var(--border-faint);
+}
+
+.tk-invoice-send > .tk-sub {
+  margin: 0 0 8px;
+}
+
+.tk-void {
+  margin-top: 14px;
+  color: var(--text-muted);
+}
+
+.tk-overdue {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* Invoices page */
+.tk-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tk-summary > div {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.tk-summary strong {
+  font-size: 22px;
+  font-weight: 650;
+}
+
+.tk-month {
+  width: auto;
+}
+
+@media (max-width: 520px) {
+  /* The description gets the full width; the amount sits under it */
+  .tk-line {
+    grid-template-columns: minmax(0, 1fr) 110px 32px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-faint);
+  }
+
+  .tk-line > input:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .tk-line .tk-line-amount {
+    grid-column: 2;
+  }
+}

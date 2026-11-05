@@ -75,6 +75,19 @@ public class PostmarkEmailSender implements EmailSender {
             body.put("Headers", headers);
         }
 
+        if (!email.attachments().isEmpty()) {
+            List<Map<String, String>> files = new ArrayList<>();
+
+            for (OutgoingEmail.Attachment attachment : email.attachments()) {
+                files.add(Map.of(
+                        "Name", attachment.name(),
+                        "Content", java.util.Base64.getEncoder().encodeToString(attachment.content()),
+                        "ContentType", attachment.contentType()));
+            }
+
+            body.put("Attachments", files);
+        }
+
         HttpRequest request = HttpRequest.newBuilder(apiUrl)
                 .timeout(Duration.ofSeconds(20))
                 .header("Accept", "application/json")

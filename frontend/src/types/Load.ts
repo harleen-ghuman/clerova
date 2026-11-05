@@ -1,7 +1,7 @@
 export type LoadStatus = "BOOKED" | "IN_TRANSIT" | "DELIVERED" | "INVOICED" | "PAID" | "CANCELLED";
 export type FlagLevel = "FIX" | "NOTE";
 export type FmcsaStatus = "ACTIVE" | "NOT_AUTHORIZED" | "NOT_FOUND";
-export type ReplyKind = "STATUS" | "APPOINTMENT" | "PAPERWORK" | "RATE" | "OTHER";
+export type ReplyKind = "STATUS" | "APPOINTMENT" | "PAPERWORK" | "RATE" | "OTHER" | "DETENTION" | "INVOICE";
 export type ReplyStatus = "DRAFT" | "SENT" | "DISMISSED";
 
 /** Amounts are in cents. */
@@ -124,12 +124,18 @@ export interface LoadDetail {
   paymentTerms: string | null;
   paperworkRule: string | null;
   rateConFile: string | null;
-  stops: { kind: "PICKUP" | "DELIVERY"; place: string | null; appointment: string | null }[];
+  detentionMaxCents: number | null;
+  quickPayPercent: number | null;
+  invoiceEmail: string | null;
+  stops: LoadStop[];
   flags: LoadFlag[];
   statusNote: string | null;
   draft: LoadReply | null;
   conversation: ConversationEntry[];
   documents: LoadDocument[];
+  charges: LoadCharge[];
+  /** The load's current invoice (not a voided one). */
+  invoice: Invoice | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -138,4 +144,93 @@ export interface BrokerSummary {
   broker: BrokerInfo;
   loads: number;
   openLoads: number;
+}
+
+/** Detention so far at a stop, worked out from the logged times. */
+export interface StopDetention {
+  minutesOnSite: number;
+  freeMinutes: number;
+  billableMinutes: number;
+  amountCents: number | null;
+  freeEndsAt: string;
+}
+
+export interface LoadStop {
+  id: string;
+  kind: "PICKUP" | "DELIVERY";
+  place: string | null;
+  appointment: string | null;
+  arrivedAt: string | null;
+  leftAt: string | null;
+  detention: StopDetention | null;
+}
+
+export type ChargeKind = "DETENTION" | "LUMPER" | "TONU" | "LAYOVER" | "OTHER";
+export type ChargeStatus = "TO_CLAIM" | "CLAIMED" | "APPROVED" | "DENIED";
+
+export interface LoadCharge {
+  id: string;
+  kind: ChargeKind;
+  label: string;
+  description: string | null;
+  amountCents: number;
+  status: ChargeStatus;
+  stopId: string | null;
+  claimedAt: string | null;
+}
+
+export type InvoiceStatus = "DRAFT" | "SENT" | "PAID" | "VOID";
+
+export interface InvoiceLine {
+  description: string;
+  amountCents: number;
+}
+
+export interface Invoice {
+  id: string;
+  loadId: string;
+  number: string;
+  status: InvoiceStatus;
+  sendTo: "FACTOR" | "BROKER";
+  billTo: string | null;
+  remitTo: string | null;
+  lines: InvoiceLine[];
+  totalCents: number;
+  quickPay: boolean;
+  quickPayFeeCents: number | null;
+  sentVia: "EMAIL" | "PORTAL" | null;
+  sentEmail: string | null;
+  sentAt: string | null;
+  /** YYYY-MM-DD */
+  dueDate: string | null;
+  paidAt: string | null;
+  paidCents: number | null;
+  createdAt: string;
+  loadNumber: string | null;
+  brokerName: string | null;
+  origin: string | null;
+  destination: string | null;
+  /** Only on one invoice (not in lists): what the packet holds and lacks. */
+  packet: { name: string | null; kind: DocumentKind | null }[] | null;
+  missingPaperwork: string[] | null;
+  suggestedEmail: string | null;
+  /** The carrier uses a factoring company, so the invoice can go to either. */
+  factoring: boolean;
+}
+
+export interface CarrierDetails {
+  legalName: string | null;
+  mcNumber: string | null;
+  dotNumber: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  invoicePrefix: string | null;
+  nextInvoiceNumber: number;
+  usesFactoring: boolean;
+  factorName: string | null;
+  factorAddress: string | null;
+  factorEmail: string | null;
+  /** What invoices need that isn't filled in, in plain words. */
+  missing: string[];
 }
