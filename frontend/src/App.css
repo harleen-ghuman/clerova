@@ -3093,3 +3093,36 @@ body.demo-bar-open .jobs-page {
     grid-template-columns: 1fr;
   }
 }
+
+/* The link between the two demos */
+.demo-bar .demo-switch {
+  justify-self: start;
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Both demos, when the visitor's kind of business isn't known */
+.auth-demo-two {
+  flex-wrap: wrap;
+}
+
+.auth-demo-two > span:first-child {
+  flex: 1 1 200px;
+}
+
+.auth-demo-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.auth-demo-two .auth-demo-button {
+  text-decoration: none;
+}
+
+.auth-demo-two .auth-demo-button:hover {
+  background: var(--brand-hover);
+}

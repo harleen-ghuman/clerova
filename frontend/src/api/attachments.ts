@@ -1,6 +1,6 @@
 import { API_BASE_URL } from "../config";
 import { supabase } from "../auth/supabase";
-import { isDemo } from "../demo/mode";
+import { isDemo, isTruckingDemo } from "../demo/mode";
 import { ApiRequestError } from "./client";
 
 /** Photos and PDFs open in the browser; other files download. */
@@ -14,6 +14,10 @@ export const VIEWABLE_TYPES = [
 
 /** A file that came with an email, as the signed-in user. */
 export async function fetchAttachment(id: string): Promise<Blob> {
+  if (isTruckingDemo()) {
+    return fetchFile(`/api/attachments/${id}`);
+  }
+
   if (isDemo()) {
     const { demoAttachment } = await import("../demo/fakeApi");
     return demoAttachment(id);
@@ -28,6 +32,11 @@ export function fetchLoadDocument(id: string): Promise<Blob> {
 }
 
 export async function fetchFile(path: string): Promise<Blob> {
+  if (isTruckingDemo()) {
+    const { demoTruckingFile } = await import("../demo/truckingFakeApi");
+    return demoTruckingFile(path);
+  }
+
   const { data } = await supabase.auth.getSession();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: data.session

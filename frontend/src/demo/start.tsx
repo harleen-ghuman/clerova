@@ -3,10 +3,10 @@ import { createRoot } from "react-dom/client";
 
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { DemoRoot } from "./DemoRoot";
-import { startDemoMode } from "./mode";
+import { demoIndustry, startDemoMode } from "./mode";
 
 export function startDemo(container: HTMLElement) {
-  startDemoMode();
+  startDemoMode(demoIndustry(window.location.pathname) ?? "PROPERTY_MANAGEMENT");
 
   createRoot(container).render(
     <StrictMode>

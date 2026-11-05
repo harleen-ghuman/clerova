@@ -166,6 +166,7 @@ function App() {
           <a href="#faq">FAQ</a>
           <a href="#contact">Contact</a>
           <a href={DEMO_URL}>Try the demo</a>
+          <a href="/trucking">For trucking</a>
         </nav>
 
         <div className="nav-actions">
@@ -441,6 +442,7 @@ function App() {
         </a>
         <nav className="footer-links" aria-label="Footer">
           <a href="/guides">Guides</a>
+          <a href="/trucking">Clerova for trucking</a>
           <a href="/terms">Terms</a>
           <a href="/privacy">Privacy</a>
           <a href="mailto:hello@clerova-ai.com">Contact: hello@clerova-ai.com</a>

@@ -10,7 +10,7 @@ const container = document.getElementById('root')!
 
 // /demo is usually served from demo/index.html; this covers hosts that send
 // every path to the app instead
-if (/^\/demo\/?$/.test(window.location.pathname)) {
+if (/^\/demo(\/trucking)?\/?$/.test(window.location.pathname)) {
   void import('./demo/start.tsx').then(({ startDemo }) => startDemo(container))
 } else {
   captureReferralSource()
