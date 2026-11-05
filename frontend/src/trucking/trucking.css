@@ -3,6 +3,8 @@
 .tk-page {
   max-width: 1080px;
   padding: 28px 32px 48px;
+  /* Long load numbers, emails and file names wrap instead of spilling out */
+  overflow-wrap: anywhere;
 }
 
 .tk-sections {
@@ -189,6 +191,7 @@
 .tk-card-top {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 8px;
   color: var(--text-muted);
   font-size: 12px;
@@ -257,7 +260,7 @@
   margin-top: 8px;
 }
 
-.tk-note-form input {
+.tk-note-form textarea {
   flex: 1 1 220px;
   min-width: 0;
   padding: 8px 10px;
@@ -283,6 +286,13 @@
 .tk-flag:first-of-type {
   border-top: 0;
   padding-top: 4px;
+}
+
+/* The Fix / Note badge keeps its pill shape next to long text */
+.tk-flag > .tk-pill {
+  align-self: start;
+  justify-self: start;
+  white-space: nowrap;
 }
 
 .tk-flag.done {
@@ -359,6 +369,24 @@
   color: var(--text-muted);
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+.tk-msg-subject {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.tk-msg-more {
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--brand);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .tk-msg-body {
@@ -519,6 +547,8 @@
 
 .tk-picker-row select {
   flex: 1 1 220px;
+  min-width: 0;
+  width: 100%;
 }
 
 .tk-upload {
@@ -556,4 +586,62 @@ label.rq-button.is-disabled {
 .tk-file-input:focus-visible + label {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
+}
+
+/* Phones: the brokers table becomes one card per broker */
+@media (max-width: 640px) {
+  .tk-table {
+    min-width: 0;
+  }
+
+  .tk-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .tk-table tr {
+    display: block;
+    padding: 6px 0;
+    border-top: 1px solid var(--border-faint);
+  }
+
+  .tk-table tbody tr:first-child {
+    border-top: 0;
+  }
+
+  .tk-table td {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 8px;
+    padding: 4px 14px;
+    border-top: 0;
+  }
+
+  .tk-table td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+}
+
+/* Money never breaks in the middle of a number */
+.tk-card-top > span:last-child,
+.tk-money {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.tk-card-top > span:first-child {
+  min-width: 0;
+}
+
+.tk-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
 }

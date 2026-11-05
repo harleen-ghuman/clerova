@@ -8,6 +8,7 @@ interface TodayViewProps {
   forwardingAddress: string | null;
   onOpenLoad: (id: string) => void;
   onOpenEmailSetup: () => void;
+  onRetry?: () => void;
 }
 
 function Row({ load, sub, pill, onOpen }: {
@@ -46,7 +47,15 @@ function Panel({ title, empty, children, count }: {
   );
 }
 
-export function TodayView({ loads, loading, error, forwardingAddress, onOpenLoad, onOpenEmailSetup }: TodayViewProps) {
+export function TodayView({
+  loads,
+  loading,
+  error,
+  forwardingAddress,
+  onOpenLoad,
+  onOpenEmailSetup,
+  onRetry,
+}: TodayViewProps) {
   const check = loads.filter((load) => load.status === "BOOKED" && load.openFlags > 0);
   const drafts = loads.filter((load) => load.draftReplies > 0);
   const onTheRoad = loads.filter((load) => load.status === "IN_TRANSIT");
@@ -62,7 +71,16 @@ export function TodayView({ loads, loading, error, forwardingAddress, onOpenLoad
         </p>
       </header>
 
-      {error && <p className="action-error" role="alert">{error}</p>}
+      {error && (
+        <div className="action-error tk-error" role="alert">
+          <span>{error}</span>
+          {onRetry && (
+            <button type="button" className="rq-button rq-button-small" onClick={onRetry}>
+              Try again
+            </button>
+          )}
+        </div>
+      )}
 
       {!loading && !error && loads.length === 0 && (
         <div className="tk-start">
@@ -83,7 +101,8 @@ export function TodayView({ loads, loading, error, forwardingAddress, onOpenLoad
         </div>
       )}
 
-      {loading && loads.length === 0 ? (
+      {/* Without loads to show, empty panels would wrongly say there's nothing to do */}
+      {error && loads.length === 0 ? null : loading && loads.length === 0 ? (
         <p className="tk-none">Loading your loads...</p>
       ) : (
         <div className="tk-sections">

@@ -16,6 +16,26 @@ interface LoadViewProps {
   onChanged: () => void;
 }
 
+/** Broker emails can be long (quoted history, signatures): show the start first. */
+const LONG_EMAIL = 900;
+
+function EmailBody({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > LONG_EMAIL;
+  const shown = long && !open ? text.slice(0, LONG_EMAIL).replace(/\s+\S*$/, "") + "…" : text;
+
+  return (
+    <>
+      <p className="tk-msg-body">{shown}</p>
+      {long && (
+        <button type="button" className="tk-msg-more" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? "Show less" : "Show the whole email"}
+        </button>
+      )}
+    </>
+  );
+}
+
 /** What the dispatcher does next, by where the load is. */
 function nextStep(load: LoadDetail): { text: string; to?: LoadStatus; label?: string } {
   const open = load.flags.filter((flag) => !flag.resolvedAt);
@@ -174,8 +194,9 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadView
               <label className="visually-hidden" htmlFor="load-note">
                 Latest update
               </label>
-              <input
+              <AutoTextarea
                 id="load-note"
+                rows={1}
                 maxLength={500}
                 placeholder="Latest update, like: Loaded 9:40, ETA Phoenix 6 AM"
                 value={note}
@@ -271,8 +292,8 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged }: LoadView
                     <span>{entry.incoming ? entry.from : `You → ${entry.to}`}</span>
                     <span>{when(entry.at)}</span>
                   </div>
-                  {entry.subject && <strong style={{ fontSize: 14 }}>{entry.subject}</strong>}
-                  {entry.body && <p className="tk-msg-body">{entry.body.trim()}</p>}
+                  {entry.subject && <strong className="tk-msg-subject">{entry.subject}</strong>}
+                  {entry.body && <EmailBody text={entry.body.trim()} />}
                   {entry.files.length > 0 && (
                     <FileList
                       files={entry.files.map((file) => ({

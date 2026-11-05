@@ -65,11 +65,12 @@ export function BrokersView({ refreshKey }: { refreshKey: number }) {
             <tbody>
               {brokers.map(({ broker, loads, openLoads }) => (
                 <tr key={broker.id}>
-                  <td>
+                  <td data-label="Broker">
                     <strong>{broker.name}</strong>
                   </td>
-                  <td>{broker.mcNumber ?? "Missing"}</td>
-                  <td>
+                  <td data-label="MC number">{broker.mcNumber ?? "Missing"}</td>
+                  <td data-label="FMCSA check">
+                    <div>
                     {broker.fmcsaStatus ? (
                       <span className={`tk-pill tk-pill-${FMCSA[broker.fmcsaStatus].tone}`}>
                         {FMCSA[broker.fmcsaStatus].text}
@@ -78,13 +79,18 @@ export function BrokersView({ refreshKey }: { refreshKey: number }) {
                       <span className="tk-sub">Not checked</span>
                     )}
                     {broker.fmcsaName && <div className="tk-sub">FMCSA name: {broker.fmcsaName}</div>}
+                    </div>
                   </td>
-                  <td>
-                    {loads} {openLoads > 0 && <span className="tk-sub">({openLoads} open)</span>}
+                  <td data-label="Loads">
+                    <div>
+                      {loads} {openLoads > 0 && <span className="tk-sub">({openLoads} open)</span>}
+                    </div>
                   </td>
-                  <td>
-                    <div>{broker.email ?? ""}</div>
-                    <div className="tk-sub">{broker.phone ?? ""}</div>
+                  <td data-label="Contact">
+                    <div>
+                      <div>{broker.email ?? (broker.phone ? "" : "Not on the rate con")}</div>
+                      {broker.phone && <div className="tk-sub">{broker.phone}</div>}
+                    </div>
                   </td>
                 </tr>
               ))}

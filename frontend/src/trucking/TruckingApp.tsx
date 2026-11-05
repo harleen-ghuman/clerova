@@ -242,6 +242,7 @@ export function TruckingApp({
             forwardingAddress={forwardingAddress}
             onOpenLoad={openLoad}
             onOpenEmailSetup={() => navigate("email-setup")}
+            onRetry={() => void loadLoads()}
           />
         )}
 
@@ -262,6 +263,7 @@ export function TruckingApp({
               onOpenLoad={openLoad}
               refreshKey={refreshTick}
               onChanged={() => void loadLoads()}
+              onRetry={() => void loadLoads()}
             />
           ))}
 

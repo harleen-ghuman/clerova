@@ -171,8 +171,9 @@ export function InboxPage({
         <div>
           <h1>Inbox</h1>
           <p>
-            Every email forwarded to Clerova. A new email becomes a request in
-            Requests; a reply is added to the request it belongs to.
+            {onOpenLoad
+              ? "Every email forwarded to Clerova. A rate con becomes a load; broker emails and paperwork go on the load they're about."
+              : "Every email forwarded to Clerova. A new email becomes a request in Requests; a reply is added to the request it belongs to."}
           </p>
         </div>
 
@@ -198,7 +199,7 @@ export function InboxPage({
           aria-pressed={filter === "attention"}
           onClick={() => setFilter("attention")}
         >
-          Ignored or failed
+          {onOpenLoad ? "Not on a load" : "Ignored or failed"}
           <span>{needsAttention.length}</span>
         </button>
       </div>
@@ -216,8 +217,12 @@ export function InboxPage({
 
           <p>
             {filter === "all"
-              ? "Forward your requests inbox to your Clerova address and new emails will appear here."
-              : "Ignored and failed emails will appear here."}
+              ? onOpenLoad
+                ? "Forward your broker emails and rate cons to your Clerova address and they will appear here."
+                : "Forward your requests inbox to your Clerova address and new emails will appear here."
+              : onOpenLoad
+                ? "Emails Clerova couldn't put on a load will appear here."
+                : "Ignored and failed emails will appear here."}
           </p>
 
           {filter === "all" && (
@@ -253,7 +258,9 @@ export function InboxPage({
                         ? "New load"
                         : onOpenLoad && message.status === "ATTACHED"
                           ? "On a load"
-                          : STATUS_LABELS[message.status]}
+                          : onOpenLoad && message.status === "IGNORED"
+                            ? "Not on a load"
+                            : STATUS_LABELS[message.status]}
                 </span>
               </div>
 
@@ -286,6 +293,7 @@ export function InboxPage({
                   {message.statusReason && ` · ${message.statusReason}`}
                 </span>
 
+                <div className="inbox-item-actions">
                 {message.loadId && onOpenLoad && (
                   <button
                     type="button"
@@ -322,7 +330,10 @@ export function InboxPage({
                 )}
 
                 {(message.status === "FAILED" ||
-                  (message.status === "IGNORED" && !isSetAside(message))) && (
+                  (message.status === "IGNORED" &&
+                    !isSetAside(message) &&
+                    // A trucking email with no file has nothing new to read
+                    !(onOpenLoad && message.attachments.length === 0))) && (
                   <button
                     type="button"
                     className="secondary-action-button"
@@ -333,9 +344,12 @@ export function InboxPage({
                       ? "Queuing..."
                       : message.status === "FAILED"
                         ? "Retry"
-                        : "Process anyway"}
+                        : onOpenLoad
+                          ? "Read it again"
+                          : "Process anyway"}
                   </button>
                 )}
+                </div>
               </div>
 
               {filingId === message.id && (

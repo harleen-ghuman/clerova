@@ -4,7 +4,7 @@ import { errorMessage } from "../api/client";
 import { ConfirmInline } from "../components/ConfirmInline";
 import type { DocumentKind, LoadDetail, LoadDocument } from "../types/Load";
 import { DOCUMENT_KINDS, kindLabel, when } from "./format";
-import { ACCEPTED_FILES, openDocument } from "./documents";
+import { ACCEPTED_FILES, openDocument, uploadProblem } from "./documents";
 
 /** The load's paperwork: files from its emails and uploads, ready for the invoice. */
 export function DocumentsSection({ load, onChanged }: { load: LoadDetail; onChanged: () => void }) {
@@ -28,6 +28,13 @@ export function DocumentsSection({ load, onChanged }: { load: LoadDetail; onChan
 
     for (const [index, file] of files.entries()) {
       setProgress(files.length > 1 ? `Uploading ${index + 1} of ${files.length}...` : "Uploading...");
+
+      const problem = uploadProblem(file);
+
+      if (problem) {
+        failed.push(`${file.name}: ${problem}`);
+        continue;
+      }
 
       try {
         await uploadDocument(file, load.id);

@@ -87,7 +87,7 @@ public class LoadDocumentService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "FILE_TOO_BIG", "Files can be up to 10 MB.");
         }
 
-        if (contentType == null) {
+        if (contentType == null || !looksLike(contentType, upload.content())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "FILE_TYPE",
                     "Upload a PDF or a photo (JPG, PNG or WebP).");
         }
@@ -286,6 +286,36 @@ public class LoadDocumentService {
         }
 
         return null;
+    }
+
+    /** The file really is what its name says: checked from its first bytes. */
+    static boolean looksLike(String contentType, byte[] content) {
+        if (content == null || content.length < 12) {
+            return false;
+        }
+
+        return switch (contentType) {
+            case "application/pdf" -> startsWith(content, 0, "%PDF-".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+            case "image/jpeg" -> (content[0] & 0xFF) == 0xFF && (content[1] & 0xFF) == 0xD8 && (content[2] & 0xFF) == 0xFF;
+            case "image/png" -> startsWith(content, 0, new byte[] {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'});
+            case "image/webp" -> startsWith(content, 0, "RIFF".getBytes(java.nio.charset.StandardCharsets.US_ASCII))
+                    && startsWith(content, 8, "WEBP".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+            default -> false;
+        };
+    }
+
+    private static boolean startsWith(byte[] content, int offset, byte[] prefix) {
+        if (content.length < offset + prefix.length) {
+            return false;
+        }
+
+        for (int i = 0; i < prefix.length; i++) {
+            if (content[offset + i] != prefix[i]) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     static String cleanName(String fileName) {

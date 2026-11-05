@@ -1307,6 +1307,7 @@ h3 {
   margin: 8px 0 0;
   font-size: 14px;
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .inbox-preview {
@@ -1430,6 +1431,15 @@ button.file-chip:focus-visible {
 .inbox-item-footer > span {
   color: var(--text-muted);
   font-size: 12px;
+}
+
+/* The email's buttons stay together on the right */
+.inbox-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .status-badge {
@@ -2737,6 +2747,11 @@ button.file-chip:focus-visible {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
+}
+
+/* A long sign-in email wraps on small phones */
+.settings-section strong {
+  overflow-wrap: anywhere;
 }
 
 .settings-section h2 {
