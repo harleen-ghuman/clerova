@@ -1310,6 +1310,14 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.inbox-on-load {
+  margin: 4px 0 0;
+  color: var(--success);
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 .inbox-preview {
   margin: 4px 0 0;
   color: var(--text-secondary);

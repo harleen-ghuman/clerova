@@ -6,6 +6,7 @@ import { FileList } from "../components/FileList";
 import type { InboundMessage, InboundMessageStatus } from "../types/Email";
 import type { LoadSummary } from "../types/Load";
 import { LoadPicker } from "../trucking/LoadPicker";
+import { loadLabel } from "../trucking/format";
 
 interface InboxPageProps {
   /** Changes when the app refreshes, so new emails show up. */
@@ -79,7 +80,9 @@ export function InboxPage({
   const [loading, setLoading] = useState(true);
   const [itemError, setItemError] = useState<{ id: string; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | "attention">("all");
+  const [filter, setFilter] = useState<"all" | "attention" | "automated">("all");
+  // Emails filed in this visit stay in view, showing where they went
+  const [justFiled, setJustFiled] = useState<string[]>([]);
   const [showSetAside, setShowSetAside] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [filingId, setFilingId] = useState<string | null>(null);
@@ -142,6 +145,7 @@ export function InboxPage({
       setBusyId(message.id);
       setItemError(null);
       await onFileEmail(message.id, loadId);
+      setJustFiled((current) => [...current, message.id]);
       setMessages((current) =>
         current.map((item) =>
           item.id === message.id
@@ -162,19 +166,23 @@ export function InboxPage({
 
   const fromPeople = messages.filter((message) => !isSetAside(message));
   const setAside = messages.length - fromPeople.length;
-  // For trucking, newsletters aren't emails that need a load
-  const needsAttention = fromPeople.filter(
+  // For trucking, newsletters get their own tab instead of crowding the list
+  const automated = onOpenLoad ? fromPeople.filter(isAutomated) : [];
+  const listed = onOpenLoad ? fromPeople.filter((message) => !isAutomated(message)) : fromPeople;
+  const needsAttention = listed.filter(
     (message) =>
-      message.status === "FAILED" ||
-      (message.status === "IGNORED" && !(onOpenLoad && isAutomated(message)))
+      message.status === "FAILED" || message.status === "IGNORED" || justFiled.includes(message.id)
   );
 
   const visible =
     filter === "attention"
       ? needsAttention
-      : showSetAside
-        ? messages
-        : fromPeople;
+      : filter === "automated"
+        ? automated
+        : showSetAside
+          ? messages
+          : listed;
+  const loadNames = new Map(loads.map((load) => [load.id, loadLabel(load)]));
 
   return (
     <section className="inbox">
@@ -201,7 +209,7 @@ export function InboxPage({
           onClick={() => setFilter("all")}
         >
           All
-          <span>{fromPeople.length}</span>
+          <span>{listed.length}</span>
         </button>
 
         <button
@@ -211,8 +219,20 @@ export function InboxPage({
           onClick={() => setFilter("attention")}
         >
           {onOpenLoad ? "Not on a load" : "Ignored or failed"}
-          <span>{needsAttention.length}</span>
+          <span>{needsAttention.length - needsAttention.filter((message) => message.status === "ATTACHED").length}</span>
         </button>
+
+        {onOpenLoad && (
+          <button
+            type="button"
+            className={`rq-chip ${filter === "automated" ? "active" : ""}`}
+            aria-pressed={filter === "automated"}
+            onClick={() => setFilter("automated")}
+          >
+            Automated
+            <span>{automated.length}</span>
+          </button>
+        )}
       </div>
 
       {loading && <p>Loading inbox...</p>}
@@ -223,11 +243,13 @@ export function InboxPage({
         <div className="empty-view">
 
           <h2>
-            {filter === "all" ? "No emails yet" : "Nothing needs attention"}
+            {filter === "all" ? "No emails yet" : filter === "automated" ? "No automated emails" : "Nothing needs attention"}
           </h2>
 
           <p>
-            {filter === "all"
+            {filter === "automated"
+              ? "Newsletters, receipts and other automatic emails will appear here, out of the way."
+              : filter === "all"
               ? onOpenLoad
                 ? "Forward your broker emails and rate cons to your Clerova address and they will appear here."
                 : "Forward your requests inbox to your Clerova address and new emails will appear here."
@@ -280,6 +302,10 @@ export function InboxPage({
               <p className="inbox-subject">
                 {message.subject || "(no subject)"}
               </p>
+
+              {onOpenLoad && message.loadId && loadNames.has(message.loadId) && (
+                <p className="inbox-on-load">On load {loadNames.get(message.loadId)}</p>
+              )}
 
               {message.preview && (
                 <p className="inbox-preview">{message.preview}</p>

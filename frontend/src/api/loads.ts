@@ -75,3 +75,8 @@ export function deleteDocument(id: string): Promise<void> {
 export function getUnfiledDocuments(): Promise<UploadedDocument[]> {
   return apiRequest("/api/load-documents");
 }
+
+/** Sets a broker's MC by hand; Clerova checks it with FMCSA. */
+export function setBrokerMc(brokerId: string, mcNumber: string): Promise<BrokerSummary["broker"]> {
+  return apiRequest(`/api/brokers/${brokerId}/mc-number`, { method: "PUT", body: { mcNumber } });
+}

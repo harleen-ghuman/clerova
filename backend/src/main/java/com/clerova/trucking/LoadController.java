@@ -60,6 +60,14 @@ public class LoadController {
         return loadService.dismissReply(currentUserService.requireOrganizationId(), id, replyId);
     }
 
+    public record BrokerMcRequest(String mcNumber) {
+    }
+
+    @org.springframework.web.bind.annotation.PutMapping("/api/brokers/{id}/mc-number")
+    public LoadResponses.BrokerInfo setBrokerMc(@PathVariable UUID id, @RequestBody BrokerMcRequest request) {
+        return loadService.setBrokerMc(currentUserService.requireOrganizationId(), id, request.mcNumber());
+    }
+
     @GetMapping("/api/brokers")
     public List<LoadResponses.BrokerSummary> brokers() {
         return loadService.brokers(currentUserService.requireOrganizationId());

@@ -7,7 +7,24 @@ import { DOCUMENT_KINDS, kindLabel, when } from "./format";
 import { ACCEPTED_FILES, openDocument, uploadProblem } from "./documents";
 
 /** The load's paperwork: files from its emails and uploads, ready for the invoice. */
+/** The same file emailed twice (same name, size and kind) is listed once. */
+function distinct(documents: LoadDocument[]): LoadDocument[] {
+  const seen = new Set<string>();
+
+  return documents.filter((document) => {
+    const key = `${document.name}|${document.sizeBytes}|${document.kind}`;
+
+    if (document.source === "UPLOAD" || !seen.has(key)) {
+      seen.add(key);
+      return true;
+    }
+
+    return false;
+  });
+}
+
 export function DocumentsSection({ load, onChanged }: { load: LoadDetail; onChanged: () => void }) {
+  const documents = distinct(load.documents);
   const inputId = useId();
   const [busy, setBusy] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
@@ -80,18 +97,17 @@ export function DocumentsSection({ load, onChanged }: { load: LoadDetail; onChan
   return (
     <section className="tk-panel" aria-label="Documents">
       <h2>
-        Documents <span>{load.documents.length}</span>
+        Documents <span>{documents.length}</span>
       </h2>
       <p className="tk-sub">
         Rate con, BOL, POD and receipts for this load, from its emails and your uploads. Clerova reads each file to
         tell what it is.
       </p>
 
-      {load.documents.length > 0 && (
+      {documents.length > 0 && (
         <ul className="tk-docs">
-          {load.documents.map((document) => (
+          {documents.map((document) => (
             <li key={`${document.source}-${document.id}`}>
-              <span className="tk-pill tk-pill-info">{kindLabel(document.kind)}</span>
               <span className="tk-doc-main">
                 {document.stored ? (
                   <button type="button" className="tk-link" onClick={() => void open(document)}>
@@ -100,7 +116,8 @@ export function DocumentsSection({ load, onChanged }: { load: LoadDetail; onChan
                 ) : (
                   <span>{document.name || "Unnamed file"}</span>
                 )}
-                <span className="tk-sub">
+                <span className="tk-sub tk-doc-meta">
+                  <span className="tk-pill tk-pill-info">{kindLabel(document.kind)}</span>
                   {document.source === "UPLOAD" ? "Uploaded" : "From an email"} · {when(document.at)}
                   {!document.stored && " · only the name was kept"}
                 </span>

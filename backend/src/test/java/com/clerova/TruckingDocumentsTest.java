@@ -404,6 +404,37 @@ class TruckingDocumentsTest {
     }
 
     @Test
+    void anMcAddedByHandIsCheckedAndFixesTheLoadsFlags() throws Exception {
+        RateConResult read = rateCon("CCFS15310");
+        read.brokerMcNumber = null;
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(read);
+        deliver("<nomc@x>", "Rate Confirmation for Shipment CCFS15310", "", "rc.pdf", scannedPdf());
+        processor.processDue();
+
+        String loadId = json(mockMvc.perform(get("/api/loads").with(user))).get(0).get("id").asText();
+        JsonNode load = json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user)));
+        assertThat(load.get("flags").toString()).contains("MC_MISSING");
+        String brokerId = load.get("broker").get("id").asText();
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/brokers/{id}/mc-number", brokerId)
+                        .with(user).contentType(MediaType.APPLICATION_JSON).content("{\"mcNumber\":\"MC# 845210\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mcNumber").value("845210"))
+                .andExpect(jsonPath("$.fmcsaStatus").value("ACTIVE"));
+
+        load = json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user)));
+        assertThat(load.get("flags").toString()).doesNotContain("MC_MISSING");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/brokers/{id}/mc-number", brokerId)
+                        .with(user).contentType(MediaType.APPLICATION_JSON).content("{\"mcNumber\":\"none\"}"))
+                .andExpect(status().isBadRequest());
+        RequestPostProcessor other = onboardNewUser(mockMvc);
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/brokers/{id}/mc-number", brokerId)
+                        .with(other).contentType(MediaType.APPLICATION_JSON).content("{\"mcNumber\":\"845210\"}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void aRateConReadyEmailWithoutTheFileSaysToDownloadIt() throws Exception {
         deliver("eber@flockfreight.example", "<flock@x>", "Your Rate Confirmation is ready for Load 9Y-ZDH-T93",
                 "View it in the portal.", null, null);

@@ -48,6 +48,8 @@ public class LoadService {
     private final EmailProperties emailProperties;
     private final EmailSender emailSender;
     private final LoadDocumentRepository loadDocumentRepository;
+    private final TruckingIntakeService intakeService;
+    private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
     public LoadService(
             LoadRepository loadRepository,
@@ -58,8 +60,12 @@ public class LoadService {
             InboundAddressService inboundAddressService,
             EmailProperties emailProperties,
             EmailSender emailSender,
-            LoadDocumentRepository loadDocumentRepository
+            LoadDocumentRepository loadDocumentRepository,
+            TruckingIntakeService intakeService,
+            org.springframework.transaction.support.TransactionTemplate transactionTemplate
     ) {
+        this.intakeService = intakeService;
+        this.transactionTemplate = transactionTemplate;
         this.loadDocumentRepository = loadDocumentRepository;
         this.loadRepository = loadRepository;
         this.loadReplyRepository = loadReplyRepository;
@@ -286,6 +292,52 @@ public class LoadService {
     }
 
     public static final String FILED_BY_HAND_REASON = "Filed under this load by you.";
+
+    /**
+     * Sets a broker's MC by hand (the rate con didn't print it, or printed
+     * the wrong one), checks it with FMCSA and redoes the broker checks on
+     * the broker's open loads.
+     */
+    public LoadResponses.BrokerInfo setBrokerMc(UUID organizationId, UUID brokerId, String value) {
+        String mcNumber = TruckingIntakeService.mcNumber(value);
+
+        if (mcNumber == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "MC_INVALID", "Enter the MC number, like 555609.");
+        }
+
+        Broker found = brokerRepository.findById(brokerId)
+                .filter(broker -> broker.getOrganizationId().equals(organizationId))
+                .orElseThrow(() -> new NotFoundException("Broker not found"));
+
+        // FMCSA can be slow: ask before the transaction
+        BrokerCheck check = intakeService.brokerCheck(organizationId, mcNumber);
+
+        return transactionTemplate.execute(status -> {
+            Broker broker = brokerRepository.findById(found.getId()).orElseThrow();
+            broker.setMcNumber(mcNumber);
+            broker.setFmcsaStatus(check == null ? null : check.status());
+            broker.setFmcsaName(check == null ? null
+                    : check.legalName() != null ? check.legalName() : check.dbaName());
+            broker.setFmcsaCheckedAt(check == null ? null : Instant.now());
+            brokerRepository.save(broker);
+
+            for (Load load : loadRepository.findForOrganization(organizationId)) {
+                if (load.getBroker() == null || !load.getBroker().getId().equals(broker.getId())
+                        || !TruckingIntakeService.OPEN.contains(load.getStatus())) {
+                    continue;
+                }
+
+                List<LoadFlag> kept = new ArrayList<>(load.getFlags().stream()
+                        .filter(flag -> !RateConChecks.BROKER_CODES.contains(flag.getCode()))
+                        .toList());
+                kept.addAll(RateConChecks.brokerFlags(load, mcNumber, check));
+                load.replaceFlags(kept);
+                loadRepository.save(load);
+            }
+
+            return LoadResponses.BrokerInfo.of(broker);
+        });
+    }
 
     /**
      * Files an email under a load by hand: one Clerova couldn't match, or

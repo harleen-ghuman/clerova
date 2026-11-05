@@ -295,12 +295,14 @@
   white-space: nowrap;
 }
 
-/* Checked items read as done without fading below readable contrast */
+/* Checked items read as done: a Done label and quieter text, no strike-through */
 .tk-flag.done strong {
   color: var(--text-muted);
   font-weight: 500;
-  text-decoration: line-through;
-  text-decoration-color: var(--border-strong);
+}
+
+.tk-flag.done p {
+  color: var(--text-muted);
 }
 
 .tk-flag p {
@@ -1082,4 +1084,57 @@ label.rq-button.is-disabled {
   .tk-column .tk-none {
     padding: 2px 0 4px;
   }
+}
+
+/* Documents: name first, then kind, source and date on one quiet line */
+.tk-doc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 2px;
+}
+
+/* Load meta line: separators trail each item, so a wrapped line never starts with a dot */
+.tk-meta > span + span::before {
+  content: none;
+}
+
+.tk-meta > span:not(:last-child)::after {
+  content: "·";
+  margin: 0 8px;
+  color: var(--border-strong);
+}
+
+/* Brokers: add or correct an MC number */
+.tk-mc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.tk-link-small {
+  font-size: 13px;
+}
+
+.tk-mc-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.tk-mc-form input {
+  width: 120px;
+  min-height: 34px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  font: inherit;
+}
+
+.tk-mc-form .action-error {
+  flex-basis: 100%;
+  margin: 0;
 }

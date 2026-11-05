@@ -68,6 +68,12 @@ export function TruckingApp({
     return state?.clerova && VIEWS.includes(state.view) ? state : null;
   });
   const [activeView, setActiveView] = useState<AppView>(restoredNav?.view ?? "today");
+  const mobileNav = useRef<HTMLElement>(null);
+
+  // On phones the tab bar scrolls sideways: keep the current tab in view
+  useEffect(() => {
+    mobileNav.current?.querySelector(".active")?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [activeView]);
   const [selectedId, setSelectedId] = useState<string | null>(restoredNav?.selectedId ?? null);
   const [loads, setLoads] = useState<LoadSummary[]>([]);
   const [loadsLoading, setLoadsLoading] = useState(true);
@@ -231,7 +237,7 @@ export function TruckingApp({
         showBilling={false}
       />
 
-      <nav className="mobile-nav" aria-label="Mobile navigation">
+      <nav className="mobile-nav" aria-label="Mobile navigation" ref={mobileNav}>
         {items.map((item) => (
           <button
             key={item.view}
