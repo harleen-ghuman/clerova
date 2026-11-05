@@ -52,6 +52,14 @@ const GMAIL_CONFIRMATION_REASON = "Gmail forwarding confirmation";
  * Emails from Clerova or Gmail's setup, not from residents: copies of your
  * replies and alerts that your forwarding sent back, and Gmail's check.
  */
+/** Newsletters and automatic notices Clerova set aside on its own. */
+function isAutomated(message: InboundMessage): boolean {
+  return (
+    message.status === "IGNORED" &&
+    Boolean(message.statusReason?.startsWith("Automated or bulk") || message.statusReason?.startsWith("Automatic notice"))
+  );
+}
+
 function isSetAside(message: InboundMessage): boolean {
   return (
     isOwnCopy(message) ||
@@ -154,8 +162,11 @@ export function InboxPage({
 
   const fromPeople = messages.filter((message) => !isSetAside(message));
   const setAside = messages.length - fromPeople.length;
+  // For trucking, newsletters aren't emails that need a load
   const needsAttention = fromPeople.filter(
-    (message) => message.status === "FAILED" || message.status === "IGNORED"
+    (message) =>
+      message.status === "FAILED" ||
+      (message.status === "IGNORED" && !(onOpenLoad && isAutomated(message)))
   );
 
   const visible =
@@ -258,7 +269,9 @@ export function InboxPage({
                         ? "New load"
                         : onOpenLoad && message.status === "ATTACHED"
                           ? "On a load"
-                          : onOpenLoad && message.status === "IGNORED"
+                          : onOpenLoad && isAutomated(message)
+                            ? "Automated"
+                            : onOpenLoad && message.status === "IGNORED"
                             ? "Not on a load"
                             : STATUS_LABELS[message.status]}
                 </span>

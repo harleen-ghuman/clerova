@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getBrokers } from "../api/loads";
 import { errorMessage } from "../api/client";
+import { Email } from "./Email";
 import type { BrokerSummary, FmcsaStatus } from "../types/Load";
 
 const FMCSA: Record<FmcsaStatus, { text: string; tone: string }> = {
@@ -88,7 +89,7 @@ export function BrokersView({ refreshKey }: { refreshKey: number }) {
                   </td>
                   <td data-label="Contact">
                     <div>
-                      <div>{broker.email ?? (broker.phone ? "" : "Not on the rate con")}</div>
+                      <div>{broker.email ? <Email value={broker.email} /> : broker.phone ? "" : "Not on the rate con"}</div>
                       {broker.phone && <div className="tk-sub">{broker.phone}</div>}
                     </div>
                   </td>

@@ -92,3 +92,9 @@ export function kindLabel(kind: DocumentKind | null): string {
 export function loadLabel(load: Pick<LoadSummary, "loadNumber" | "origin" | "destination">): string {
   return `${load.loadNumber ? `#${load.loadNumber}` : "No load number"} · ${lane(load.origin, load.destination)}`;
 }
+
+/** Where a long email may wrap: after the "@" and before dots, never mid-word. */
+export function emailBreaks(email: string): string[] {
+  const at = email.indexOf("@");
+  return at < 0 ? [email] : [email.slice(0, at + 1), ...email.slice(at + 1).split(/(?=\.)/)];
+}
