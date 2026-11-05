@@ -149,9 +149,8 @@ public class TruckingIntakeService {
                 SavedLoad saved = transactionTemplate.execute(
                         status -> saveLoad(organizationId, file.getFileName(), read, mcNumber, check));
 
-                if (saved.created()) {
-                    fileWaitingPaperwork(organizationId, saved.load().getId());
-                }
+                // A new load, or a new copy that may carry numbers the old one didn't
+                fileWaitingPaperwork(organizationId, saved.load().getId());
 
                 return saved.created()
                         ? new Result(InboundMessageStatus.PROCESSED, null, saved.load().getId())
@@ -335,6 +334,19 @@ public class TruckingIntakeService {
         } catch (RuntimeException e) {
             log.warn("Could not file waiting paperwork for load {}: {}", loadId, e.toString());
         }
+    }
+
+    /** A broker with no MC, by name: "Acme Freight, Inc." is the same as "Acme Freight". */
+    private Optional<Broker> brokerWithoutMc(UUID organizationId, String name) {
+        String wanted = RateConChecks.normalize(name);
+
+        if (wanted.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return brokerRepository.findByOrganizationIdOrderByNameAsc(organizationId).stream()
+                .filter(broker -> broker.getMcNumber() == null && RateConChecks.normalize(broker.getName()).equals(wanted))
+                .findFirst();
     }
 
     /**
@@ -720,7 +732,7 @@ public class TruckingIntakeService {
 
         Broker broker = (mcNumber != null
                 ? brokerRepository.findFirstByOrganizationIdAndMcNumber(organizationId, mcNumber)
-                : brokerRepository.findFirstByOrganizationIdAndMcNumberIsNullAndNameIgnoreCase(organizationId, name))
+                : brokerWithoutMc(organizationId, name))
                 .orElseGet(Broker::new);
 
         broker.setOrganizationId(organizationId);

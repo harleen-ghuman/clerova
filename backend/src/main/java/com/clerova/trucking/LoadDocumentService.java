@@ -144,7 +144,7 @@ public class LoadDocumentService {
 
         LoadResponses.UploadedDocument saved = uploaded(documentRepository.save(document), newLoad);
 
-        if (newLoad) {
+        if (loadId == null && kind == DocumentKind.RATE_CON && target != null) {
             intakeService.fileWaitingPaperwork(organizationId, target.getId());
         }
 

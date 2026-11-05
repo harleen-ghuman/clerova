@@ -351,6 +351,39 @@ class TruckingDocumentsTest {
         assertThat(brokers.get(0).get("broker").get("mcNumber").isNull()).isTrue();
         assertThat(json(mockMvc.perform(get("/api/inbox").with(user))).get(0).get("statusReason").asText())
                 .isEqualTo(TruckingIntakeService.REVISED_REASON);
+
+        // A third read, spelled the other way again: still one load and one broker
+        RateConResult again = rateCon("CCFS15310");
+        again.brokerName = "CrossCountry Freight Solutions";
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(again);
+        deliver("<v3@x>", "Rate Confirmation for Shipment CCFS15310", "", "rc.pdf", scannedPdf());
+        processor.processDue();
+        assertThat(json(mockMvc.perform(get("/api/loads").with(user)))).hasSize(1);
+        assertThat(json(mockMvc.perform(get("/api/brokers").with(user)))).hasSize(1);
+    }
+
+    @Test
+    void waitingPaperworkIsFiledWhenANewCopyAddsTheNumber() throws Exception {
+        // The first copy of the rate con had no shipper number
+        String loadId = bookLoad("3466426-1");
+
+        RateConResult bol = new RateConResult();
+        bol.documentKind = "BOL";
+        bol.referenceNumbers = new ArrayList<>(List.of("ABF553780"));
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(bol);
+        deliver("me@gmail.com", "<bol-wait@x>", "paperwork", "", "bol.pdf", scannedPdf());
+        processor.processDue();
+        assertThat(json(mockMvc.perform(get("/api/inbox").with(user))).get(0).get("status").asText()).isEqualTo("IGNORED");
+
+        RateConResult copy = rateCon("3466426-1");
+        copy.referenceNumbers = new ArrayList<>(List.of("ABF553780"));
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(copy);
+        deliver("<rc-copy@x>", "Rate Confirmation 3466426-1 (signed)", "", "signed.pdf", scannedPdf());
+        processor.processDue();
+
+        JsonNode bolEmail = json(mockMvc.perform(get("/api/inbox").with(user))).get(1);
+        assertThat(bolEmail.get("status").asText()).isEqualTo("ATTACHED");
+        assertThat(bolEmail.get("loadId").asText()).isEqualTo(loadId);
     }
 
     @Test
