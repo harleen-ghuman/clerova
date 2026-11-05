@@ -164,6 +164,23 @@ class TruckingDocumentsTest {
     }
 
     @Test
+    void aBolWhoseSubjectNamesTheLaneFindsItsLoad() throws Exception {
+        String loadId = bookLoad("3466426-1");
+        RateConResult bol = new RateConResult();
+        bol.documentKind = "BOL";
+        // Only the shipper's numbers, none of the broker's
+        bol.referenceNumbers = new ArrayList<>(List.of("28522", "AOP5S1O"));
+        when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(bol);
+
+        deliver("me@gmail.com", "<lane@x>", "Fwd: Ely to Hanford", "", "ely to hanford ca.pdf", scannedPdf());
+        processor.processDue();
+
+        JsonNode email = json(mockMvc.perform(get("/api/inbox").with(user))).get(0);
+        assertThat(email.get("status").asText()).isEqualTo("ATTACHED");
+        assertThat(email.get("loadId").asText()).isEqualTo(loadId);
+    }
+
+    @Test
     void anUnmatchedEmailCanBeFiledUnderALoadByHand() throws Exception {
         String loadId = bookLoad("88213");
         RateConResult unknown = new RateConResult();
