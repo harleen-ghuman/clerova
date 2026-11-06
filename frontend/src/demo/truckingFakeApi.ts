@@ -108,6 +108,17 @@ function broker(name: string, mc: string | null, email: string, phone: string): 
   };
 }
 
+/**
+ * Minutes since 11:10 PM two nights ago, local time: the sample delivery that
+ * waited past midnight (left 2h 45m later), whatever time the demo is opened.
+ */
+const LATE_ARRIVAL = (() => {
+  const arrived = new Date();
+  arrived.setDate(arrived.getDate() - 2);
+  arrived.setHours(23, 10, 0, 0);
+  return Math.round((Date.now() - arrived.getTime()) / 60_000);
+})();
+
 function stop(kind: "PICKUP" | "DELIVERY", place: string, appointment: string, arrived?: number, left?: number): LoadStop {
   return {
     id: id("stop"),
@@ -234,18 +245,18 @@ function seed(): State {
 
   // 3. Delivered: detention to claim, ready to invoice
   const delivered = baseLoad(harbor, "BH-7781", "DELIVERED", 185_000, [
-    stop("PICKUP", "Delta Paper Co, 500 Industrial Dr, Stockton, CA 95206", clockAt(1710), 1700, 1640),
-    stop("DELIVERY", "Sierra Supply, 2600 E 4th St, Reno, NV 89512", `${clockAt(1310)} APPT`, 1300, 1135),
-  ], 2900);
+    stop("PICKUP", "Delta Paper Co, 500 Industrial Dr, Stockton, CA 95206", clockAt(LATE_ARRIVAL + 410), LATE_ARRIVAL + 400, LATE_ARRIVAL + 340),
+    stop("DELIVERY", "Sierra Supply, 2600 E 4th St, Reno, NV 89512", `${clockAt(LATE_ARRIVAL + 10)} APPT`, LATE_ARRIVAL, LATE_ARRIVAL - 165),
+  ], LATE_ARRIVAL + 1200);
   delivered.paymentTerms = "Net 31";
   delivered.quickPayPercent = 2.5;
   delivered.flags = [flag("MC_MISSING", "NOTE", "No MC number for the broker",
     "The rate con doesn't print the broker's MC, so Clerova couldn't check it with FMCSA. Add it on the Brokers page.", null, true)];
   delivered.conversation = [
-    incoming("Blue Harbor Ops <ops@blueharbor.example>", "Load BH-7781 confirmation", "Rate con attached.", 2900, ["RC_BH-7781.pdf"]),
+    incoming("Blue Harbor Ops <ops@blueharbor.example>", "Load BH-7781 confirmation", "Rate con attached.", LATE_ARRIVAL + 1200, ["RC_BH-7781.pdf"]),
     incoming("Sam Ortiz <dispatch@sierrarun.example>", "Fwd: POD BH-7781", "Signed POD from the driver.", 1100, ["POD_BH-7781.pdf"]),
   ];
-  delivered.documents = [emailDocument("RATE_CON", "RC_BH-7781.pdf", 2900), emailDocument("POD", "POD_BH-7781.pdf", 1100)];
+  delivered.documents = [emailDocument("RATE_CON", "RC_BH-7781.pdf", LATE_ARRIVAL + 1200), emailDocument("POD", "POD_BH-7781.pdf", 1100)];
 
   // 4. Invoiced and waiting on payment
   const invoiced = baseLoad(crestline, "87990", "INVOICED", 240_000, [
