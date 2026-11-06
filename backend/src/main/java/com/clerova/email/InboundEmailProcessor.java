@@ -57,6 +57,12 @@ public class InboundEmailProcessor {
     static final String PLAN_WAIT_REASON =
             "Your plan has ended. This email will be organized as soon as you choose a plan.";
 
+    /** The same for carriers, whose plan covers loads and grows with their trucks. */
+    static final String TRUCKING_QUOTA_WAIT_REASON =
+            "Your plan's loads for this month are used up. This email will be read on %s, or as soon as you add trucks in Settings.";
+    static final String TRUCKING_PLAN_WAIT_REASON =
+            "Your plan has ended. This email will be read as soon as you start a plan again.";
+
     public static final String FAILED_REASON = "Couldn't read this email. Click Retry to try again.";
 
     static final int MAX_ATTEMPTS = 3;
@@ -398,7 +404,8 @@ public class InboundEmailProcessor {
 
         message.setStatus(InboundMessageStatus.RECEIVED);
         message.setAttempts(0);
-        message.setStatusReason(QUOTA_WAIT_REASON.formatted(
+        boolean trucking = truckingIntakeService.isTruckingWorkspace(message.getOrganizationId());
+        message.setStatusReason((trucking ? TRUCKING_QUOTA_WAIT_REASON : QUOTA_WAIT_REASON).formatted(
                 DateTimeFormatter.ofPattern("MMMM d", Locale.US).withZone(ZoneOffset.UTC).format(reset)
         ));
         message.setNextAttemptAt(reset);
@@ -413,7 +420,9 @@ public class InboundEmailProcessor {
     private void waitForPlan(InboundMessage message) {
         message.setStatus(InboundMessageStatus.RECEIVED);
         message.setAttempts(0);
-        message.setStatusReason(PLAN_WAIT_REASON);
+        message.setStatusReason(truckingIntakeService.isTruckingWorkspace(message.getOrganizationId())
+                ? TRUCKING_PLAN_WAIT_REASON
+                : PLAN_WAIT_REASON);
         message.setNextAttemptAt(Instant.now().plus(Duration.ofDays(7)));
 
         inboundMessageRepository.save(message);

@@ -64,6 +64,11 @@ class TruckingBillingTest {
         checkout(user, "{\"plan\":\"STARTER\",\"interval\":\"month\",\"trucks\":0}")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Enter how many trucks you run, from 1 to 500."));
+        // Not quietly rounded down to 2
+        checkout(user, "{\"plan\":\"STARTER\",\"interval\":\"month\",\"trucks\":2.5}")
+                .andExpect(status().isBadRequest());
+        checkout(user, "{\"plan\":\"STARTER\",\"interval\":\"month\",\"trucks\":\"ten\"}")
+                .andExpect(status().isBadRequest());
 
         when(stripe.get("/v1/prices?active=true&lookup_keys%5B%5D=founding_trucking_starter_monthly"))
                 .thenReturn(stripeJson.readTree("{\"data\":[{\"id\":\"price_ts\"}]}"));

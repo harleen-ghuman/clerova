@@ -656,8 +656,9 @@ function BillingSection({
             {trialing
               ? `Clerova keeps working until your trial ends${ends ? ` on ${ends}` : ""}. You won't be charged.`
               : `Clerova keeps working until ${ends ?? "the end of this billing period"}. You won't be charged again.`}{" "}
-            After that, new emails won't be organized. Your requests and
-            history stay saved, and you can choose a plan again anytime.
+            {trucking
+              ? "After that, new rate cons won't be read. Your loads and history stay saved, and you can start a plan again anytime."
+              : "After that, new emails won't be organized. Your requests and history stay saved, and you can choose a plan again anytime."}
           </p>
           <div className="settings-actions">
             <button
