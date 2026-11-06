@@ -1274,6 +1274,25 @@ class EmailIntakeTest {
     }
 
     @Test
+    void shuttingDownStopsClaimingEmailsAndLeavesThemForTheNextInstance() throws Exception {
+        deliver(payload(forwardingAddress, "<shutdown@x>", null, null, "tina@example.com", "Help"))
+                .andExpect(jsonPath("$.status").value("STORED"));
+
+        processor.stopClaiming();
+        try {
+            assertThat(processor.processDue()).isZero();
+            processor.runScheduled();
+            JsonNode waiting = json(mockMvc.perform(get("/api/inbox").with(user))).get(0);
+            assertThat(waiting.get("status").asText()).isEqualTo("RECEIVED");
+        } finally {
+            processor.resumeAfterTest();
+        }
+
+        // The next instance picks it up as usual
+        assertThat(processor.processDue()).isEqualTo(1);
+    }
+
+    @Test
     void emailWaitsWhenRequestsAreUsedUpAndGoesAfterAnUpgrade() throws Exception {
         String organizationId = json(mockMvc.perform(get("/api/me").with(user)))
                 .get("organization").get("id").asText();
