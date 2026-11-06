@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { dismissReply, getLoad, resolveFlag, sendReply, updateLoad } from "../api/loads";
 import { errorMessage } from "../api/client";
 import { AutoTextarea } from "../components/AutoTextarea";
@@ -6,6 +6,8 @@ import { ConfirmInline } from "../components/ConfirmInline";
 import { FileList } from "../components/FileList";
 import { ChargesPanel } from "./ChargesPanel";
 import { DocumentsSection } from "./DocumentsSection";
+import { distinctDocuments } from "./documents";
+import { flashSection, onLoadTab, showLoadTab, type LoadTab, type OpenLoadOptions } from "./loadTabs";
 import { InvoicePanel } from "./InvoicePanel";
 import { StopsPanel } from "./StopsPanel";
 import { Email } from "./Email";
@@ -19,7 +21,15 @@ interface LoadViewProps {
   /** Something changed; refresh the lists. */
   onChanged: () => void;
   onOpenSettings: () => void;
+  /** Open on a tab, or at the rate con check. */
+  openWith?: OpenLoadOptions | null;
 }
+
+const TABS: { id: LoadTab; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "documents", label: "Documents" },
+  { id: "emails", label: "Emails" },
+];
 
 /** Broker emails can be long (quoted history, signatures): show the start first. */
 const LONG_EMAIL = 900;
@@ -64,7 +74,7 @@ function nextStep(load: LoadDetail): { text: string; to?: LoadStatus; label?: st
       return {
         text: load.invoice
           ? "Delivered. Finish the invoice and send it."
-          : "Delivered. Add the signed BOL or POD under Documents, then create the invoice.",
+          : "Delivered. Add the signed BOL or POD in the Documents tab, then create the invoice.",
       };
     case "INVOICED":
       return { text: "Invoiced. Mark it paid on the invoice when the money arrives." };
@@ -86,8 +96,10 @@ function filedDocument(load: LoadDetail, file: { id: string }) {
   return load.documents.find((document) => document.source === "EMAIL" && document.id === file.id);
 }
 
-export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSettings }: LoadViewProps) {
+export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSettings, openWith }: LoadViewProps) {
   const [load, setLoad] = useState<LoadDetail | null>(null);
+  const [tab, setTab] = useState<LoadTab>(openWith?.tab ?? "overview");
+  const checksShown = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState("");
@@ -116,6 +128,24 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
       current = false;
     };
   }, [loadId]);
+
+  // Panels can ask for a tab ("See Emails", "Open Documents"); the page then starts at the top
+  useEffect(
+    () =>
+      onLoadTab((next) => {
+        setTab(next);
+        window.requestAnimationFrame(() => document.getElementById("load-tabs")?.scrollIntoView({ block: "start" }));
+      }),
+    []
+  );
+
+  // Opened from "to fix" or "to check": go straight to the rate con check, highlighted
+  useEffect(() => {
+    if (load && openWith?.checks && !checksShown.current) {
+      checksShown.current = true;
+      window.requestAnimationFrame(() => flashSection("load-checks"));
+    }
+  }, [load, openWith]);
 
   async function run(key: string, action: () => Promise<LoadDetail>, fallback: string): Promise<boolean> {
     setBusy(key);
@@ -180,6 +210,20 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
   const origin = load.stops.find((stop) => stop.kind === "PICKUP")?.place ?? load.stops[0]?.place ?? null;
   const destination = [...load.stops].reverse().find((stop) => stop.kind === "DELIVERY")?.place ?? null;
   const noteChanged = note.trim() !== (load.statusNote ?? "");
+  const documentCount = distinctDocuments(load.documents).length;
+  const openFlags = load.flags.filter((flag) => !flag.resolvedAt).length;
+
+  // Arrow keys move between tabs, as screen reader users expect
+  function moveTab(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") {
+      return;
+    }
+
+    const index = TABS.findIndex((item) => item.id === tab);
+    const next = TABS[(index + (event.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length].id;
+    setTab(next);
+    window.requestAnimationFrame(() => document.getElementById(`load-tab-${next}`)?.focus());
+  }
 
   return (
     <div className="tk-page">
@@ -205,10 +249,107 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
 
       {error && <p className="action-error" role="alert">{error}</p>}
 
-      <div className="tk-detail">
+      <div className="tk-tabs" role="tablist" aria-label="This load" id="load-tabs" onKeyDown={moveTab}>
+        {TABS.map((item) => {
+          const count = item.id === "documents" ? documentCount : item.id === "emails" ? load.conversation.length : null;
+
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              id={`load-tab-${item.id}`}
+              aria-selected={tab === item.id}
+              aria-controls={`load-panel-${item.id}`}
+              tabIndex={tab === item.id ? 0 : -1}
+              className={`tk-tab ${tab === item.id ? "active" : ""}`}
+              onClick={() => setTab(item.id)}
+            >
+              {item.label}
+              {count !== null && <span className="tk-tab-count">{count}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === "documents" && (
+        <div role="tabpanel" id="load-panel-documents" aria-labelledby="load-tab-documents" className="tk-tabpanel">
+          <DocumentsSection
+          load={load}
+          onChanged={() => void run("documents", () => getLoad(loadId), "Couldn't refresh this load.")}
+          />
+        </div>
+      )}
+
+      {tab === "emails" && (
+        <div role="tabpanel" id="load-panel-emails" aria-labelledby="load-tab-emails" className="tk-tabpanel">
+          <section className="tk-panel" aria-label="Emails" id="load-emails">
+            <h2>Emails</h2>
+            <div className="tk-thread">
+              {load.conversation.length === 0 && <p className="tk-none">No emails on this load yet.</p>}
+              {newestFirst(load.conversation).map((entry) => (
+                <article key={entry.id} className={`tk-msg ${entry.incoming ? "" : "out"}`}>
+                  <div className="tk-msg-head">
+                    <span>
+                      {entry.incoming ? (
+                        entry.from
+                      ) : (
+                        <>
+                          <span className="tk-pill tk-pill-info">Sent</span> by you to {entry.to}
+                        </>
+                      )}
+                    </span>
+                    <span>{when(entry.at)}</span>
+                  </div>
+                  {entry.subject && <strong className="tk-msg-subject">{entry.subject}</strong>}
+                  {entry.body && <EmailBody text={entry.body.trim()} />}
+                  {/* Files already listed under Documents are named here, not shown twice */}
+                  {entry.files.some((file) => filedDocument(load, file)) && (
+                    <p className="tk-msg-filed">
+                      {entry.files
+                        .map((file) => filedDocument(load, file))
+                        .filter((document) => document !== undefined)
+                        .map((document) => `${kindLabel(document.kind)}: ${document.name}`)
+                        .join(", ")}{" "}
+                      · in the{" "}
+                      <button type="button" className="tk-link" onClick={() => showLoadTab("documents")}>
+                        Documents tab
+                      </button>
+                    </p>
+                  )}
+                  {entry.files.some((file) => !filedDocument(load, file)) && (
+                    <FileList
+                      files={entry.files.filter((file) => !filedDocument(load, file)).map((file) => ({
+                        id: file.id,
+                        fileName: file.name,
+                        contentType: file.contentType,
+                        sizeBytes: file.sizeBytes,
+                        available: file.stored,
+                      }))}
+                    />
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {tab === "overview" && (
+      <div className="tk-detail" role="tabpanel" id="load-panel-overview" aria-labelledby="load-tab-overview">
         <div className="tk-stack">
           <section className="tk-panel tk-next" aria-label="Next step">
-            <p>{step.text}</p>
+            <p>
+              {step.text}
+              {openFlags > 0 && (
+                <>
+                  {" "}
+                  <button type="button" className="tk-link" onClick={() => flashSection("load-checks")}>
+                    Show {openFlags === 1 ? "it" : "them"}
+                  </button>
+                </>
+              )}
+            </p>
             <div className="tk-actions">
               {step.to && (
                 <button
@@ -366,7 +507,7 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
           </section>
 
           {load.flags.length > 0 && (
-            <section className="tk-panel" aria-label="Rate con check">
+            <section className="tk-panel" aria-label="Rate con check" id="load-checks">
               <h2>Rate con check</h2>
               {load.flags.map((flag) => (
                 <div key={flag.id} className={`tk-flag ${flag.resolvedAt ? "done" : ""}`}>
@@ -439,61 +580,8 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
           </div>
         )}
 
-        {/* Full width under both columns: files and emails need the room */}
-        <div className="tk-stack tk-wide">
-          <DocumentsSection
-            load={load}
-            onChanged={() => void run("documents", () => getLoad(loadId), "Couldn't refresh this load.")}
-          />
-
-          <section className="tk-panel" aria-label="Emails" id="load-emails">
-            <h2>Emails</h2>
-            <div className="tk-thread">
-              {load.conversation.length === 0 && <p className="tk-none">No emails on this load yet.</p>}
-              {newestFirst(load.conversation).map((entry) => (
-                <article key={entry.id} className={`tk-msg ${entry.incoming ? "" : "out"}`}>
-                  <div className="tk-msg-head">
-                    <span>
-                      {entry.incoming ? (
-                        entry.from
-                      ) : (
-                        <>
-                          <span className="tk-pill tk-pill-info">Sent</span> by you to {entry.to}
-                        </>
-                      )}
-                    </span>
-                    <span>{when(entry.at)}</span>
-                  </div>
-                  {entry.subject && <strong className="tk-msg-subject">{entry.subject}</strong>}
-                  {entry.body && <EmailBody text={entry.body.trim()} />}
-                  {/* Files already listed under Documents are named here, not shown twice */}
-                  {entry.files.some((file) => filedDocument(load, file)) && (
-                    <p className="tk-msg-filed">
-                      {entry.files
-                        .map((file) => filedDocument(load, file))
-                        .filter((document) => document !== undefined)
-                        .map((document) => `${kindLabel(document.kind)}: ${document.name}`)
-                        .join(", ")}{" "}
-                      · in Documents above
-                    </p>
-                  )}
-                  {entry.files.some((file) => !filedDocument(load, file)) && (
-                    <FileList
-                      files={entry.files.filter((file) => !filedDocument(load, file)).map((file) => ({
-                        id: file.id,
-                        fileName: file.name,
-                        contentType: file.contentType,
-                        sizeBytes: file.sizeBytes,
-                        available: file.stored,
-                      }))}
-                    />
-                  )}
-                </article>
-              ))}
-            </div>
-          </section>
-        </div>
       </div>
+      )}
     </div>
   );
 }

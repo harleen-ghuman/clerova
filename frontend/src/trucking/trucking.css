@@ -1842,3 +1842,117 @@ label.rq-button.is-disabled {
 .tk-msg-head .tk-pill {
   margin-right: 4px;
 }
+
+/* Load page tabs: Overview, Documents, Emails */
+.tk-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 20px;
+  border-bottom: 1px solid var(--border-faint);
+  overflow-x: auto;
+  scroll-margin-top: 16px;
+}
+
+.tk-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: -1px;
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tk-tab:hover {
+  color: var(--text-primary, #16181d);
+}
+
+.tk-tab.active {
+  border-bottom-color: var(--brand);
+  color: var(--brand);
+}
+
+.tk-tab-count {
+  min-width: 20px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--border-faint);
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.tk-tab.active .tk-tab-count {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.tk-tabpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* A section the dispatcher was sent to: a short highlight so the eye finds it */
+.tk-flash {
+  scroll-margin-top: 16px;
+  animation: tk-flash 2.4s ease-out;
+}
+
+@keyframes tk-flash {
+  0%,
+  35% {
+    box-shadow: 0 0 0 3px var(--brand);
+    background: var(--brand-soft);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-flash {
+    animation: none;
+    box-shadow: 0 0 0 3px var(--brand);
+  }
+}
+
+@media (max-width: 900px) {
+  .tk-tabs {
+    margin-bottom: 16px;
+  }
+
+  .tk-tab {
+    padding: 10px 12px;
+  }
+}
+
+/* Invoices page: Documents and Packet beside each sent invoice */
+.tk-row-invoice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tk-row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .tk-row-invoice {
+    flex-basis: 100%;
+  }
+
+  .tk-row-actions {
+    flex-basis: 100%;
+  }
+}

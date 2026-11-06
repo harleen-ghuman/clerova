@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { sendLoadMessage, setStopTimes } from "../api/loads";
 import type { LoadDetail, LoadStop } from "../types/Load";
+import { showLoadTab } from "./loadTabs";
 import { MessageComposer, type MessageDraft } from "./MessageComposer";
 import { clock, duration, emailTime, fromLocalInput, money, placeName, toLocalInput, when } from "./format";
 
@@ -35,6 +36,28 @@ function arrivalNotice(load: LoadDetail, stop: LoadStop): MessageDraft {
   };
 }
 
+/** Tells the broker the truck left, with the time on site, as many rate cons ask for detention. */
+function departureNotice(load: LoadDetail, stop: LoadStop, leftAt: string): MessageDraft {
+  const onSite = stop.arrivedAt ? Math.max(0, (new Date(leftAt).getTime() - new Date(stop.arrivedAt).getTime()) / 60_000) : null;
+  const free = load.detentionFreeMinutes ?? 120;
+  const over = onSite !== null ? onSite - free : 0;
+  const arrival = stop.arrivedAt && onSite !== null
+    ? ` They arrived at ${emailTime(stop.arrivedAt)}, so they were on site ${duration(onSite)}.`
+    : "";
+  const detention = over > 0
+    ? ` That is ${duration(over)} past the ${duration(free)} free time, so detention applies. We'll send the detention claim separately.`
+    : "";
+
+  return {
+    title: "Tell the broker the truck left",
+    to: load.broker?.email ?? "",
+    subject: subjectFor(load, `left ${placeName(stop.place)}`),
+    body:
+      `Hi,\n\nOur driver left ${placeName(stop.place)} at ${emailTime(leftAt)} for ${loadName(load)}.` +
+      `${arrival}${detention}\n\nThanks,`,
+  };
+}
+
 /** A heads-up once the free time is over and the truck is still there. */
 function detentionStarted(load: LoadDetail, stop: LoadStop): MessageDraft {
   const rate = load.detentionRateCents !== null ? ` at ${money(load.detentionRateCents)}/hour` : "";
@@ -58,9 +81,9 @@ function leftText(arrivedAt: string, leftAt: string): string {
     : new Date(leftAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-/** Scrolls to the load's emails, where sent messages and the broker's replies are. */
+/** Opens the load's Emails tab, where sent messages and the broker's replies are. */
 function showEmails() {
-  document.getElementById("load-emails")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  showLoadTab("emails");
 }
 
 function StopTimesForm({ stop, busy, onSave, onCancel }: {
@@ -139,6 +162,11 @@ export function StopsPanel({ load, sendingEnabled, busy, run }: StopsPanelProps)
     if (saved && field === "arrivedAt") {
       setComposing({ stopId: stop.id, draft: arrivalNotice(load, { ...stop, arrivedAt: time }) });
     }
+
+    // And the departure, so the time on site is on record with the broker too
+    if (saved && field === "leftAt") {
+      setComposing({ stopId: stop.id, draft: departureNotice(load, stop, time) });
+    }
   }
 
   return (
@@ -213,7 +241,7 @@ export function StopsPanel({ load, sendingEnabled, busy, run }: StopsPanelProps)
 
                   {sentNote?.stopId === stop.id && (
                     <p className="request-success tk-sent-note" role="status">
-                      Sent to {sentNote.to}. The broker's reply will show under Emails on this load.{" "}
+                      Sent to {sentNote.to}. The broker's reply will show in this load's Emails tab.{" "}
                       <button type="button" className="tk-link" onClick={showEmails}>
                         See Emails
                       </button>

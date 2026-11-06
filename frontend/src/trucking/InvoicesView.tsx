@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { OpenLoadOptions } from "./loadTabs";
 import { errorMessage } from "../api/client";
 import { createInvoice } from "../api/loads";
 import type { Invoice, LoadSummary } from "../types/Load";
@@ -10,7 +11,7 @@ interface InvoicesViewProps {
   invoices: Invoice[];
   loading: boolean;
   error: string | null;
-  onOpenLoad: (id: string) => void;
+  onOpenLoad: (id: string, options?: OpenLoadOptions) => void;
   onRetry?: () => void;
   /** Refreshes loads and invoices after one is made here. */
   onChanged?: () => void;
@@ -31,6 +32,8 @@ export function InvoicesView({ loads, invoices, loading, error, onOpenLoad, onRe
   const [exportError, setExportError] = useState<string | null>(null);
   const [creating, setCreating] = useState<string | null>(null);
   const [createError, setCreateError] = useState<{ loadId: string; text: string } | null>(null);
+  const [packing, setPacking] = useState<string | null>(null);
+  const [packetError, setPacketError] = useState<{ invoiceId: string; text: string } | null>(null);
 
   const invoiced = new Set(invoices.map((invoice) => invoice.loadId));
   const toInvoice = loads.filter((load) => load.status === "DELIVERED" && !invoiced.has(load.id));
@@ -60,6 +63,20 @@ export function InvoicesView({ loads, invoices, loading, error, onOpenLoad, onRe
       setCreateError({ loadId, text: errorMessage(err, "Couldn't make the invoice. Please try again.") });
     } finally {
       setCreating(null);
+    }
+  }
+
+  // Invoice, rate con and signed paperwork in one PDF, as sent to the broker or factor
+  async function downloadPacket(invoice: Invoice) {
+    setPacking(invoice.id);
+    setPacketError(null);
+
+    try {
+      await downloadFile(`/api/invoices/${invoice.id}/packet`, `Invoice ${invoice.number} packet.pdf`);
+    } catch (err) {
+      setPacketError({ invoiceId: invoice.id, text: errorMessage(err, "Couldn't make the packet. Please try again.") });
+    } finally {
+      setPacking(null);
     }
   }
 
@@ -160,7 +177,8 @@ export function InvoicesView({ loads, invoices, loading, error, onOpenLoad, onRe
             const late = isOverdue(invoice);
 
             return (
-              <button key={invoice.id} type="button" className="tk-row" onClick={() => onOpenLoad(invoice.loadId)}>
+              <div key={invoice.id} className="tk-row tk-row-split">
+                <button type="button" className="tk-row-open tk-row-invoice" onClick={() => onOpenLoad(invoice.loadId)}>
                 <span className="tk-row-main">
                   <span className="tk-lane">
                     {invoice.number} · {lane(invoice.origin, invoice.destination)}
@@ -182,7 +200,33 @@ export function InvoicesView({ loads, invoices, loading, error, onOpenLoad, onRe
                 >
                   {invoice.status === "PAID" ? "Paid" : late ? "Overdue" : invoice.status === "SENT" ? "Sent" : "Draft"}
                 </span>
-              </button>
+                </button>
+                {/* The paperwork goes with the invoice: open it, or download the packet */}
+                <span className="tk-row-actions">
+                  <button
+                    type="button"
+                    className="rq-button rq-button-small"
+                    aria-label={`Documents for invoice ${invoice.number}`}
+                    onClick={() => onOpenLoad(invoice.loadId, { tab: "documents" })}
+                  >
+                    Documents
+                  </button>
+                  <button
+                    type="button"
+                    className="rq-button rq-button-small"
+                    aria-label={`Packet for invoice ${invoice.number}`}
+                    disabled={packing !== null}
+                    onClick={() => void downloadPacket(invoice)}
+                  >
+                    {packing === invoice.id ? "Making it..." : "Packet"}
+                  </button>
+                </span>
+                {packetError?.invoiceId === invoice.id && (
+                  <p className="action-error tk-row-error" role="alert">
+                    {packetError.text}
+                  </p>
+                )}
+              </div>
             );
           })}
 
