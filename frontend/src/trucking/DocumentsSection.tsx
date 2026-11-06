@@ -84,14 +84,9 @@ export function DocumentsSection({ load, onChanged }: { load: LoadDetail; onChan
     }
   }
 
-  async function open(document: LoadDocument) {
+  function open(document: LoadDocument) {
     setError(null);
-
-    try {
-      await openDocument(document);
-    } catch (err) {
-      setError(errorMessage(err, "Couldn't open this file. Please try again."));
-    }
+    openDocument(document);
   }
 
   return (
@@ -99,94 +94,106 @@ export function DocumentsSection({ load, onChanged }: { load: LoadDetail; onChan
       <h2>
         Documents <span>{documents.length}</span>
       </h2>
-      <p className="tk-sub">
-        Rate con, BOL, POD and receipts for this load, from its emails and your uploads. Clerova reads each file to
-        tell what it is.
-      </p>
+      <p className="tk-sub">Paperwork for this load. Files from its emails are added for you.</p>
 
       {documents.length > 0 && (
-        <ul className="tk-docs">
-          {documents.map((document) => (
-            <li key={`${document.source}-${document.id}`}>
-              <span className="tk-doc-main">
-                {document.stored ? (
-                  <button type="button" className="tk-link" onClick={() => void open(document)}>
-                    {document.name || "Unnamed file"}
-                  </button>
-                ) : (
-                  <span>{document.name || "Unnamed file"}</span>
-                )}
-                <span className="tk-sub tk-doc-meta">
-                  <span className="tk-pill tk-pill-info">{kindLabel(document.kind)}</span>
-                  {document.source === "UPLOAD" ? "Uploaded" : "From an email"} · {when(document.at)}
-                  {!document.stored && " · only the name was kept"}
-                </span>
-              </span>
+        <ul className="tk-doclist">
+          {documents.map((document) => {
+            const name = document.name || "Unnamed file";
+            const photo = (document.contentType ?? "").startsWith("image/") || /\.(jpe?g|png|webp|gif|heic)$/i.test(name);
 
-              {document.source === "UPLOAD" && (
-                <span className="tk-doc-actions">
-                  <select
-                    aria-label={`What is ${document.name || "this file"}?`}
-                    value={document.kind ?? "OTHER"}
-                    disabled={busy !== null}
-                    onChange={(event) =>
-                      void act(
-                        `kind-${document.id}`,
-                        () => updateDocument(document.id, { kind: event.target.value as DocumentKind }),
-                        "Couldn't change it."
-                      )
-                    }
-                  >
-                    {DOCUMENT_KINDS.map((item) => (
-                      <option key={item.kind} value={item.kind}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                  {removing === document.id ? (
-                    <ConfirmInline
-                      message="Remove this file?"
-                      confirmLabel="Remove"
-                      keepLabel="Keep"
-                      onConfirm={() => {
-                        setRemoving(null);
-                        void act(`remove-${document.id}`, () => deleteDocument(document.id), "Couldn't remove it.");
-                      }}
-                      onKeep={() => setRemoving(null)}
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      className="rq-button rq-button-small rq-button-quiet"
-                      disabled={busy !== null}
-                      onClick={() => setRemoving(document.id)}
-                    >
-                      Remove
-                    </button>
+            return (
+              <li key={`${document.source}-${document.id}`} className="tk-doc">
+                <button
+                  type="button"
+                  className="tk-doc-open"
+                  onClick={() => open(document)}
+                  disabled={!document.stored}
+                >
+                  <span className={`tk-doc-icon ${photo ? "photo" : ""}`} aria-hidden="true">
+                    {photo ? "IMG" : "PDF"}
+                  </span>
+                  <span className="tk-doc-text">
+                    <strong>{kindLabel(document.kind)}</strong>
+                    <span className="tk-doc-name">{name}</span>
+                    <span className="tk-doc-from">
+                      {document.stored
+                        ? `${document.source === "UPLOAD" ? "Uploaded" : "From an email"}${document.at ? ` · ${when(document.at)}` : ""}`
+                        : "Only the name was kept"}
+                    </span>
+                  </span>
+                  {document.stored && (
+                    <span className="tk-doc-view" aria-hidden="true">
+                      View <span>›</span>
+                    </span>
                   )}
-                </span>
-              )}
-            </li>
-          ))}
+                </button>
+
+                {document.source === "UPLOAD" && (
+                  <div className="tk-doc-manage">
+                    <label>
+                      <span>Type</span>
+                      <select
+                        value={document.kind ?? "OTHER"}
+                        disabled={busy !== null}
+                        onChange={(event) =>
+                          void act(
+                            `kind-${document.id}`,
+                            () => updateDocument(document.id, { kind: event.target.value as DocumentKind }),
+                            "Couldn't change it."
+                          )
+                        }
+                      >
+                        {DOCUMENT_KINDS.map((item) => (
+                          <option key={item.kind} value={item.kind}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {removing === document.id ? (
+                      <ConfirmInline
+                        message="Remove this file?"
+                        confirmLabel="Remove"
+                        keepLabel="Keep"
+                        onConfirm={() => {
+                          setRemoving(null);
+                          void act(`remove-${document.id}`, () => deleteDocument(document.id), "Couldn't remove it.");
+                        }}
+                        onKeep={() => setRemoving(null)}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className="rq-button rq-button-small rq-button-quiet"
+                        disabled={busy !== null}
+                        onClick={() => setRemoving(document.id)}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 
-      <div className="tk-actions">
-        {/* The input comes first so its keyboard focus can outline the label */}
-        <input
-          id={inputId}
-          className="visually-hidden tk-file-input"
-          type="file"
-          accept={ACCEPTED_FILES}
-          multiple
-          disabled={busy !== null}
-          onChange={(event) => void upload(event)}
-        />
-        <label htmlFor={inputId} className={`rq-button rq-button-small ${busy ? "is-disabled" : ""}`}>
-          {progress ?? "Add a document"}
-        </label>
-        <span className="tk-sub">PDF or photo, up to 10 MB.</span>
-      </div>
+      {/* The input comes first so its keyboard focus can outline the label */}
+      <input
+        id={inputId}
+        className="visually-hidden tk-file-input"
+        type="file"
+        accept={ACCEPTED_FILES}
+        multiple
+        disabled={busy !== null}
+        onChange={(event) => void upload(event)}
+      />
+      <label htmlFor={inputId} className={`tk-doc-add ${busy ? "is-disabled" : ""}`}>
+        <strong>{progress ?? "+ Add a document"}</strong>
+        <span>BOL, POD, receipt or lumper slip. PDF or photo, up to 10 MB.</span>
+      </label>
 
       {error && (
         <p className="action-error" role="alert">

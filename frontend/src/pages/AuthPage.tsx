@@ -305,16 +305,16 @@ export function AuthPage({
               <strong>Just looking around?</strong> Try Clerova with sample data. No sign-up. Pick a demo:
             </span>
             <span className="auth-demo-choices">
-              <a className="auth-demo-button" href="/demo">
+              <a className="auth-demo-button" href="/demo/">
                 Property management
               </a>
-              <a className="auth-demo-button" href="/demo/trucking">
+              <a className="auth-demo-button" href="/demo/trucking/">
                 Trucking
               </a>
             </span>
           </div>
         ) : (
-          <a className="auth-demo" href={demoFor === "TRUCKING" ? "/demo/trucking" : "/demo"}>
+          <a className="auth-demo" href={demoFor === "TRUCKING" ? "/demo/trucking/" : "/demo/"}>
             <span>
               <strong>Just looking around?</strong> Try Clerova with sample data.
               No sign-up.

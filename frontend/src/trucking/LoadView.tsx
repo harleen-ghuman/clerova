@@ -10,7 +10,7 @@ import { InvoicePanel } from "./InvoicePanel";
 import { StopsPanel } from "./StopsPanel";
 import { Email } from "./Email";
 import type { LoadDetail, LoadStatus } from "../types/Load";
-import { STATUS_LABELS, city, detention, money, when } from "./format";
+import { STATUS_LABELS, city, detention, kindLabel, money, when } from "./format";
 
 interface LoadViewProps {
   loadId: string;
@@ -73,6 +73,11 @@ function nextStep(load: LoadDetail): { text: string; to?: LoadStatus; label?: st
     case "CANCELLED":
       return { text: "This load was cancelled." };
   }
+}
+
+/** The load's document for a file on one of its emails, if it's listed under Documents. */
+function filedDocument(load: LoadDetail, file: { id: string }) {
+  return load.documents.find((document) => document.source === "EMAIL" && document.id === file.id);
 }
 
 export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSettings }: LoadViewProps) {
@@ -339,9 +344,20 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
                   </div>
                   {entry.subject && <strong className="tk-msg-subject">{entry.subject}</strong>}
                   {entry.body && <EmailBody text={entry.body.trim()} />}
-                  {entry.files.length > 0 && (
+                  {/* Files already listed under Documents are named here, not shown twice */}
+                  {entry.files.some((file) => filedDocument(load, file)) && (
+                    <p className="tk-msg-filed">
+                      {entry.files
+                        .map((file) => filedDocument(load, file))
+                        .filter((document) => document !== undefined)
+                        .map((document) => `${kindLabel(document.kind)}: ${document.name}`)
+                        .join(", ")}{" "}
+                      · in Documents above
+                    </p>
+                  )}
+                  {entry.files.some((file) => !filedDocument(load, file)) && (
                     <FileList
-                      files={entry.files.map((file) => ({
+                      files={entry.files.filter((file) => !filedDocument(load, file)).map((file) => ({
                         id: file.id,
                         fileName: file.name,
                         contentType: file.contentType,
@@ -357,7 +373,7 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
         </div>
 
         <div className="tk-stack">
-          <section className="tk-panel" aria-label="Rate and terms">
+          <section className="tk-panel tk-terms" aria-label="Rate and terms">
             <h2>Rate and terms</h2>
             <dl className="tk-kv">
               <dt>Rate</dt>

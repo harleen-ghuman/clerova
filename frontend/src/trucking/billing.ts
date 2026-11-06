@@ -1,4 +1,5 @@
 import { fetchFile } from "../api/attachments";
+import { viewFile } from "../utils/viewFile";
 import type { Invoice } from "../types/Load";
 
 /** "2026-12-05" as "Dec 5, 2026", without time zone shifts. */
@@ -18,23 +19,9 @@ export function isOverdue(invoice: Pick<Invoice, "status" | "dueDate">): boolean
   return new Date(year, month - 1, day) < today;
 }
 
-/** Opens a PDF from the API in a new tab. */
-export async function openPdf(path: string) {
-  const tab = window.open("", "_blank");
-
-  try {
-    const blob = await fetchFile(path);
-    const url = URL.createObjectURL(blob);
-
-    if (tab) {
-      tab.location.href = url;
-    }
-
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  } catch (err) {
-    tab?.close();
-    throw err;
-  }
+/** Opens a PDF from the API, like an invoice, in the in-app viewer. */
+export function openPdf(path: string, name: string, subtitle?: string) {
+  viewFile({ name, subtitle, load: () => fetchFile(path) });
 }
 
 /** Saves a file from the API, like the packet or the month's spreadsheet. */

@@ -366,7 +366,7 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
             type="button"
             className="rq-button rq-button-small"
             disabled={held}
-            onClick={() => void act("pdf", () => openPdf(`/api/invoices/${invoice.id}/pdf`), "Couldn't open the invoice.")}
+            onClick={() => openPdf(`/api/invoices/${invoice.id}/pdf`, `Invoice ${invoice.number}.pdf`, "Invoice")}
           >
             View invoice
           </button>

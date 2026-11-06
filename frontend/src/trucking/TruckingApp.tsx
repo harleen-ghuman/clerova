@@ -81,6 +81,7 @@ export function TruckingApp({
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [invoicesError, setInvoicesError] = useState<string | null>(null);
   const [focusCarrier, setFocusCarrier] = useState(false);
+  const [loadSearch, setLoadSearch] = useState("");
   const [billingError, setBillingError] = useState<string | null>(null);
 
   /** Stripe's page for the card and past invoices. */
@@ -397,6 +398,8 @@ export function TruckingApp({
               refreshKey={refreshTick}
               onChanged={() => void loadLoads()}
               onRetry={() => void loadLoads()}
+              search={loadSearch}
+              onSearch={setLoadSearch}
             />
           ))}
 

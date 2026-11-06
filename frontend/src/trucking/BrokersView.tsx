@@ -2,6 +2,7 @@ import { useEffect, useId, useState, type FormEvent } from "react";
 import { getBrokers, setBrokerMc } from "../api/loads";
 import { errorMessage } from "../api/client";
 import { Email } from "./Email";
+import { matchesSearch } from "./search";
 import type { BrokerSummary, FmcsaStatus } from "../types/Load";
 
 const FMCSA: Record<FmcsaStatus, { text: string; tone: string }> = {
@@ -78,6 +79,11 @@ export function BrokersView({ refreshKey }: { refreshKey: number }) {
   const [reloads, setReloads] = useState(0);
   const [brokers, setBrokers] = useState<BrokerSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const query = search.trim();
+  const shown = brokers && query
+    ? brokers.filter(({ broker }) => matchesSearch(query, [broker.name, broker.mcNumber, broker.email, broker.phone, broker.fmcsaName]))
+    : brokers;
 
   useEffect(() => {
     let current = true;
@@ -117,6 +123,34 @@ export function BrokersView({ refreshKey }: { refreshKey: number }) {
       )}
 
       {brokers && brokers.length > 0 && (
+        <div className="tk-search-row">
+          <label className="rq-search tk-search">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M20 20l-3.5-3.5" />
+            </svg>
+            <span className="visually-hidden">Search brokers</span>
+            <input
+              type="search"
+              placeholder="Broker name, MC number or email"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
+          {query && (
+            <p className="tk-sub" role="status">
+              {shown && shown.length === 0
+                ? `No brokers match "${query}".`
+                : `${shown?.length} ${shown?.length === 1 ? "broker matches" : "brokers match"}.`}{" "}
+              <button type="button" className="tk-link" onClick={() => setSearch("")}>
+                Clear
+              </button>
+            </p>
+          )}
+        </div>
+      )}
+
+      {shown && shown.length > 0 && (
         <div className="tk-table-wrap" role="region" aria-label="Brokers table" tabIndex={0}>
           <table className="tk-table">
             <thead>
@@ -129,7 +163,7 @@ export function BrokersView({ refreshKey }: { refreshKey: number }) {
               </tr>
             </thead>
             <tbody>
-              {brokers.map(({ broker, loads, openLoads }) => (
+              {shown.map(({ broker, loads, openLoads }) => (
                 <tr key={broker.id}>
                   <td data-label="Broker">
                     <strong>{broker.name}</strong>

@@ -1540,3 +1540,223 @@ label.rq-button.is-disabled {
     grid-column: 2;
   }
 }
+
+/* An emailed file that's already under Documents: named, not shown twice */
+.tk-msg-filed {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+/* Phones: one column, with the rate and terms right after what needs doing */
+@media (max-width: 900px) {
+  .tk-detail > .tk-stack {
+    display: contents;
+  }
+
+  .tk-detail .tk-next,
+  .tk-detail .tk-draft {
+    order: -2;
+  }
+
+  .tk-detail .tk-terms {
+    order: -1;
+  }
+}
+
+/* Documents: one tappable row per file, kind first */
+.tk-doclist {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.tk-doc {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.tk-doc-open {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tk-doc-open:hover:not(:disabled) {
+  background: var(--surface-soft);
+}
+
+.tk-doc-open:disabled {
+  cursor: default;
+}
+
+.tk-doc-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 46px;
+  border-radius: 6px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.tk-doc-icon.photo {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.tk-doc-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.tk-doc-text strong {
+  font-size: 15px;
+}
+
+.tk-doc-name {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-doc-from {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.tk-doc-view {
+  flex: 0 0 auto;
+  color: var(--brand);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tk-doc-view span {
+  margin-left: 2px;
+  font-size: 18px;
+}
+
+.tk-doc-manage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 14px 10px 64px;
+  border-top: 1px solid var(--border-faint);
+}
+
+.tk-doc-manage label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.tk-doc-manage select {
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+}
+
+.tk-doc-add {
+  display: grid;
+  gap: 2px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 12px;
+  color: var(--brand);
+  text-align: center;
+  cursor: pointer;
+}
+
+.tk-doc-add strong {
+  font-size: 15px;
+}
+
+.tk-doc-add span {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.tk-doc-add:hover {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.tk-file-input:focus-visible + .tk-doc-add {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.tk-doc-add.is-disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+@media (max-width: 520px) {
+  .tk-doc-manage {
+    padding-left: 14px;
+  }
+}
+
+/* Search on the Loads board and Brokers */
+.tk-search-row {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 16px;
+}
+
+.tk-search {
+  max-width: 420px;
+}
+
+.tk-search-row .tk-sub {
+  margin: 0;
+}
+
+.tk-search.rq-search {
+  min-width: 0;
+}
+
+/* 16px keeps iPhones from zooming in when the box is tapped */
+@media (max-width: 800px) {
+  .tk-search input {
+    font-size: 16px;
+  }
+}
+
+.tk-search-row .tk-search {
+  order: 0;
+}
+
+.tk-search-row > p {
+  order: 1;
+}
