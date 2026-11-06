@@ -3282,3 +3282,168 @@ body.demo-bar-open .jobs-page {
 .demo-bar-head a {
   text-decoration: none;
 }
+
+/* File viewer: photos and PDFs over the app, with Back and Download */
+body.file-viewer-open {
+  overflow: hidden;
+}
+
+.file-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: #2b2f36;
+}
+
+.file-viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  padding-top: max(10px, env(safe-area-inset-top));
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.file-viewer-close {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--brand);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.file-viewer-close:hover {
+  background: var(--brand-soft);
+}
+
+.file-viewer-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+}
+
+.file-viewer-title strong {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-viewer-title span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.file-viewer-bar .rq-button {
+  flex: 0 0 auto;
+  text-decoration: none;
+}
+
+.file-viewer-zoom {
+  position: absolute;
+  right: 16px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(22, 24, 29, 0.85);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.file-viewer-zoom span {
+  min-width: 44px;
+  text-align: center;
+}
+
+.file-viewer-zoom button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.file-viewer-zoom button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.file-viewer-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.file-viewer-sheet {
+  display: grid;
+  justify-content: center;
+  gap: 12px;
+  padding-bottom: 72px;
+}
+
+.file-viewer-sheet[hidden] {
+  display: none;
+}
+
+.file-viewer-page {
+  display: block;
+  background: #ffffff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.file-viewer-image {
+  display: block;
+  max-width: 100%;
+  margin: 0 auto;
+  background: #ffffff;
+}
+
+.file-viewer-note {
+  margin: 24px auto;
+  max-width: 420px;
+  color: #e4e7ec;
+  font-size: 14px;
+  text-align: center;
+}
+
+.file-viewer-note.action-error {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+@media (max-width: 520px) {
+  .file-viewer-bar {
+    gap: 6px;
+    padding-left: 6px;
+    padding-right: 10px;
+  }
+
+  .file-viewer-body {
+    padding: 8px;
+  }
+}
+
+.file-viewer-body:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}

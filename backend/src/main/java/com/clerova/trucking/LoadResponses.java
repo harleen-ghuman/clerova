@@ -71,7 +71,7 @@ public final class LoadResponses {
             UUID id, String loadNumber, LoadStatus status, String brokerName,
             String origin, String destination, String pickupAppointment, String deliveryAppointment,
             Long rateCents, int openFlags, int fixFlags, int draftReplies, String statusNote,
-            Instant createdAt, Instant updatedAt
+            Instant createdAt, Instant updatedAt, String referenceNumbers
     ) {
     }
 
@@ -152,7 +152,8 @@ public final class LoadResponses {
                 draftReplies,
                 load.getStatusNote(),
                 load.getCreatedAt(),
-                load.getUpdatedAt()
+                load.getUpdatedAt(),
+                load.getReferenceNumbers()
         );
     }
 

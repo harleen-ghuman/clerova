@@ -119,12 +119,8 @@ export function UploadDocuments({ loads, refreshKey, onOpenLoad, onChanged }: Up
     }
   }
 
-  async function open(document: UploadedDocument) {
-    try {
-      await openDocument({ id: document.id, source: "UPLOAD" });
-    } catch (err) {
-      setError(errorMessage(err, "Couldn't open this file. Please try again."));
-    }
+  function open(document: UploadedDocument) {
+    openDocument({ id: document.id, source: "UPLOAD", name: document.name, kind: document.kind });
   }
 
   const byId = new Map(loads.map((load) => [load.id, load]));

@@ -19,6 +19,8 @@ export interface LoadSummary {
   fixFlags: number;
   draftReplies: number;
   statusNote: string | null;
+  /** PO, BOL and other numbers from the rate con, for search. */
+  referenceNumbers?: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -567,6 +567,15 @@ function packetDocuments(load: DemoLoad): LoadDocument[] {
   return PACKET_ORDER.flatMap((kind) => load.documents.filter((document) => document.kind === kind));
 }
 
+/** Sample PO and BOL numbers, so searching the board works like the real one. */
+const DEMO_REFERENCES: Record<string, string> = {
+  "88213": "PO 55120",
+  "MR-5002": "PO 77812, BOL 30014",
+  "BH-7781": "PO 61930",
+  "87990": "BOL 28890",
+  "MR-4950": "PO 70441",
+};
+
 function summary(load: DemoLoad): LoadSummary {
   const open = load.flags.filter((item) => !item.resolvedAt);
   return {
@@ -583,6 +592,7 @@ function summary(load: DemoLoad): LoadSummary {
     fixFlags: open.filter((item) => item.level === "FIX").length,
     draftReplies: load.replies.filter((reply) => reply.status === "DRAFT").length,
     statusNote: load.statusNote,
+    referenceNumbers: (load.loadNumber && DEMO_REFERENCES[load.loadNumber]) || null,
     createdAt: load.createdAt,
     updatedAt: load.updatedAt,
   };

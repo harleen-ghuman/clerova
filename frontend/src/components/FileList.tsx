@@ -3,6 +3,7 @@ import { useState } from "react";
 import { fetchAttachment, VIEWABLE_TYPES } from "../api/attachments";
 import { errorMessage } from "../api/client";
 import type { AttachmentFile } from "../types/Email";
+import { viewFile } from "../utils/viewFile";
 
 function size(bytes: number | null): string | null {
   if (bytes === null || bytes <= 0) {
@@ -31,29 +32,26 @@ export function FileList({ files }: { files: AttachmentFile[] }) {
 
   async function open(file: AttachmentFile) {
     const name = file.fileName || "file";
-    // Opened right away, while the click still counts, so it isn't blocked
-    const tab = viewable(file) ? window.open("", "_blank") : null;
+
+    // Photos and PDFs open in the viewer, so people stay in Clerova
+    if (viewable(file)) {
+      viewFile({ name, load: () => fetchAttachment(file.id) });
+      return;
+    }
 
     try {
       setBusy(file.id);
       setError(null);
       const url = URL.createObjectURL(await fetchAttachment(file.id));
-
-      if (tab) {
-        tab.location.href = url;
-      } else {
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = name;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-      }
-
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
-      tab?.close();
-      setError(errorMessage(err, "Couldn't open this file. Please try again."));
+      setError(errorMessage(err, "Couldn't download this file. Please try again."));
     } finally {
       setBusy(null);
     }
