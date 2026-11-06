@@ -2,7 +2,7 @@ import { LegalPage } from "./LegalPage";
 
 export function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" updated="October 28, 2026">
+    <LegalPage title="Privacy Policy" updated="November 6, 2026">
       <div className="legal-summary">
         <p>
           <strong>The short version:</strong> We collect what we need to run
@@ -17,9 +17,10 @@ export function Privacy() {
       <p>
         This policy explains how Clerova ("we", "us") handles personal
         information on clerova-ai.com and in the Clerova app. Our customers are
-        businesses, such as property management companies. When a customer
-        forwards emails to Clerova, those emails can include information about
-        other people, like tenants, owners and vendors. We process that
+        businesses, such as property management and trucking companies. When a
+        customer forwards emails to Clerova, those emails can include
+        information about other people, like tenants, owners and vendors, or
+        brokers, shippers, receivers and drivers. We process that
         information on the customer's behalf and follow the customer's
         instructions.
       </p>
@@ -28,7 +29,8 @@ export function Privacy() {
       <ul>
         <li>
           <strong>Account details:</strong> your name, email address, company
-          name, number of units managed, and how you heard about us.
+          name, number of units managed or trucks you run, and how you heard
+          about us.
         </li>
         <li>
           <strong>If you sign in with Google:</strong> Google shares your name,
@@ -47,6 +49,12 @@ export function Privacy() {
           hours, and the email address you choose for copies of your replies.
         </li>
         <li>
+          <strong>Trucking details:</strong> for trucking companies, your
+          carrier details (legal name, MC and DOT numbers, address, phone,
+          billing email and factoring company), and the loads, stops, arrival
+          and departure times, charges, documents and invoices in your account.
+        </li>
+        <li>
           <strong>Billing details:</strong> your plan and payment status.
           Stripe collects and stores your card details. We never see your full
           card number.
@@ -61,6 +69,7 @@ export function Privacy() {
       <h2>3. How we use it</h2>
       <ul>
         <li>to organize your requests, suggest next steps and draft replies;</li>
+        <li>for trucking, to read rate cons and load paperwork, check brokers, work out detention and make invoices;</li>
         <li>to send the replies you approve, and account emails such as usage warnings;</li>
         <li>to run billing, the free trial and your plan's limits;</li>
         <li>to keep the Service secure, fix problems and improve it;</li>
@@ -75,8 +84,10 @@ export function Privacy() {
       <p>
         To organize requests and draft replies, we send the content of each
         request, and the company information you add, to our AI provider,
-        OpenAI, through its business API. Attachments themselves aren't sent,
-        only their names. Under
+        OpenAI, through its business API. For property management, attachments
+        themselves aren't sent, only their names. For trucking, Clerova sends
+        rate cons and other load paperwork (the PDF's text and images of its
+        first pages, or the photo) so they can be read. Under
         OpenAI's API terms, this data is not used to train its models by
         default. We don't use your data to train AI models either.
       </p>
@@ -87,9 +98,10 @@ export function Privacy() {
         <li><strong>Supabase:</strong> database, file storage and sign-in</li>
         <li><strong>Google:</strong> sign-in with Google, if you choose it</li>
         <li><strong>Render:</strong> hosting for the app and website</li>
-        <li><strong>Postmark:</strong> receiving forwarded emails and sending replies and account emails</li>
-        <li><strong>OpenAI:</strong> AI processing of requests</li>
+        <li><strong>Postmark:</strong> receiving forwarded emails and sending replies, invoices and account emails</li>
+        <li><strong>OpenAI:</strong> AI processing of requests and load paperwork</li>
         <li><strong>Stripe:</strong> payments and billing</li>
+        <li><strong>FMCSA:</strong> for trucking, we look up brokers' MC numbers in the U.S. government's public carrier data (only the MC number is sent)</li>
         <li><strong>Cloudflare:</strong> domain and network services</li>
         <li><strong>Google Workspace:</strong> our support email</li>
       </ul>
@@ -132,8 +144,9 @@ export function Privacy() {
       </p>
       <p>
         If you are a tenant, owner or vendor whose emails were forwarded to
-        Clerova by a property manager, please contact that property manager
-        first. We will help them respond to your request.
+        Clerova by a property manager, or a broker, shipper or driver whose
+        emails were forwarded by a trucking company, please contact that
+        company first. We will help them respond to your request.
       </p>
 
       <h2>10. Children</h2>

@@ -119,9 +119,13 @@ export function FileViewer({ file, onClosed }: { file: ViewerFile; onClosed: () 
     const width = Math.max(240, body.current.clientWidth - 24) * ZOOMS[zoom];
 
     void (async () => {
+      let closePdf: (() => void) | null = null;
+
       try {
         const { openPdf, drawPage, MAX_PAGES } = await import("../utils/pdfRender");
-        const { pdf, close: closePdf } = await openPdf(await blob.arrayBuffer());
+        const opened = await openPdf(await blob.arrayBuffer());
+        const pdf = opened.pdf;
+        closePdf = opened.close;
         const shown = Math.min(pdf.numPages, MAX_PAGES);
 
         if (!current) {
@@ -139,8 +143,6 @@ export function FileViewer({ file, onClosed }: { file: ViewerFile; onClosed: () 
           target.appendChild(canvas);
           await drawPage(pdf, number, canvas, width);
         }
-
-        closePdf();
       } catch (err) {
         console.error("Failed to show the PDF:", err);
 
@@ -148,6 +150,9 @@ export function FileViewer({ file, onClosed }: { file: ViewerFile; onClosed: () 
           setKind("other");
           setError("This PDF can't be shown here. Download it to open it.");
         }
+      } finally {
+        // Frees the PDF and its worker, also when zoom changed or the viewer closed mid-way
+        closePdf?.();
       }
     })();
 
@@ -168,7 +173,7 @@ export function FileViewer({ file, onClosed }: { file: ViewerFile; onClosed: () 
       return;
     }
 
-    const focusable = [...dialog.current.querySelectorAll<HTMLElement>("button:not(:disabled), a[href]")];
+    const focusable = [...dialog.current.querySelectorAll<HTMLElement>("button:not(:disabled), a[href], [tabindex='0']")];
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
 
@@ -222,7 +227,15 @@ export function FileViewer({ file, onClosed }: { file: ViewerFile; onClosed: () 
       <div className="file-viewer-body" ref={body} tabIndex={0} role="region" aria-label="File">
         {!kind && !error && <p className="file-viewer-note">Opening {file.name}...</p>}
         {error && <p className="file-viewer-note action-error">{error}</p>}
-        {kind === "image" && url && <img className="file-viewer-image" src={url} alt={file.name} />}
+        {kind === "image" && url && (
+          <img
+            className="file-viewer-image"
+            src={url}
+            alt={file.name}
+            // Some photos (like iPhone HEIC) can't be shown in a browser: offer the download
+            onError={() => setKind("other")}
+          />
+        )}
         {kind === "other" && !error && (
           <p className="file-viewer-note">This file can't be shown here. Download it to open it.</p>
         )}

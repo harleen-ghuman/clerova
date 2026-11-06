@@ -2,7 +2,7 @@ import { LegalPage } from "./LegalPage";
 
 export function Terms() {
   return (
-    <LegalPage title="Terms of Service" updated="October 26, 2026">
+    <LegalPage title="Terms of Service" updated="November 6, 2026">
       <div className="legal-summary">
         <p>
           <strong>The short version:</strong> Clerova organizes the emails you
@@ -29,6 +29,13 @@ export function Terms() {
         out details such as the address, type and priority, suggest a next
         step and draft a reply. Nothing is sent and no job is created until a
         person on your account approves it.
+      </p>
+      <p>
+        For trucking companies, Clerova reads rate confirmations and other load
+        paperwork, points out things to check, looks up brokers in FMCSA's
+        public data, drafts replies to brokers, works out detention and builds
+        invoices. Nothing goes to a broker or factoring company until you
+        approve it.
       </p>
 
       <h2>3. Your account</h2>
@@ -62,6 +69,12 @@ export function Terms() {
           for that period is added to your next bill.
         </li>
         <li>
+          Trucking plans are priced by the number of trucks you run, which you
+          enter yourself, and cover about 40 loads a truck each month. If you
+          change your trucks, Stripe adds or credits the difference for that
+          period.
+        </li>
+        <li>
           Founding prices stay the same for as long as your subscription stays
           active. We may change other prices with at least 30 days' notice by
           email. The new price applies from your next renewal.
@@ -83,7 +96,8 @@ export function Terms() {
       <p>
         You confirm that you have the right to forward the emails you send to
         Clerova and to share the information in them with us, including
-        information about your tenants, owners and vendors.
+        information about your tenants, owners and vendors, or about brokers,
+        shippers, receivers and drivers.
       </p>
 
       <h2>6. AI suggestions</h2>
@@ -95,6 +109,11 @@ export function Terms() {
         rely on Clerova for legal, financial or emergency decisions. For
         emergencies such as fires, floods or gas leaks, follow your usual
         emergency procedures.
+      </p>
+      <p>
+        For trucking, rate con checks, FMCSA results, detention times and
+        invoice amounts can also be wrong or out of date. Check each rate con
+        before you sign it, and each invoice and claim before you send it.
       </p>
 
       <h2>7. Acceptable use</h2>

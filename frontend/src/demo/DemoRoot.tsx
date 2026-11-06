@@ -156,7 +156,7 @@ function DemoBar({ trucking }: { trucking: boolean }) {
           ? "Try it like a dispatcher would. Clerova's drafts here are pre-written examples."
           : "Try it like a property manager would. Clerova's suggestions here are pre-written examples."}
       </p>
-      <a className="demo-switch" href={trucking ? "/demo" : "/demo/trucking"}>
+      <a className="demo-switch" href={trucking ? "/demo/" : "/demo/trucking/"}>
         {trucking ? "See the property management demo" : "Run a trucking company? See the trucking demo"}
       </a>
 
