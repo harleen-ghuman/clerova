@@ -251,6 +251,61 @@ public class LoadService {
     private record Sent(OutgoingEmail email, String providerId) {
     }
 
+    /**
+     * Replies to any email in a carrier's Inbox, from the workspace's Clerova
+     * address, in the same thread. An email on a load gets the load's reply
+     * address and shows under the load's Emails; others come back to the Inbox.
+     */
+    @Transactional
+    public com.clerova.dto.InboundMessageResponse replyToEmail(UUID organizationId, InboundMessage message,
+                                                              String to, String body) {
+        String address = to == null || to.isBlank() ? message.getFromEmail() : to.strip();
+
+        if (!InvoiceService.isEmail(address)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_EMAIL", "Enter the email address to reply to.");
+        }
+
+        String text = body == null ? "" : body.strip();
+
+        if (text.isEmpty()) {
+            throw new ConflictException("The reply is empty. Add a message before sending.");
+        }
+
+        if (text.length() > MAX_REPLY) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "REPLY_TOO_LONG", "The reply is too long.");
+        }
+
+        if (!emailProperties.isSendingEnabled()) {
+            throw new ApiException(HttpStatus.CONFLICT, "EMAIL_SENDING_DISABLED",
+                    "Sending email isn't set up yet. Copy the reply and send it from your own email.");
+        }
+
+        invoiceService.requireEmailAllowance(organizationId);
+        String original = message.getSubject() == null ? "" : message.getSubject().strip();
+        String subject = clip((original.toLowerCase(java.util.Locale.ROOT).startsWith("re:") ? original : "Re: " + original)
+                .replaceAll("[\\r\\n]+", " "), 200);
+        Load load = message.getLoadId() == null ? null
+                : loadRepository.findByIdAndOrganizationId(message.getLoadId(), organizationId).orElse(null);
+        Sent sent = sendToBroker(organizationId, load, address, subject, text, message);
+
+        if (load != null) {
+            LoadReply record = new LoadReply();
+            record.setLoadId(load.getId());
+            record.setToEmail(address);
+            record.setSubject(subject);
+            record.setKind(ReplyKind.OTHER);
+            record.setSummary(clip(subject, 500));
+            record.setBody(sent.email().textBody());
+            record.setStatus(ReplyStatus.SENT);
+            record.setSentAt(Instant.now());
+            record.setProviderMessageId(sent.providerId());
+            loadReplyRepository.save(record);
+        }
+
+        inboundMessageRepository.markReplied(message.getId(), Instant.now());
+        return com.clerova.dto.InboundMessageResponse.from(inboundMessageRepository.findById(message.getId()).orElseThrow());
+    }
+
     /** Sends an email about a load from the workspace's Clerova address; replies come back to the load. */
     private Sent sendToBroker(UUID organizationId, Load load, String to, String subject, String text,
                               InboundMessage answered) {
@@ -264,7 +319,7 @@ public class LoadService {
         OutgoingEmail email = new OutgoingEmail(
                 "\"" + organization.getName().replaceAll("[\"\\r\\n<>]", "").trim() + " via Clerova\" <"
                         + emailProperties.forwardingAddress(token) + ">",
-                emailProperties.loadReplyAddress(token, load.getId()),
+                load != null ? emailProperties.loadReplyAddress(token, load.getId()) : emailProperties.forwardingAddress(token),
                 to,
                 subject,
                 ReplyService.withSignOff(text, organization.getName()),
@@ -275,7 +330,7 @@ public class LoadService {
         try {
             return new Sent(email, emailSender.send(email));
         } catch (EmailSendException e) {
-            log.warn("Couldn't send an email on load {}: {}", load.getId(), e.getMessage());
+            log.warn("Couldn't send an email on load {}: {}", load == null ? "(none)" : load.getId(), e.getMessage());
             throw new ApiException(HttpStatus.BAD_GATEWAY, "EMAIL_NOT_SENT",
                     "The email couldn't be sent. Please try again in a minute.");
         }

@@ -72,3 +72,13 @@ export function sendReply(
     { method: "POST" }
   );
 }
+
+/** An AI draft to reply to an Inbox email (trucking; 10 per email). */
+export function draftInboxReply(id: string): Promise<{ draft: string; draftsLeft: number }> {
+  return apiRequest(`/api/inbox/${id}/draft-reply`, { method: "POST" });
+}
+
+/** Sends a reply to an Inbox email, in the same thread. */
+export function replyToInboxEmail(id: string, reply: { to: string; body: string }): Promise<InboundMessage> {
+  return apiRequest(`/api/inbox/${id}/reply`, { method: "POST", body: reply });
+}

@@ -257,6 +257,61 @@ class TruckingIntakeTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void anyInboxEmailCanBeAnsweredWithADraftAndSentInTheSameThread() throws Exception {
+        when(emailSender.send(org.mockito.ArgumentMatchers.any())).thenReturn("pm-out-inbox");
+        when(truckingAiService.draftBrokerReply(anyString(), anyString(), anyString()))
+                .thenReturn(reply(true, "Hi Lee,\n\nYes, we have a truck in Fresno on Monday.\n\nThanks,"));
+
+        // A broker asks about a truck: no load, so it's not filed anywhere
+        deliver("lee@mesaridge.example", forwardingAddress, "<ask-1@x>", null,
+                "Truck for Monday?", "Do you have a reefer in Fresno Monday?", null);
+        processor.processDue();
+        JsonNode email = json(mockMvc.perform(get("/api/inbox").with(user))).get(0);
+        String id = email.get("id").asText();
+        assertThat(email.get("loadId").isNull()).isTrue();
+        assertThat(email.get("replyDraftsLeft").asInt()).isEqualTo(10);
+        assertThat(email.get("repliedAt").isNull()).isTrue();
+
+        // A draft, from the email alone
+        mockMvc.perform(post("/api/inbox/{id}/draft-reply", id).with(user))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.draft").value(org.hamcrest.Matchers.containsString("truck in Fresno")))
+                .andExpect(jsonPath("$.draftsLeft").value(9));
+        ArgumentCaptor<String> facts = ArgumentCaptor.forClass(String.class);
+        verify(truckingAiService).draftBrokerReply(facts.capture(), anyString(), anyString());
+        assertThat(facts.getValue()).startsWith("No load is linked");
+
+        // Sent from Clerova, in the thread, replies back to the Inbox
+        mockMvc.perform(post("/api/inbox/{id}/reply", id).with(user).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"body\":\"Hi Lee,\\n\\nYes, Monday works.\\n\\nThanks,\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.repliedAt").isNotEmpty());
+        ArgumentCaptor<com.clerova.email.OutgoingEmail> sent = ArgumentCaptor.forClass(com.clerova.email.OutgoingEmail.class);
+        verify(emailSender).send(sent.capture());
+        assertThat(sent.getValue().to()).isEqualTo("lee@mesaridge.example");
+        assertThat(sent.getValue().subject()).isEqualTo("Re: Truck for Monday?");
+        assertThat(sent.getValue().inReplyTo()).isEqualTo("<ask-1@x>");
+        assertThat(sent.getValue().replyTo()).isEqualTo(forwardingAddress);
+        assertThat(sent.getValue().textBody()).endsWith("Thanks,\nSierra Run Transport");
+
+        // 10 drafts per email, then write your own
+        for (int i = 0; i < 9; i++) {
+            mockMvc.perform(post("/api/inbox/{id}/draft-reply", id).with(user)).andExpect(status().isOk());
+        }
+        mockMvc.perform(post("/api/inbox/{id}/draft-reply", id).with(user))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("You've used the 10 drafts for this email. Edit the last one, or write your own."));
+
+        // Empty replies and other workspaces are refused
+        mockMvc.perform(post("/api/inbox/{id}/reply", id).with(user).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"body\":\"  \"}")).andExpect(status().isConflict());
+        RequestPostProcessor other = onboardNewUser(mockMvc);
+        mockMvc.perform(post("/api/inbox/{id}/draft-reply", id).with(other)).andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/inbox/{id}/reply", id).with(other).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"body\":\"hi\"}")).andExpect(status().isNotFound());
+    }
+
     private String bookLoad() throws Exception {
         when(truckingAiService.readRateCon(anyString(), anyString(), anyList())).thenReturn(rateCon("2150.00", ""));
         deliver("<rc-book@x>", "Rate Confirmation 88213", "Rate con attached.", TruckingIntakeTestPdf.pdf("RATE CONFIRMATION 88213"));

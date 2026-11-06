@@ -1194,6 +1194,29 @@ function handle(route: string, body: Record<string, unknown>, form: FormData | n
 
   // Inbox
   if (route === "GET /api/inbox") return [...state.inbox].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+  if ((match = route.match(/^POST \/api\/inbox\/([^/]+)\/draft-reply$/))) {
+    // Same rule as the server: 10 drafts per email, not counted toward the plan
+    const email = state.inbox.find((candidate) => candidate.id === match![1]);
+    if (!email) throw new ApiRequestError("Email not found", 404);
+    const left = email.replyDraftsLeft ?? 10;
+    if (left <= 0) conflict("You've used the 10 drafts for this email. Edit the last one, or write your own.");
+    email.replyDraftsLeft = left - 1;
+    const first = (email.fromName ?? "").split(" ")[0];
+    const draft = `Hi${first ? ` ${first}` : ""},\n\nThanks for your email${email.subject ? ` about "${email.subject}"` : ""}. We're checking and will get back to you shortly.\n\nThanks,`;
+    return { draft, draftsLeft: email.replyDraftsLeft };
+  }
+  if ((match = route.match(/^POST \/api\/inbox\/([^/]+)\/reply$/))) {
+    const email = state.inbox.find((candidate) => candidate.id === match![1]);
+    if (!email) throw new ApiRequestError("Email not found", 404);
+    const to = text(body.to) || email.fromEmail || "";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) invalid("Enter the email address to reply to.");
+    if (!text(body.body)) conflict("The reply is empty. Add a message before sending.");
+    const subject = /^re:/i.test(email.subject ?? "") ? email.subject! : `Re: ${email.subject ?? ""}`;
+    const load = email.loadId ? state.loads.find((candidate) => candidate.id === email.loadId) : undefined;
+    if (load) recordSent(load, to, subject, text(body.body), "OTHER");
+    email.repliedAt = now();
+    return { ...email };
+  }
   if ((match = route.match(/^POST \/api\/inbox\/([^/]+)\/reprocess$/))) {
     const email = state.inbox.find((candidate) => candidate.id === match![1]);
     if (!email) throw new ApiRequestError("This email no longer exists.", 404);

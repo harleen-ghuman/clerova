@@ -7,6 +7,7 @@ import type { InboundMessage, InboundMessageStatus } from "../types/Email";
 import type { LoadSummary } from "../types/Load";
 import { LoadPicker } from "../trucking/LoadPicker";
 import { loadLabel } from "../trucking/format";
+import { InboxReply } from "../trucking/InboxReply";
 
 interface InboxPageProps {
   /** Changes when the app refreshes, so new emails show up. */
@@ -18,6 +19,8 @@ interface InboxPageProps {
   /** A trucking workspace's loads, to file an email under one by hand. */
   loads?: LoadSummary[];
   onFileEmail?: (messageId: string, loadId: string) => Promise<unknown>;
+  /** Trucking: replies can be sent from Clerova. */
+  sendingEnabled?: boolean;
 }
 
 const STATUS_LABELS: Record<InboundMessageStatus, string> = {
@@ -75,7 +78,9 @@ export function InboxPage({
   onOpenEmailSetup,
   loads = [],
   onFileEmail,
+  sendingEnabled = false,
 }: InboxPageProps) {
+  const [replyingId, setReplyingId] = useState<string | null>(null);
   const [messages, setMessages] = useState<InboundMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [itemError, setItemError] = useState<{ id: string; message: string } | null>(null);
@@ -208,7 +213,7 @@ export function InboxPage({
           aria-pressed={filter === "all"}
           onClick={() => setFilter("all")}
         >
-          All
+          {onOpenLoad ? "All emails" : "All"}
           <span>{listed.length}</span>
         </button>
 
@@ -218,7 +223,7 @@ export function InboxPage({
           aria-pressed={filter === "attention"}
           onClick={() => setFilter("attention")}
         >
-          {onOpenLoad ? "Not on a load" : "Ignored or failed"}
+          {onOpenLoad ? "Needs a load" : "Ignored or failed"}
           <span>{needsAttention.length - needsAttention.filter((message) => message.status === "ATTACHED").length}</span>
         </button>
 
@@ -229,7 +234,7 @@ export function InboxPage({
             aria-pressed={filter === "automated"}
             onClick={() => setFilter("automated")}
           >
-            Automated
+            Notifications
             <span>{automated.length}</span>
           </button>
         )}
@@ -292,9 +297,9 @@ export function InboxPage({
                         : onOpenLoad && message.status === "ATTACHED"
                           ? "On a load"
                           : onOpenLoad && isAutomated(message)
-                            ? "Automated"
+                            ? "Notification"
                             : onOpenLoad && message.status === "IGNORED"
-                            ? "Not on a load"
+                            ? "Needs a load"
                             : STATUS_LABELS[message.status]}
                 </span>
               </div>
@@ -330,9 +335,24 @@ export function InboxPage({
                     minute: "2-digit",
                   })}
                   {message.statusReason && ` · ${message.statusReason}`}
+                  {message.repliedAt &&
+                    ` · Replied ${new Date(message.repliedAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`}
                 </span>
 
                 <div className="inbox-item-actions">
+                {onOpenLoad && !isSetAside(message) && replyingId !== message.id && (
+                  <button
+                    type="button"
+                    className="secondary-action-button"
+                    onClick={() => {
+                      setReplyingId(message.id);
+                      setFilingId(null);
+                    }}
+                  >
+                    Reply
+                  </button>
+                )}
+
                 {message.loadId && onOpenLoad && (
                   <button
                     type="button"
@@ -390,6 +410,18 @@ export function InboxPage({
                 )}
                 </div>
               </div>
+
+              {replyingId === message.id && (
+                <InboxReply
+                  message={message}
+                  sendingEnabled={sendingEnabled}
+                  onSent={(updated) => {
+                    setMessages((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+                    setReplyingId(null);
+                  }}
+                  onCancel={() => setReplyingId(null)}
+                />
+              )}
 
               {filingId === message.id && (
                 <LoadPicker

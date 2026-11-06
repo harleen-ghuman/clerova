@@ -86,6 +86,12 @@ function nextStep(load: LoadDetail): { text: string; to?: LoadStatus; label?: st
   }
 }
 
+/** "Net 31" spelled out, so it's clear when the money comes. */
+function paymentText(terms: string): string {
+  const days = terms.match(/\bnet\s*-?\s*(\d{1,3})\b/i)?.[1];
+  return days && !/days? after/i.test(terms) ? `${terms}: paid ${days} days after the invoice` : terms;
+}
+
 /** Emails newest first, like an inbox. */
 function newestFirst<T extends { at: string | null }>(entries: T[]): T[] {
   const time = (entry: T) => (entry.at ? Date.parse(entry.at) : 0);
@@ -109,6 +115,7 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
   const [confirmBack, setConfirmBack] = useState(false);
   const [emailingUpdate, setEmailingUpdate] = useState(false);
   const [updateSent, setUpdateSent] = useState<string | null>(null);
+  const [showDoneChecks, setShowDoneChecks] = useState(false);
 
   useEffect(() => {
     let current = true;
@@ -562,7 +569,7 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
                 <>
                   <dt>Payment</dt>
                   <dd>
-                    {load.paymentTerms}
+                    {paymentText(load.paymentTerms)}
                     {load.quickPayPercent !== null && <div className="tk-sub">Quick pay: {load.quickPayPercent}% fee</div>}
                   </dd>
                 </>
@@ -592,8 +599,21 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
 
           {load.flags.length > 0 && (
             <section className="tk-panel" aria-label="Rate con check" id="load-checks">
-              <h2>Rate con check</h2>
-              {load.flags.map((flag) => (
+              <h2>
+                Rate con check
+                <span className={`tk-pill tk-pill-${openFlags > 0 ? "note" : "good"}`}>
+                  {openFlags > 0 ? `${openFlags} open` : "All done"}
+                </span>
+              </h2>
+              {openFlags === 0 && !showDoneChecks && (
+                <p className="tk-sub">
+                  {load.flags.length === 1 ? "The one item was checked." : `All ${load.flags.length} items were checked.`}{" "}
+                  <button type="button" className="tk-link" onClick={() => setShowDoneChecks(true)}>
+                    Show them
+                  </button>
+                </p>
+              )}
+              {load.flags.filter((flag) => !flag.resolvedAt || showDoneChecks).map((flag) => (
                 <div key={flag.id} className={`tk-flag ${flag.resolvedAt ? "done" : ""}`}>
                   <span className={`tk-pill tk-pill-${flag.resolvedAt ? "good" : flag.level === "FIX" ? "fix" : "note"}`}>
                     {flag.resolvedAt ? "Done" : flag.level === "FIX" ? "Fix" : "Note"}
@@ -617,6 +637,16 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
                   )}
                 </div>
               ))}
+              {openFlags > 0 && load.flags.length > openFlags && (
+                <button type="button" className="tk-link tk-link-small" onClick={() => setShowDoneChecks((shown) => !shown)}>
+                  {showDoneChecks ? "Hide the done items" : `Show ${load.flags.length - openFlags} done`}
+                </button>
+              )}
+              {openFlags === 0 && showDoneChecks && (
+                <button type="button" className="tk-link tk-link-small" onClick={() => setShowDoneChecks(false)}>
+                  Hide them
+                </button>
+              )}
             </section>
           )}
 

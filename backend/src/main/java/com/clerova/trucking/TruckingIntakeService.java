@@ -889,6 +889,57 @@ public class TruckingIntakeService {
         return digits.isEmpty() || digits.length() > 8 ? null : digits;
     }
 
+    /** A drafted reply to an Inbox email, and how many drafts are left for it. */
+    public record InboxDraft(String draft, int draftsLeft) {
+    }
+
+    /**
+     * Drafts a reply to any email in a carrier's Inbox, for the dispatcher to
+     * edit and send. Up to 10 drafts per email; not counted toward the plan.
+     */
+    public InboxDraft draftInboxReply(UUID organizationId, UUID messageId) {
+        InboundMessage message = requireTruckingMessage(organizationId, messageId);
+        aiUsageService.requireAccess(organizationId);
+
+        if (inboundMessageRepository.useReplyDraft(messageId, com.clerova.dto.InboundMessageResponse.MAX_REPLY_DRAFTS) == 0) {
+            throw new com.clerova.exception.ConflictException(
+                    "You've used the " + com.clerova.dto.InboundMessageResponse.MAX_REPLY_DRAFTS
+                            + " drafts for this email. Edit the last one, or write your own.");
+        }
+
+        try {
+            String[] context = message.getLoadId() == null
+                    ? new String[] {"No load is linked to this email. Answer from the email only, and never invent load details.", ""}
+                    : transactionTemplate.execute(status -> {
+                        Load load = loadRepository.findById(message.getLoadId()).orElseThrow();
+                        return new String[] {facts(load), conversation(load, message.getId())};
+                    });
+            BrokerReplyResult result = truckingAiService.draftBrokerReply(context[0], context[1], emailText(message));
+            String draft = result == null || result.draft == null || result.draft.isBlank()
+                    ? "Hi,\n\nThanks for your email.\n\nThanks,"
+                    : result.draft.strip();
+            int used = inboundMessageRepository.findById(messageId).map(InboundMessage::getReplyDraftsUsed).orElse(0);
+            return new InboxDraft(draft, Math.max(0, com.clerova.dto.InboundMessageResponse.MAX_REPLY_DRAFTS - used));
+        } catch (RuntimeException e) {
+            inboundMessageRepository.refundReplyDraft(messageId);
+            log.warn("Couldn't draft an Inbox reply for {}: {}", messageId, e.getMessage());
+            throw new com.clerova.exception.ApiException(org.springframework.http.HttpStatus.BAD_GATEWAY, "AI_DRAFT_FAILED",
+                    "Couldn't write a draft right now. Please try again, or write your own.");
+        }
+    }
+
+    /** An email in this carrier's Inbox; other workspaces and property managers get a not found. */
+    InboundMessage requireTruckingMessage(UUID organizationId, UUID messageId) {
+        var organization = organizationRepository.findById(organizationId).orElseThrow();
+
+        if (organization.getIndustry() != com.clerova.domain.Industry.TRUCKING) {
+            throw new com.clerova.exception.NotFoundException("Email not found");
+        }
+
+        return inboundMessageRepository.findByIdAndOrganizationId(messageId, organizationId)
+                .orElseThrow(() -> new com.clerova.exception.NotFoundException("Email not found"));
+    }
+
     private static String emailText(InboundMessage message) {
         String subject = message.getSubject() != null ? "Subject: " + message.getSubject() + "\n\n" : "";
         String body = message.getTextBody() != null ? message.getTextBody() : "";

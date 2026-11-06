@@ -453,6 +453,7 @@ export function TruckingApp({
               onOpenLoad={openLoad}
               loads={loads}
               onFileEmail={(messageId, loadId) => fileEmail(loadId, messageId).then(() => loadLoads())}
+              sendingEnabled={emailSettings?.sendingEnabled ?? false}
             />
           </div>
         )}
