@@ -81,6 +81,7 @@ export function TruckingApp({
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [invoicesError, setInvoicesError] = useState<string | null>(null);
   const [focusCarrier, setFocusCarrier] = useState(false);
+  const [focusBilling, setFocusBilling] = useState(0);
   const [loadSearch, setLoadSearch] = useState("");
   const [billingError, setBillingError] = useState<string | null>(null);
 
@@ -323,7 +324,10 @@ export function TruckingApp({
         userEmail={userEmail}
         onNavigate={navigate}
         onSignOut={onSignOut}
-        onManageBilling={() => navigate("settings")}
+        onManageBilling={() => {
+          navigate("settings");
+          setFocusBilling((count) => count + 1);
+        }}
         items={items}
         usageText={
           billing && limit > 0
@@ -429,6 +433,7 @@ export function TruckingApp({
             error={loadsError ?? invoicesError}
             onOpenLoad={openLoad}
             onRetry={() => void loadLoads()}
+            onChanged={() => void loadLoads()}
           />
         )}
 
@@ -484,6 +489,7 @@ export function TruckingApp({
               onSignOut={onSignOut}
               propertyManagement={false}
               focusCompanyInfo={focusCarrier}
+              focusBilling={focusBilling}
             />
           </div>
         )}

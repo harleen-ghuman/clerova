@@ -148,7 +148,7 @@ export function AuthPage({
         // identities, and sends nothing; say so instead of "check your email"
         if (data.user && data.user.identities?.length === 0) {
           setMode("sign-in");
-          setError("There's already an account with this email. Sign in, or reset your password.");
+          setError("There's already an account with this email. Sign in, continue with Google if you used it before, or reset your password.");
           return;
         }
 
@@ -243,7 +243,7 @@ export function AuthPage({
           {error && <p className="action-error">{error}</p>}
           {notice && <p className="request-success">{notice}</p>}
 
-          <div className="auth-links">
+          <div className="auth-links auth-links-stack">
             <button type="button" onClick={resendConfirmation} disabled={resending}>
               {resending ? "Sending..." : "Send the link again"}
             </button>

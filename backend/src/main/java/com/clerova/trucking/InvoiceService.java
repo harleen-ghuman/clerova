@@ -530,9 +530,14 @@ public class InvoiceService {
         ZoneId zone = zoneFor(organizationId);
         Map<UUID, Load> loads = loadRepository.findForOrganization(organizationId).stream()
                 .collect(Collectors.toMap(Load::getId, Function.identity()));
-        StringBuilder csv = new StringBuilder(
-                "Invoice,Invoice date,Load,Broker,From,To,Sent to,Status,Lines,Total,Quick pay fee,Due date,Paid date,Amount paid\r\n");
+        StringBuilder csv = new StringBuilder();
+        List<String> header = new ArrayList<>(List.of("Invoice", "Invoice date", "Load", "Broker", "From", "To", "Sent to", "Status"));
+        header.addAll(List.of(EXPORT_COLUMNS));
+        header.addAll(List.of("Total", "Quick pay fee", "Due date", "Paid date", "Amount paid", "Line details"));
+        row(csv, header.toArray(String[]::new));
+        long[] columnTotals = new long[EXPORT_COLUMNS.length];
         long total = 0;
+        long fees = 0;
         long paid = 0;
 
         List<Invoice> invoices = invoiceRepository.findByOrganizationIdOrderByCreatedAtDesc(organizationId).reversed();
@@ -551,11 +556,20 @@ public class InvoiceService {
 
             Load load = loads.get(invoice.getLoadId());
             List<LoadStop> stops = load == null ? List.of() : load.getStops();
+            long[] columns = new long[EXPORT_COLUMNS.length];
+            boolean[] used = new boolean[EXPORT_COLUMNS.length];
+
+            for (InvoiceLine line : invoice.getLines()) {
+                int column = exportColumn(line.getDescription());
+                columns[column] += line.getAmountCents();
+                used[column] = true;
+            }
+
             String lines = invoice.getLines().stream()
                     .map(line -> line.getDescription() + " " + Money.dollars(line.getAmountCents()))
                     .collect(Collectors.joining("; "));
 
-            row(csv,
+            List<String> cells = new ArrayList<>(List.of(
                     invoice.getNumber(),
                     date.toString(),
                     load == null ? "" : orEmpty(load.getLoadNumber()),
@@ -563,23 +577,69 @@ public class InvoiceService {
                     stops.isEmpty() ? "" : town(stops.getFirst().getPlace()),
                     stops.size() < 2 ? "" : town(stops.getLast().getPlace()),
                     invoice.getSendTo() == Invoice.SendTo.FACTOR ? "Factor" : "Broker",
-                    invoice.getStatus() == InvoiceStatus.PAID ? "Paid" : "Waiting on payment",
-                    lines,
+                    invoice.getStatus() == InvoiceStatus.PAID ? "Paid" : "Waiting on payment"));
+
+            for (int i = 0; i < columns.length; i++) {
+                cells.add(used[i] ? amount(columns[i]) : "");
+                columnTotals[i] += columns[i];
+            }
+
+            cells.addAll(List.of(
                     amount(invoice.getTotalCents()),
                     invoice.getQuickPayFeeCents() == null ? "" : amount(invoice.getQuickPayFeeCents()),
                     invoice.getDueDate() == null ? "" : invoice.getDueDate().toString(),
                     invoice.getPaidAt() == null ? "" : LocalDate.ofInstant(invoice.getPaidAt(), zone).toString(),
-                    invoice.getPaidCents() == null ? "" : amount(invoice.getPaidCents()));
+                    invoice.getPaidCents() == null ? "" : amount(invoice.getPaidCents()),
+                    lines));
+            row(csv, cells.toArray(String[]::new));
             total += invoice.getTotalCents();
+            fees += invoice.getQuickPayFeeCents() == null ? 0 : invoice.getQuickPayFeeCents();
             paid += invoice.getPaidCents() == null ? 0 : invoice.getPaidCents();
         }
 
-        row(csv, "Total", "", "", "", "", "", "", "", "", amount(total), "", "", "", amount(paid));
+        List<String> totals = new ArrayList<>(List.of("Total", "", "", "", "", "", "", ""));
+
+        for (long column : columnTotals) {
+            totals.add(amount(column));
+        }
+
+        totals.addAll(List.of(amount(total), amount(fees), "", "", amount(paid), ""));
+        row(csv, totals.toArray(String[]::new));
         return new FileDownload("Clerova invoices " + period + ".csv",
                 ("﻿" + csv).getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     // --------------------------------------------------------------- helpers
+
+    /** The spreadsheet's money columns, so a bookkeeper can total each kind of pay. */
+    static final String[] EXPORT_COLUMNS = {"Line haul", "Detention", "Lumper", "TONU", "Layover", "Other"};
+
+    /** Which money column an invoice line goes in, from its description (lines can be edited by hand). */
+    static int exportColumn(String description) {
+        String text = description == null ? "" : description.toLowerCase(Locale.ROOT);
+
+        if (text.contains("line haul") || text.contains("linehaul") || text.startsWith("freight") || text.startsWith("rate")) {
+            return 0;
+        }
+
+        if (text.contains("detention")) {
+            return 1;
+        }
+
+        if (text.contains("lumper")) {
+            return 2;
+        }
+
+        if (text.contains("tonu") || text.contains("truck ordered")) {
+            return 3;
+        }
+
+        if (text.contains("layover")) {
+            return 4;
+        }
+
+        return 5;
+    }
 
     private void markSent(Invoice invoice, Load load, Invoice.SentVia via, String email) {
         if (invoice.getStatus() == InvoiceStatus.DRAFT) {

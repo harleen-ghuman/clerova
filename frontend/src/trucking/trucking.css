@@ -1548,6 +1548,49 @@ label.rq-button.is-disabled {
   font-size: 13px;
 }
 
+/* The invoice (once delivered) goes first across the whole width; documents
+   and emails take the whole width under the two columns */
+.tk-detail > .tk-invoice-row,
+.tk-detail > .tk-wide {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.tk-detail > .tk-invoice-row {
+  order: -1;
+}
+
+/* Invoices page: room between the list and the bookkeeper box */
+.tk-invoice-list {
+  margin-bottom: 16px;
+}
+
+/* Invoices page: a delivered load with its own Create invoice button */
+.tk-row-split {
+  flex-wrap: wrap;
+}
+
+.tk-row-open {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tk-row-open:hover .tk-lane {
+  color: var(--brand);
+}
+
+.tk-row-error {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 /* Phones: one column, with the rate and terms right after what needs doing */
 @media (max-width: 900px) {
   .tk-detail > .tk-stack {
@@ -1555,7 +1598,8 @@ label.rq-button.is-disabled {
   }
 
   .tk-detail .tk-next,
-  .tk-detail .tk-draft {
+  .tk-detail .tk-draft,
+  .tk-detail > .tk-invoice-row {
     order: -2;
   }
 

@@ -160,10 +160,12 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
   const [paying, setPaying] = useState<string | null>(null);
   const [confirmVoid, setConfirmVoid] = useState(false);
   const [linesDirty, setLinesDirty] = useState(false);
+  const [rebuilt, setRebuilt] = useState<string | null>(null);
 
   async function act(key: string, action: () => Promise<Invoice | void>, fallback: string): Promise<boolean> {
     setBusy(key);
     setError(null);
+    setRebuilt(null);
 
     try {
       const result = await action();
@@ -223,6 +225,29 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
   }
 
   const draft = invoice.status === "DRAFT";
+
+  // Says what happened, also when the lines already matched
+  async function startOver() {
+    const before = JSON.stringify(invoice!.lines);
+    let after = before;
+    const ok = await act(
+      "rebuild",
+      async () => {
+        const result = await updateInvoice(invoice!.id, { rebuild: true });
+        after = JSON.stringify(result.lines);
+        return result;
+      },
+      "Couldn't update the lines."
+    );
+
+    if (ok) {
+      setRebuilt(
+        after === before
+          ? "The lines already match the rate and approved extra pay. Nothing changed."
+          : "Lines updated from the rate and approved extra pay."
+      );
+    }
+  }
   // Unsaved line edits hold back anything that uses the saved invoice
   const held = busy !== null || (draft && linesDirty);
   const due = invoice.totalCents - (invoice.quickPayFeeCents ?? 0);
@@ -280,12 +305,15 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
             type="button"
             className="tk-link tk-link-small"
             disabled={held}
-            onClick={() =>
-              void act("rebuild", () => updateInvoice(invoice.id, { rebuild: true }), "Couldn't update the lines.")
-            }
+            onClick={() => void startOver()}
           >
-            Start over from the rate and approved extra pay
+            {busy === "rebuild" ? "Starting over..." : "Start over from the rate and approved extra pay"}
           </button>
+          {rebuilt && (
+            <p className="request-success tk-rebuilt" role="status">
+              {rebuilt}
+            </p>
+          )}
 
           {!toFactor && load.quickPayPercent !== null && (
             <label className="tk-check">
@@ -357,7 +385,7 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
         </ol>
         {missing.length > 0 && (
           <p className="tk-callout">
-            No {missing.join(", ")} on this load yet. Add {missing.length === 1 ? "it" : "them"} under Documents
+            No {missing.length > 1 ? `${missing.slice(0, -1).join(", ")} or ${missing[missing.length - 1]}` : missing[0]} on this load yet. Add {missing.length === 1 ? "it" : "them"} under Documents
             {draft ? " before you send the invoice." : "."}
           </p>
         )}

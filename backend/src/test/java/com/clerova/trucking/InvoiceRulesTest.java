@@ -115,4 +115,16 @@ class InvoiceRulesTest {
         assertThat(overChange.minutesOnSite()).isEqualTo(240);
         assertThat(overChange.amountCents()).isEqualTo(10000);
     }
+
+    @Test
+    void spreadsheetColumnsComeFromTheLineDescriptions() {
+        assertThat(InvoiceService.exportColumn("Line haul, load 88213")).isZero();
+        assertThat(InvoiceService.exportColumn("Detention: 2.5 hours at Sierra Supply")).isEqualTo(1);
+        assertThat(InvoiceService.exportColumn("Lumper: receipt 4471")).isEqualTo(2);
+        assertThat(InvoiceService.exportColumn("Truck ordered, not used, load 5")).isEqualTo(3);
+        assertThat(InvoiceService.exportColumn("TONU")).isEqualTo(3);
+        assertThat(InvoiceService.exportColumn("Layover")).isEqualTo(4);
+        assertThat(InvoiceService.exportColumn("Pallet jack rental")).isEqualTo(5);
+        assertThat(InvoiceService.exportColumn(null)).isEqualTo(5);
+    }
 }

@@ -489,7 +489,7 @@ public class BillingService {
     public static final int MAX_TRUCKS = 500;
 
     /** Fair use: about this many loads a truck a month. */
-    public static final int LOADS_PER_TRUCK = 40;
+    public static final int LOADS_PER_TRUCK = 60;
 
     /** The cheaper trucking plan for this many trucks. */
     public static Plan truckingPlan(int trucks) {

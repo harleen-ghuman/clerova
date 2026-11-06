@@ -425,6 +425,19 @@ class TruckingInvoiceTest {
         String csv = mockMvc.perform(get("/api/invoices/export").param("month", month).with(user))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         assertThat(csv).contains("\"SR-1001\"", "\"88213\"", "\"Crestline Freight\"", "\"1242.50\"", "\"Waiting on payment\"");
+        // Each kind of pay has its own column, and they add up to the total
+        List<String> header = csvCells(csv.lines().findFirst().orElseThrow().replace("\uFEFF", ""));
+        assertThat(header).containsSubsequence("Status", "Line haul", "Detention", "Lumper", "TONU", "Layover", "Other", "Total");
+        List<String> row = csvCells(csv.lines().filter(line -> line.startsWith("\"SR-1001\"")).findFirst().orElseThrow());
+        java.math.BigDecimal pay = java.math.BigDecimal.ZERO;
+
+        for (String kind : List.of("Line haul", "Detention", "Lumper", "TONU", "Layover", "Other")) {
+            String cell = row.get(header.indexOf(kind));
+            pay = cell.isEmpty() ? pay : pay.add(new java.math.BigDecimal(cell));
+        }
+
+        assertThat(row.get(header.indexOf("Line haul"))).isNotEmpty();
+        assertThat(pay).isEqualByComparingTo(row.get(header.indexOf("Total")));
         mockMvc.perform(get("/api/invoices/export").param("month", "soon").with(user)).andExpect(status().isBadRequest());
     }
 
@@ -813,5 +826,13 @@ class TruckingInvoiceTest {
 
     private JsonNode json(ResultActions result) throws Exception {
         return objectMapper.readTree(result.andReturn().getResponse().getContentAsString());
+    }
+
+    /** The cells of one spreadsheet row (every cell is quoted). */
+    private static List<String> csvCells(String line) {
+        String trimmed = line.strip();
+        return java.util.Arrays.stream(trimmed.substring(1, trimmed.length() - 1).split("\",\"", -1))
+                .map(cell -> cell.replace("\"\"", "\""))
+                .toList();
     }
 }

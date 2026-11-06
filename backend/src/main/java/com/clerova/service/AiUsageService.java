@@ -109,7 +109,7 @@ public class AiUsageService {
         String next;
 
         if (organization.getIndustry() == com.clerova.domain.Industry.TRUCKING) {
-            // Fair use for carriers is about 40 loads a truck a month
+            // Fair use for carriers is about 60 loads a truck a month (BillingService.LOADS_PER_TRUCK)
             next = "Clerova can read new rate cons again on %s. Add trucks in Settings, or email %s if you need more."
                     .formatted(reset, supportAddress);
         } else if (billingService.isEnabled() && organization.getPlan() == Plan.STARTER) {

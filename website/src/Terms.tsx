@@ -70,7 +70,7 @@ export function Terms() {
         </li>
         <li>
           Trucking plans are priced by the number of trucks you run, which you
-          enter yourself, and cover about 40 loads a truck each month. If you
+          enter yourself, and are subject to fair use for that many trucks. If you
           change your trucks, Stripe adds or credits the difference for that
           period.
         </li>

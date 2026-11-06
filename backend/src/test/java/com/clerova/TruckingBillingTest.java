@@ -106,7 +106,7 @@ class TruckingBillingTest {
         mockMvc.perform(get("/api/me").with(user))
                 .andExpect(jsonPath("$.organization.plan").value("STARTER"))
                 .andExpect(jsonPath("$.organization.trucks").value(6))
-                .andExpect(jsonPath("$.organization.aiMonthlyLimit").value(240))
+                .andExpect(jsonPath("$.organization.aiMonthlyLimit").value(360))
                 .andExpect(jsonPath("$.organization.foundingCustomer").value(true))
                 .andExpect(jsonPath("$.organization.subscriptionRequired").value(false));
 
@@ -129,7 +129,7 @@ class TruckingBillingTest {
         mockMvc.perform(get("/api/me").with(user))
                 .andExpect(jsonPath("$.organization.plan").value("FLEET"))
                 .andExpect(jsonPath("$.organization.trucks").value(10))
-                .andExpect(jsonPath("$.organization.aiMonthlyLimit").value(400));
+                .andExpect(jsonPath("$.organization.aiMonthlyLimit").value(600));
 
         // Growth is for property managers
         mockMvc.perform(post("/api/billing/upgrade").with(user)).andExpect(status().isConflict());

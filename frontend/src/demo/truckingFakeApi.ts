@@ -792,16 +792,37 @@ export async function demoTruckingFile(path: string): Promise<Blob> {
   }
 
   if ((match = path.match(/^\/api\/invoices\/export\?month=(\d{4}-\d{2})$/))) {
+    // Same columns as the server: each kind of pay gets its own column
+    const kinds = ["Line haul", "Detention", "Lumper", "TONU", "Layover", "Other"];
+    const column = (description: string) => {
+      const text = description.toLowerCase();
+      if (text.includes("line haul") || text.includes("linehaul") || text.startsWith("freight") || text.startsWith("rate")) return 0;
+      if (text.includes("detention")) return 1;
+      if (text.includes("lumper")) return 2;
+      if (text.includes("tonu") || text.includes("truck ordered")) return 3;
+      if (text.includes("layover")) return 4;
+      return 5;
+    };
+    const dollars = (cents: number) => (cents / 100).toFixed(2);
+    const cell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
     const rows = state.invoices
       .filter((invoice) => invoice.status === "SENT" || invoice.status === "PAID")
       .map((invoice) => {
         const load = findLoad(invoice.loadId);
+        const amounts: (number | null)[] = kinds.map(() => null);
+        invoice.lines.forEach((line) => {
+          const index = column(line.description);
+          amounts[index] = (amounts[index] ?? 0) + line.amountCents;
+        });
         return [invoice.number, (invoice.sentAt ?? "").slice(0, 10), load.loadNumber, findBroker(load).name,
-          invoice.status === "PAID" ? "Paid" : "Waiting on payment", (invoice.totalCents / 100).toFixed(2),
-          invoice.paidCents === null ? "" : (invoice.paidCents / 100).toFixed(2)]
-          .map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",");
+          invoice.status === "PAID" ? "Paid" : "Waiting on payment",
+          ...amounts.map((cents) => (cents === null ? "" : dollars(cents))), dollars(invoice.totalCents),
+          invoice.quickPayFeeCents === null ? "" : dollars(invoice.quickPayFeeCents),
+          invoice.paidCents === null ? "" : dollars(invoice.paidCents)]
+          .map(cell).join(",");
       });
-    return new Blob([`\uFEFFInvoice,Invoice date,Load,Broker,Status,Total,Amount paid\r\n${rows.join("\r\n")}\r\n`], { type: "text/csv" });
+    const header = ["Invoice", "Invoice date", "Load", "Broker", "Status", ...kinds, "Total", "Quick pay fee", "Amount paid"].join(",");
+    return new Blob([`\uFEFF${header}\r\n${rows.join("\r\n")}\r\n`], { type: "text/csv" });
   }
 
   // A document on a load or an email attachment
