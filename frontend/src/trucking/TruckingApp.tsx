@@ -334,7 +334,7 @@ export function TruckingApp({
         }}
         items={items}
         usageText={
-          billing && limit > 0
+          limit > 0
             ? `${used} of ${limit.toLocaleString()} loads this month`
             : loadsThisMonthText(loads)
         }

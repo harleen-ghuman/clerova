@@ -21,7 +21,7 @@ import { CarrierSection } from "../trucking/CarrierSection";
 import { TimeZoneSection } from "../trucking/TimeZoneSection";
 import type { Me, Organization } from "../types/Account";
 import { PLANS, planName, planPrice } from "../utils/plans";
-import { MAX_TRUCKS, truckingPrice } from "../utils/truckingPlans";
+import { CONTACT_EMAIL, MAX_TRUCKS, TRUCKING_PRICES, dollars, truckingPlan, truckingPrice } from "../utils/truckingPlans";
 
 interface SettingsPageProps {
   email: string;
@@ -595,7 +595,7 @@ function BillingSection({
     : plan
       ? planPrice(organization.foundingCustomer ? plan.foundingMonthly : plan.monthly, interval)
       : null;
-  const priceText = price ? `$${price.amount.toLocaleString()} a ${price.per}` : null;
+  const priceText = price ? `${dollars(price.amount)} a ${price.per}` : null;
   const name = trucking
     ? `${organization.plan === "FLEET" ? "Fleet" : "Starter"}${organization.trucks ? ` for ${organization.trucks} ${organization.trucks === 1 ? "truck" : "trucks"}` : ""}`
     : planName(organization.plan);
@@ -641,6 +641,8 @@ function BillingSection({
         Plan and billing
       </h2>
       <p>{summary}</p>
+
+      <PlansList organization={organization} interval={interval} />
 
       {confirmingUpgrade ? (
         <div className="billing-confirm" role="group" aria-label="Upgrade to Growth">
@@ -764,6 +766,64 @@ function BillingSection({
 }
 
 /** A carrier's number of trucks: the price follows, prorated by Stripe. */
+/** Every plan and its price, with the workspace's own plan marked, so prices are always one look away. */
+function PlansList({ organization, interval }: { organization: Organization; interval: "month" | "year" }) {
+  const founding = organization.foundingCustomer;
+  const per = interval === "year" ? "year" : "month";
+  const times = interval === "year" ? 10 : 1;
+  let rows: { key: string; name: string; size: string; price: string; mine: boolean }[];
+
+  if (organization.industry === "TRUCKING") {
+    const prices = founding ? TRUCKING_PRICES.founding : TRUCKING_PRICES.regular;
+    const current = organization.trucks ? truckingPlan(organization.trucks) : organization.plan;
+    rows = [
+      {
+        key: "STARTER",
+        name: "Starter",
+        size: "1 to 8 trucks",
+        price: `${dollars(prices.starterPerTruck * times)} a truck a ${per}`,
+        mine: current === "STARTER",
+      },
+      {
+        key: "FLEET",
+        name: "Fleet",
+        size: "9 to 49 trucks",
+        price: `${dollars(prices.fleetBase * times)} a ${per} for up to 20 trucks, then ${dollars(prices.fleetPerTruck * times)} a truck`,
+        mine: current === "FLEET",
+      },
+      { key: "CUSTOM", name: "50 trucks or more", size: "Larger fleets", price: `Email ${CONTACT_EMAIL} for a price`, mine: false },
+    ];
+  } else {
+    rows = PLANS.map((plan) => ({
+      key: plan.plan,
+      name: plan.name,
+      size: `${plan.requests.toLocaleString("en-US")} requests a month`,
+      price: `${dollars((founding ? plan.foundingMonthly : plan.monthly) * times)} a ${per}`,
+      mine: organization.plan === plan.plan,
+    }));
+  }
+
+  return (
+    <div className="settings-plans">
+      <span className="settings-plans-title" id="settings-plans-title">
+        Plans{founding ? " (founding prices, yours for as long as you stay)" : ""}
+      </span>
+      <ul aria-labelledby="settings-plans-title">
+        {rows.map((row) => (
+          <li key={row.key} className={row.mine ? "mine" : ""}>
+            <strong>
+              {row.name}
+              {row.mine && <span className="tk-pill tk-pill-info">Your plan</span>}
+            </strong>
+            <span>{row.size}</span>
+            <span>{row.price}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function TrucksForm({ organization, onChanged }: { organization: Organization; onChanged: () => Promise<unknown> }) {
   const current = organization.trucks ?? 1;
   const [trucks, setTrucks] = useState(String(current));
@@ -779,7 +839,11 @@ function TrucksForm({ organization, onChanged }: { organization: Organization; o
     event.preventDefault();
 
     if (!valid) {
-      setError(`Enter how many trucks you run, from 1 to ${MAX_TRUCKS}.`);
+      setError(
+        count > MAX_TRUCKS
+          ? `For 50 or more trucks, email ${CONTACT_EMAIL} and we'll set up your plan.`
+          : `Enter how many trucks you run, from 1 to ${MAX_TRUCKS}.`
+      );
       return;
     }
 
@@ -814,8 +878,10 @@ function TrucksForm({ organization, onChanged }: { organization: Organization; o
         />
         <span className="auth-hint">
           {next && count !== current
-            ? `With ${count} ${count === 1 ? "truck" : "trucks"}: ${next.plan === "FLEET" ? "Fleet" : "Starter"}, $${next.amount.toLocaleString()} a ${next.per}. Stripe adds or credits the difference for this period.`
-            : "Running more or fewer trucks? Change it here and your price follows."}
+            ? `With ${count} ${count === 1 ? "truck" : "trucks"}: ${next.plan === "FLEET" ? "Fleet" : "Starter"}, ${dollars(next.amount)} a ${next.per}. Stripe adds or credits the difference for this period.`
+            : count > MAX_TRUCKS
+              ? `For 50 or more trucks, email ${CONTACT_EMAIL} and we'll set up your plan.`
+              : "Running more or fewer trucks? Change it here and your price follows."}
         </span>
       </label>
       {error && <p className="action-error">{error}</p>}

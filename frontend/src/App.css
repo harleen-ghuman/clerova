@@ -3456,3 +3456,53 @@ body.file-viewer-open {
   outline: 2px solid var(--brand);
   outline-offset: -2px;
 }
+
+/* Settings: every plan and its price */
+.settings-plans {
+  margin: 4px 0 16px;
+}
+
+.settings-plans-title {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-plans ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-plans li {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(110px, 1fr) minmax(0, 2fr);
+  gap: 4px 16px;
+  align-items: baseline;
+  padding: 10px 14px;
+  border: 1px solid var(--border-faint);
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.settings-plans li.mine {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.settings-plans li strong {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .settings-plans li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
