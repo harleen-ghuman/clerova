@@ -54,7 +54,8 @@ export function TruckingPlanPage({ organization, notice, onSignOut }: TruckingPl
   }, []);
 
   function step(by: number) {
-    const next = Math.min(MAX_TRUCKS, Math.max(1, (valid ? count : 1) + by));
+    // From an empty or too-big number, + and − land between 1 and the most allowed
+    const next = Math.min(MAX_TRUCKS, Math.max(1, (Number.isInteger(count) ? Math.min(count, MAX_TRUCKS + 1) : 0) + by));
     setTrucks(String(next));
   }
 

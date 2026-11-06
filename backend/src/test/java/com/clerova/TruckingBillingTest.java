@@ -148,6 +148,26 @@ class TruckingBillingTest {
         verify(stripe, never()).post(startsWith("/v1/subscriptions/"), anyMap());
     }
 
+    @Test
+    void aWorkspaceCantClaimAnotherWorkspacesCheckout() throws Exception {
+        RequestPostProcessor owner = signUpCarrier();
+        RequestPostProcessor other = signUpCarrier();
+        String ownerId = organizationIdOf(owner);
+        when(stripe.get("/v1/checkout/sessions/cs_owner")).thenReturn(stripeJson.readTree(
+                "{\"id\":\"cs_owner\",\"client_reference_id\":\"" + ownerId + "\",\"subscription\":\"sub_1\"}"));
+        stubSubscription(ownerId, "trialing", "founding_trucking_starter_monthly", 5);
+
+        mockMvc.perform(post("/api/billing/checkout/cs_owner/complete").with(other)).andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/me").with(other))
+                .andExpect(jsonPath("$.organization.subscriptionStatus").doesNotExist())
+                .andExpect(jsonPath("$.organization.subscriptionRequired").value(true));
+
+        mockMvc.perform(post("/api/billing/checkout/cs_owner/complete").with(owner)).andExpect(status().isOk());
+        mockMvc.perform(get("/api/me").with(owner))
+                .andExpect(jsonPath("$.organization.subscriptionStatus").value("trialing"))
+                .andExpect(jsonPath("$.organization.trucks").value(5));
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private RequestPostProcessor signUpCarrier() throws Exception {

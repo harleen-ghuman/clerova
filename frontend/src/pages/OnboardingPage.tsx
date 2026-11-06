@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 
 import { completeOnboarding, getMe } from "../api/account";
 import { ApiRequestError, errorMessage } from "../api/client";
-import { getChosenIndustry, getReferralSource } from "../auth/referral";
+import { forgetChosenIndustry, getChosenIndustry, getReferralSource } from "../auth/referral";
 import type { Industry, Me } from "../types/Account";
 import { TRUCKING_ENABLED } from "../config";
 
@@ -65,6 +65,7 @@ export function OnboardingPage({
         referralSource: referralSource || storedSource || "",
       });
 
+      forgetChosenIndustry();
       onComplete(me);
     } catch (err) {
       // Set up meanwhile (another tab or a double click): just continue

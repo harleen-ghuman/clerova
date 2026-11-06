@@ -453,7 +453,11 @@ export function TruckingApp({
               onManageBilling={() => void manageBilling()}
               billingError={billingError}
               upgradeQuestion=""
-              onBillingChanged={loadOrganization}
+              onBillingChanged={() => {
+                // A change went through, so an earlier billing error is stale
+                setBillingError(null);
+                return loadOrganization();
+              }}
               onUpgrade={() => undefined}
               upgrading={false}
               onSignOut={onSignOut}

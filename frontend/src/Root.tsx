@@ -141,6 +141,13 @@ export function Root() {
     };
   }, [waitingForPlan]);
 
+  // Signed out: forget the last screen, so whoever signs in next starts on Today
+  useEffect(() => {
+    if (session === null && (window.history.state as { clerova?: boolean } | null)?.clerova) {
+      window.history.replaceState(null, "");
+    }
+  }, [session]);
+
   async function handleSignOut() {
     await supabase.auth.signOut();
     setMe(null);

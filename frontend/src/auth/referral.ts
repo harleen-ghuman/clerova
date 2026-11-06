@@ -169,3 +169,21 @@ export function getChosenIndustry(): "PROPERTY_MANAGEMENT" | "TRUCKING" | null {
     return null;
   }
 }
+
+/** Once the workspace is made, so the next person on this browser starts fresh. */
+export function forgetChosenIndustry(): void {
+  try {
+    localStorage.removeItem(INDUSTRY_KEY);
+  } catch {
+    // Nothing saved
+  }
+}
+
+/** Once checkout starts, so the next person on this browser starts fresh. */
+export function forgetChosenPlan(): void {
+  try {
+    localStorage.removeItem(PLAN_KEY);
+  } catch {
+    // Nothing saved
+  }
+}
