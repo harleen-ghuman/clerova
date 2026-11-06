@@ -18,6 +18,7 @@ import { supabase } from "../auth/supabase";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { isDemo } from "../demo/mode";
 import { CarrierSection } from "../trucking/CarrierSection";
+import { TimeZoneSection } from "../trucking/TimeZoneSection";
 import type { Me, Organization } from "../types/Account";
 import { PLANS, planName, planPrice } from "../utils/plans";
 import { MAX_TRUCKS, truckingPrice } from "../utils/truckingPlans";
@@ -222,7 +223,10 @@ export function SettingsPage({
       {propertyManagement ? (
         <CompanyInfoSection focus={focusCompanyInfo} onFocused={onCompanyInfoFocused} />
       ) : (
-        <CarrierSection focus={focusCompanyInfo} />
+        <>
+          <CarrierSection focus={focusCompanyInfo} />
+          {!isDemo() && <TimeZoneSection organization={organization} onSaved={onSaved} />}
+        </>
       )}
       {isDemo() ? (
         <section className="settings-section">

@@ -117,7 +117,7 @@ export function deleteCharge(loadId: string, chargeId: string): Promise<LoadDeta
 /** Emails the broker about the load (a detention notice or claim). */
 export function sendLoadMessage(
   loadId: string,
-  message: { to?: string; subject: string; body: string; chargeId?: string }
+  message: { to?: string; subject: string; body: string; chargeId?: string; stopId?: string }
 ): Promise<LoadDetail> {
   return apiRequest(`/api/loads/${loadId}/messages`, { method: "POST", body: message });
 }

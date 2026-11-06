@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 
 import { fileEmail, getInvoices, getLoads } from "../api/loads";
 import { getEmailSettings } from "../api/email";
-import { getMe } from "../api/account";
+import { deviceTimeZone, getMe, setTimeZone } from "../api/account";
 import { keepPlan, openBillingPortal } from "../api/billing";
 import { errorMessage } from "../api/client";
-import { REFRESH_EVENT } from "../demo/mode";
+import { REFRESH_EVENT, isDemo } from "../demo/mode";
 import { Sidebar, type AppView, type SidebarItem } from "../components/Sidebar";
 import { InboxPage } from "../pages/InboxPage";
 import { EmailSetupPage } from "../pages/EmailSetupPage";
@@ -170,6 +170,24 @@ export function TruckingApp({
     void loadLoads();
     void loadEmailSettings();
   }, []);
+
+  // Invoice dates follow the carrier's time zone: the first time, take this device's
+  useEffect(() => {
+    const zone = deviceTimeZone();
+
+    if (initialOrganization.timeZone || !zone || isDemo()) {
+      return;
+    }
+
+    setTimeZone(zone)
+      .then((me) => {
+        if (me.organization) {
+          setOrganization(me.organization);
+        }
+        accountUpdated.current(me);
+      })
+      .catch((err) => console.error("Failed to save the time zone:", err));
+  }, [initialOrganization.timeZone]);
 
   // Emails are read in the background, so check for new loads regularly
   useEffect(() => {

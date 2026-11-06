@@ -61,4 +61,58 @@ class InvoiceRulesTest {
         stop.setArrivedAt(null);
         assertThat(Detention.at(stop, load, Instant.now())).isNull();
     }
+
+    @Test
+    void dueDatesCrossMonthEndsAndLeapYears() {
+        Invoice invoice = new Invoice();
+        invoice.setSendTo(Invoice.SendTo.BROKER);
+        Load load = new Load();
+        load.setPaymentTerms("Net 30");
+
+        assertThat(InvoiceService.dueDate(invoice, load, java.time.LocalDate.of(2027, 1, 31)))
+                .isEqualTo(java.time.LocalDate.of(2027, 3, 2));
+        assertThat(InvoiceService.dueDate(invoice, load, java.time.LocalDate.of(2028, 1, 30)))
+                .isEqualTo(java.time.LocalDate.of(2028, 2, 29));
+        assertThat(InvoiceService.dueDate(invoice, load, java.time.LocalDate.of(2026, 12, 15)))
+                .isEqualTo(java.time.LocalDate.of(2027, 1, 14));
+
+        // A factor pays on its own schedule, and quick pay has no due date
+        invoice.setSendTo(Invoice.SendTo.FACTOR);
+        assertThat(InvoiceService.dueDate(invoice, load, java.time.LocalDate.of(2027, 1, 31))).isNull();
+    }
+
+    @Test
+    void theCarriersTimeZoneDecidesTheDayAndMonth() {
+        // 12:30 AM on Nov 1 in New York is still Oct 31 in California
+        Instant sent = Instant.parse("2026-11-01T04:30:00Z");
+        assertThat(java.time.LocalDate.ofInstant(sent, InvoiceService.zoneOf("America/New_York")))
+                .isEqualTo(java.time.LocalDate.of(2026, 11, 1));
+        assertThat(java.time.LocalDate.ofInstant(sent, InvoiceService.zoneOf(null)))
+                .isEqualTo(java.time.LocalDate.of(2026, 10, 31));
+        assertThat(InvoiceService.zoneOf("Not/AZone")).isEqualTo(InvoiceService.DEFAULT_ZONE);
+    }
+
+    @Test
+    void detentionPastMidnightAndOverTheClockChange() {
+        Load load = new Load();
+        load.setDetentionFreeMinutes(120);
+        load.setDetentionRateCents(5000L);
+        LoadStop stop = new LoadStop();
+
+        // Arrived 9:41 PM, left 12:26 AM the next day: 2h 45m on site, 45 minutes billed
+        Instant arrived = Instant.parse("2026-11-06T05:41:00Z");
+        stop.setArrivedAt(arrived);
+        stop.setLeftAt(Instant.parse("2026-11-06T08:26:00Z"));
+        Detention.Result result = Detention.at(stop, load, Instant.now());
+        assertThat(result.minutesOnSite()).isEqualTo(165);
+        assertThat(result.billableMinutes()).isEqualTo(45);
+        assertThat(result.amountCents()).isEqualTo(3750);
+
+        // Clocks go back at 2 AM on Nov 1: 12:30 AM to 3:30 AM on the wall is 4 real hours
+        stop.setArrivedAt(Instant.parse("2026-11-01T07:30:00Z"));
+        stop.setLeftAt(Instant.parse("2026-11-01T11:30:00Z"));
+        Detention.Result overChange = Detention.at(stop, load, Instant.now());
+        assertThat(overChange.minutesOnSite()).isEqualTo(240);
+        assertThat(overChange.amountCents()).isEqualTo(10000);
+    }
 }

@@ -389,6 +389,12 @@ public class LoadService {
     @Transactional
     public LoadResponses.LoadDetail sendMessage(UUID organizationId, UUID loadId, String to, String subject,
                                                 String body, UUID chargeId) {
+        return sendMessage(organizationId, loadId, to, subject, body, chargeId, null);
+    }
+
+    @Transactional
+    public LoadResponses.LoadDetail sendMessage(UUID organizationId, UUID loadId, String to, String subject,
+                                                String body, UUID chargeId, UUID stopId) {
         Load load = require(organizationId, loadId);
         String address = to == null || to.isBlank()
                 ? (load.getBroker() != null ? load.getBroker().getEmail() : null)
@@ -413,6 +419,12 @@ public class LoadService {
                 : clip(subject.strip().replaceAll("[\\r\\n]+", " "), 200);
         LoadCharge charge = chargeId == null ? null : chargeRepository.findByIdAndLoadId(chargeId, loadId)
                 .orElseThrow(() -> new NotFoundException("Charge not found"));
+        // Only a stop of this load can be linked
+        UUID stop = stopId == null ? null : load.getStops().stream()
+                .filter(candidate -> candidate.getId().equals(stopId))
+                .map(LoadStop::getId)
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("Stop not found"));
 
         if (!emailProperties.isSendingEnabled()) {
             throw new ApiException(HttpStatus.CONFLICT, "EMAIL_SENDING_DISABLED",
@@ -432,6 +444,8 @@ public class LoadService {
         record.setStatus(ReplyStatus.SENT);
         record.setSentAt(Instant.now());
         record.setProviderMessageId(sent.providerId());
+        record.setStopId(stop);
+        record.setChargeId(charge == null ? null : charge.getId());
         loadReplyRepository.save(record);
 
         if (charge != null && charge.getStatus() == ChargeStatus.TO_CLAIM) {
@@ -548,8 +562,21 @@ public class LoadService {
                     message.getSubject(), message.getTextBody(), message.getReceivedAt(), files));
         }
 
+        java.util.Map<UUID, List<LoadResponses.SentEmail>> stopEmails = new java.util.HashMap<>();
+        java.util.Map<UUID, LoadResponses.SentEmail> claimEmails = new java.util.HashMap<>();
+
         for (LoadReply reply : loadReplyRepository.findByLoadIdOrderByCreatedAtAsc(load.getId())) {
             if (reply.getStatus() == ReplyStatus.SENT) {
+                LoadResponses.SentEmail sent = new LoadResponses.SentEmail(reply.getToEmail(), reply.getSubject(), reply.getSentAt());
+
+                if (reply.getStopId() != null) {
+                    stopEmails.computeIfAbsent(reply.getStopId(), id -> new ArrayList<>()).add(sent);
+                }
+
+                if (reply.getChargeId() != null) {
+                    claimEmails.put(reply.getChargeId(), sent);
+                }
+
                 conversation.add(new LoadResponses.ConversationEntry(reply.getId(), false, null, reply.getToEmail(),
                         reply.getSubject(), reply.getBody(), reply.getSentAt(), List.of()));
             } else if (reply.getStatus() == ReplyStatus.DRAFT) {
@@ -566,11 +593,11 @@ public class LoadService {
                 Comparator.nullsFirst(Comparator.naturalOrder())));
 
         List<LoadResponses.ChargeInfo> charges = chargeRepository.findByLoadIdOrderByCreatedAtAsc(load.getId()).stream()
-                .map(LoadResponses.ChargeInfo::of)
+                .map(charge -> LoadResponses.ChargeInfo.of(charge, claimEmails.get(charge.getId())))
                 .toList();
 
         return LoadResponses.detail(load, draft == null ? null : LoadResponses.ReplyInfo.of(draft), conversation,
-                documents, charges, invoiceService.forLoad(load));
+                documents, charges, invoiceService.forLoad(load), stopEmails);
     }
 
     /** PDFs and photos big enough to be a document (not a logo). */

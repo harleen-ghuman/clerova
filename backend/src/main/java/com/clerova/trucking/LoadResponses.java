@@ -23,8 +23,14 @@ public final class LoadResponses {
 
     public record StopInfo(
             UUID id, StopKind kind, String place, String appointment, Instant arrivedAt, Instant leftAt,
-            DetentionInfo detention
+            DetentionInfo detention,
+            /** Arrival and detention notices emailed about this stop, oldest first. */
+            List<SentEmail> emails
     ) {
+    }
+
+    /** An email sent from a load: to whom, about what, and when. */
+    public record SentEmail(String toEmail, String subject, Instant sentAt) {
     }
 
     /** Detention so far at a stop (or in all, once the truck left). */
@@ -35,11 +41,17 @@ public final class LoadResponses {
 
     public record ChargeInfo(
             UUID id, ChargeKind kind, String label, String description, long amountCents, ChargeStatus status,
-            UUID stopId, Instant claimedAt
+            UUID stopId, Instant claimedAt,
+            /** Where the claim was emailed from Clerova, if it was. */
+            SentEmail claimEmail
     ) {
         static ChargeInfo of(LoadCharge charge) {
+            return of(charge, null);
+        }
+
+        static ChargeInfo of(LoadCharge charge, SentEmail claimEmail) {
             return new ChargeInfo(charge.getId(), charge.getKind(), charge.getKind().label(), charge.getDescription(),
-                    charge.getAmountCents(), charge.getStatus(), charge.getStopId(), charge.getClaimedAt());
+                    charge.getAmountCents(), charge.getStatus(), charge.getStopId(), charge.getClaimedAt(), claimEmail);
         }
     }
 
@@ -159,6 +171,12 @@ public final class LoadResponses {
 
     static LoadDetail detail(Load load, ReplyInfo draft, List<ConversationEntry> conversation,
                              List<DocumentInfo> documents, List<ChargeInfo> charges, InvoiceInfo invoice) {
+        return detail(load, draft, conversation, documents, charges, invoice, java.util.Map.of());
+    }
+
+    static LoadDetail detail(Load load, ReplyInfo draft, List<ConversationEntry> conversation,
+                             List<DocumentInfo> documents, List<ChargeInfo> charges, InvoiceInfo invoice,
+                             java.util.Map<UUID, List<SentEmail>> stopEmails) {
         Instant now = Instant.now();
 
         return new LoadDetail(
@@ -172,7 +190,8 @@ public final class LoadResponses {
                     return new StopInfo(s.getId(), s.getKind(), s.getPlace(), s.getAppointment(),
                             s.getArrivedAt(), s.getLeftAt(), detention == null ? null : new DetentionInfo(
                                     detention.minutesOnSite(), detention.freeMinutes(), detention.billableMinutes(),
-                                    detention.amountCents(), detention.freeEndsAt()));
+                                    detention.amountCents(), detention.freeEndsAt()),
+                            stopEmails.getOrDefault(s.getId(), List.of()));
                 }).toList(),
                 load.getFlags().stream().map(f -> new FlagInfo(
                         f.getId(), f.getCode(), f.getLevel(), f.getTitle(), f.getDetail(), f.getSourceText(),

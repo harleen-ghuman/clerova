@@ -3,7 +3,7 @@ import { addCharge, deleteCharge, sendLoadMessage, updateCharge } from "../api/l
 import { ConfirmInline } from "../components/ConfirmInline";
 import type { ChargeKind, ChargeStatus, LoadCharge, LoadDetail } from "../types/Load";
 import { MessageComposer, type MessageDraft } from "./MessageComposer";
-import { duration, emailTime, money, parseCents, placeName } from "./format";
+import { duration, emailTime, money, parseCents, placeName, when } from "./format";
 
 interface ChargesPanelProps {
   load: LoadDetail;
@@ -271,6 +271,21 @@ export function ChargesPanel({ load, sendingEnabled, busy, run }: ChargesPanelPr
                   </>
                 )}
               </div>
+
+              {charge.claimEmail && (
+                <p className="tk-charge-sent">
+                  Claim emailed to {charge.claimEmail.toEmail}
+                  {charge.claimEmail.sentAt ? ` · ${when(charge.claimEmail.sentAt)}` : ""}.{" "}
+                  The broker's reply will show under Emails on this load.{" "}
+                  <button
+                    type="button"
+                    className="tk-link"
+                    onClick={() => document.getElementById("load-emails")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                  >
+                    See Emails
+                  </button>
+                </p>
+              )}
 
               {claiming?.chargeId === charge.id && (
                 <MessageComposer

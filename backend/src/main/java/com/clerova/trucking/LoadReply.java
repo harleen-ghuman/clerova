@@ -19,6 +19,12 @@ public class LoadReply {
 
     private UUID inboundMessageId;
 
+    /** The stop an arrival or detention notice was about. */
+    private UUID stopId;
+
+    /** The charge a claim was for. */
+    private UUID chargeId;
+
     @Column(nullable = false)
     private String toEmail;
 
@@ -78,4 +84,9 @@ public class LoadReply {
     public Instant getCreatedAt() { return createdAt; }
     public Instant getSentAt() { return sentAt; }
     public void setSentAt(Instant sentAt) { this.sentAt = sentAt; }
+
+    public UUID getStopId() { return stopId; }
+    public void setStopId(UUID stopId) { this.stopId = stopId; }
+    public UUID getChargeId() { return chargeId; }
+    public void setChargeId(UUID chargeId) { this.chargeId = chargeId; }
 }

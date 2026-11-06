@@ -66,6 +66,8 @@ interface DemoLoad {
   flags: LoadFlag[];
   statusNote: string | null;
   replies: LoadReply[];
+  /** Which stop or charge each sent email was about, by reply id (as load_replies.stop_id / charge_id). */
+  links?: Record<string, { stopId?: string; chargeId?: string }>;
   conversation: ConversationEntry[];
   documents: LoadDocument[];
   charges: LoadCharge[];
@@ -623,7 +625,7 @@ function detail(load: DemoLoad): LoadDetail {
     detentionMaxCents: load.detentionMaxCents,
     quickPayPercent: load.quickPayPercent,
     invoiceEmail: load.invoiceEmail,
-    stops: load.stops,
+    stops: load.stops.map((stop) => ({ ...stop, emails: linkedEmails(load, "stopId", stop.id) })),
     flags: load.flags,
     statusNote: load.statusNote,
     draft: load.replies.find((reply) => reply.status === "DRAFT") ?? null,
@@ -631,7 +633,7 @@ function detail(load: DemoLoad): LoadDetail {
       .map((entry) => ({ ...entry, files: entry.files.map((file) => ({ ...file, id: sameDocument(load, file.name)?.id ?? file.id })) }))
       .sort((a, b) => (a.at ?? "").localeCompare(b.at ?? "")),
     documents: load.documents,
-    charges: load.charges,
+    charges: load.charges.map((charge) => ({ ...charge, claimEmail: linkedEmails(load, "chargeId", charge.id).at(-1) ?? null })),
     invoice: invoice ? invoiceInfo(invoice, true) : null,
     createdAt: load.createdAt,
     updatedAt: load.updatedAt,
@@ -651,12 +653,26 @@ function signOff(text: string): string {
   return `${trimmed}${last.trim().endsWith(",") ? "\n" : "\n\n"}${name}`;
 }
 
-function recordSent(load: DemoLoad, to: string, subject: string, body: string, kind: LoadReply["kind"]) {
+function recordSent(
+  load: DemoLoad, to: string, subject: string, body: string, kind: LoadReply["kind"],
+  link?: { stopId?: string; chargeId?: string }
+) {
+  const replyId = id("reply");
   load.replies.push({
-    id: id("reply"), toEmail: to, subject, kind, summary: subject, body: signOff(body), status: "SENT",
+    id: replyId, toEmail: to, subject, kind, summary: subject, body: signOff(body), status: "SENT",
     createdAt: now(), sentAt: now(),
   });
+  if (link) {
+    load.links = { ...(load.links ?? {}), [replyId]: link };
+  }
   touch(load);
+}
+
+/** The sent emails linked to a stop or a charge, like the server's detail. */
+function linkedEmails(load: DemoLoad, key: "stopId" | "chargeId", value: string) {
+  return load.replies
+    .filter((reply) => reply.status === "SENT" && load.links?.[reply.id]?.[key] === value)
+    .map((reply) => ({ toEmail: reply.toEmail, subject: reply.subject, sentAt: reply.sentAt }));
 }
 
 function markSent(invoice: DemoInvoice, load: DemoLoad, via: "EMAIL" | "PORTAL", email: string | null) {
@@ -1014,8 +1030,13 @@ function handle(route: string, body: Record<string, unknown>, form: FormData | n
     const to = text(body.to) || findBroker(load).email || "";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) invalid("Enter the broker's email address.");
     if (!text(body.body)) conflict("The message is empty. Add a message before sending.");
-    recordSent(load, to, text(body.subject) || `Load ${load.loadNumber}`, text(body.body), "DETENTION");
     const charge = load.charges.find((candidate) => candidate.id === body.chargeId);
+    const stop = load.stops.find((candidate) => candidate.id === body.stopId);
+    if (body.stopId && !stop) throw new ApiRequestError("Stop not found", 404);
+    recordSent(load, to, text(body.subject) || `Load ${load.loadNumber}`, text(body.body), "DETENTION", {
+      stopId: stop?.id,
+      chargeId: charge?.id,
+    });
     if (charge && charge.status === "TO_CLAIM") {
       charge.status = "CLAIMED";
       charge.claimedAt = now();

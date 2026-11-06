@@ -1760,3 +1760,41 @@ label.rq-button.is-disabled {
 .tk-search-row > p {
   order: 1;
 }
+
+/* What was emailed from a stop or a charge, and when */
+.tk-times-title {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.tk-stop-sent {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.tk-stop-sent li::before {
+  content: "✉ ";
+  color: var(--brand);
+}
+
+.tk-sent-note,
+.tk-charge-sent {
+  margin: 8px 0 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.tk-charge-sent {
+  color: var(--text-secondary);
+}
+
+.tk-msg-head .tk-pill {
+  margin-right: 4px;
+}

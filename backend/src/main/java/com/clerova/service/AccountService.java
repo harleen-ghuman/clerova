@@ -136,6 +136,24 @@ public class AccountService {
         return toMeResponse(user);
     }
 
+    /**
+     * The workspace's time zone (IANA, like America/Chicago), used for invoice
+     * dates, due dates and the monthly export. The app sends the device's
+     * zone the first time; Settings can change it.
+     */
+    @Transactional
+    public MeResponse setTimeZone(String timeZone) {
+        AppUser user = currentUserService.requireUser();
+        String zone = timeZone == null ? "" : timeZone.strip();
+
+        if (zone.isEmpty() || zone.length() > 64 || !java.time.ZoneId.getAvailableZoneIds().contains(zone)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_TIME_ZONE", "Pick a time zone from the list.");
+        }
+
+        user.getOrganization().setTimeZone(zone);
+        return toMeResponse(user);
+    }
+
     private AppUser syncEmail(AppUser user) {
         String email = currentUserService.currentEmail();
 

@@ -332,14 +332,22 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
             onChanged={() => void run("documents", () => getLoad(loadId), "Couldn't refresh this load.")}
           />
 
-          <section className="tk-panel" aria-label="Emails">
+          <section className="tk-panel" aria-label="Emails" id="load-emails">
             <h2>Emails</h2>
             <div className="tk-thread">
               {load.conversation.length === 0 && <p className="tk-none">No emails on this load yet.</p>}
               {load.conversation.map((entry) => (
                 <article key={entry.id} className={`tk-msg ${entry.incoming ? "" : "out"}`}>
                   <div className="tk-msg-head">
-                    <span>{entry.incoming ? entry.from : `You → ${entry.to}`}</span>
+                    <span>
+                      {entry.incoming ? (
+                        entry.from
+                      ) : (
+                        <>
+                          <span className="tk-pill tk-pill-info">Sent</span> by you to {entry.to}
+                        </>
+                      )}
+                    </span>
                     <span>{when(entry.at)}</span>
                   </div>
                   {entry.subject && <strong className="tk-msg-subject">{entry.subject}</strong>}

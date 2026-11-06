@@ -78,6 +78,9 @@ class TruckingInvoiceTest {
     @Autowired
     private InboundEmailProcessor processor;
 
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
     @MockitoBean
     private TruckingAiService truckingAiService;
 
@@ -220,6 +223,75 @@ class TruckingInvoiceTest {
         // A claimed charge isn't changed by new times
         JsonNode moved = json(times(loadId, delivery, arrived, arrived.plus(5, ChronoUnit.HOURS)));
         assertThat(moved.get("charges").get(0).get("amountCents").asLong()).isEqualTo(left.get("charges").get(0).get("amountCents").asLong());
+    }
+
+    @Test
+    void emailsFromAStopOrAChargeShowWhereAndWhenTheyWent() throws Exception {
+        String loadId = load("88213");
+        JsonNode load = json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user)));
+        String delivery = load.get("stops").get(1).get("id").asText();
+        Instant arrived = Instant.now().minus(6, ChronoUnit.HOURS);
+        times(loadId, delivery, arrived, null);
+
+        JsonNode noticed = json(mockMvc.perform(post("/api/loads/{id}/messages", loadId).with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"subject\":\"Load 88213: arrived\",\"body\":\"Hi, our driver arrived.\",\"stopId\":\"" + delivery + "\"}"))
+                .andExpect(status().isOk()));
+        JsonNode emails = noticed.get("stops").get(1).get("emails");
+        assertThat(emails).hasSize(1);
+        assertThat(emails.get(0).get("toEmail").asText()).isEqualTo("dana@crestline.example");
+        assertThat(emails.get(0).get("subject").asText()).isEqualTo("Load 88213: arrived");
+        assertThat(emails.get(0).get("sentAt").isNull()).isFalse();
+        assertThat(noticed.get("stops").get(0).get("emails")).isEmpty();
+
+        JsonNode left = json(times(loadId, delivery, arrived, arrived.plus(4, ChronoUnit.HOURS)));
+        String chargeId = left.get("charges").get(0).get("id").asText();
+        assertThat(left.get("charges").get(0).get("claimEmail").isNull()).isTrue();
+        JsonNode claimed = json(mockMvc.perform(post("/api/loads/{id}/messages", loadId).with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"subject\":\"Load 88213: detention claim\",\"body\":\"Claiming detention.\",\"chargeId\":\"" + chargeId + "\"}"))
+                .andExpect(status().isOk()));
+        assertThat(claimed.get("charges").get(0).get("claimEmail").get("toEmail").asText()).isEqualTo("dana@crestline.example");
+
+        // A stop of another load can't be linked
+        mockMvc.perform(post("/api/loads/{id}/messages", loadId).with(user).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"body\":\"x\",\"stopId\":\"" + UUID.randomUUID() + "\"}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void invoiceDatesAndTheMonthlyExportFollowTheCarriersTimeZone() throws Exception {
+        saveCarrier(false);
+        String loadId = load("88213");
+        String invoiceId = json(mockMvc.perform(post("/api/loads/{id}/invoice", loadId).with(user))).get("id").asText();
+        mockMvc.perform(post("/api/invoices/{id}/mark-sent", invoiceId).with(user)).andExpect(status().isOk());
+        // Sent at 12:30 AM on Nov 1 in New York, which is still Oct 31 in California
+        jdbcTemplate.update("update invoices set sent_at = ? where id = ?",
+                java.sql.Timestamp.from(Instant.parse("2026-11-01T04:30:00Z")), UUID.fromString(invoiceId));
+
+        mockMvc.perform(put("/api/me/time-zone").with(user).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"timeZone\":\"Mars/Base\"}")).andExpect(status().isBadRequest());
+        mockMvc.perform(put("/api/me/time-zone").with(user).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"timeZone\":\"America/New_York\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.organization.timeZone").value("America/New_York"));
+
+        assertThat(export("2026-11")).contains("\"SR-1001\"", "\"2026-11-01\"");
+        assertThat(export("2026-10")).doesNotContain("SR-1001");
+
+        mockMvc.perform(put("/api/me/time-zone").with(user).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"timeZone\":\"America/Los_Angeles\"}")).andExpect(status().isOk());
+        assertThat(export("2026-10")).contains("\"SR-1001\"", "\"2026-10-31\"");
+        assertThat(export("2026-11")).doesNotContain("SR-1001");
+
+        // The PDF's invoice date follows too
+        byte[] pdf = mockMvc.perform(get("/api/invoices/{id}/pdf", invoiceId).with(user)).andReturn().getResponse().getContentAsByteArray();
+        assertThat(pdfText(pdf)).contains("Oct 31, 2026");
+    }
+
+    private String export(String month) throws Exception {
+        return mockMvc.perform(get("/api/invoices/export").param("month", month).with(user))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
     }
 
     @Test

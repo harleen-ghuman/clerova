@@ -28,7 +28,7 @@ public class LoadController {
     public record ChargeRequest(ChargeKind kind, String description, Long amountCents, ChargeStatus status) {
     }
 
-    public record MessageRequest(String to, String subject, String body, UUID chargeId) {
+    public record MessageRequest(String to, String subject, String body, UUID chargeId, UUID stopId) {
     }
 
     private final LoadService loadService;
@@ -111,6 +111,6 @@ public class LoadController {
     @PostMapping("/api/loads/{id}/messages")
     public LoadResponses.LoadDetail sendMessage(@PathVariable UUID id, @RequestBody MessageRequest request) {
         return loadService.sendMessage(currentUserService.requireOrganizationId(), id, request.to(),
-                request.subject(), request.body(), request.chargeId());
+                request.subject(), request.body(), request.chargeId(), request.stopId());
     }
 }

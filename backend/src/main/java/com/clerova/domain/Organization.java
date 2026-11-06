@@ -36,6 +36,9 @@ public class Organization {
     /** Trucks the carrier runs; trucking plans are priced by it. */
     private Integer trucks;
 
+    /** IANA time zone, like America/Chicago, for invoice dates; null means Pacific. */
+    private String timeZone;
+
     private Instant trialEndsAt;
 
     @Column(nullable = false)
@@ -149,6 +152,14 @@ public class Organization {
 
     public void setTrucks(Integer trucks) {
         this.trucks = trucks;
+    }
+
+    public String getTimeZone() {
+        return timeZone;
+    }
+
+    public void setTimeZone(String timeZone) {
+        this.timeZone = timeZone;
     }
 
     public Plan getPlan() {
