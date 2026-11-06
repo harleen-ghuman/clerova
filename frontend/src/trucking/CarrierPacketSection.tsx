@@ -18,6 +18,12 @@ import { SendCarrierPacket } from "./SendCarrierPacket";
 
 const SOON_DAYS = 30;
 
+/** In packet order, as the server sends them: authority, insurance, W-9... */
+function inPacketOrder(documents: CarrierDocument[]): CarrierDocument[] {
+  const order = CARRIER_DOCUMENT_KINDS.map((item) => item.kind);
+  return [...documents].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
+}
+
 function expiryText(document: CarrierDocument): { text: string; tone: "fix" | "note" | "" } | null {
   if (!document.expiresOn) {
     return null;
@@ -76,7 +82,7 @@ export function CarrierPacketSection({ sendingEnabled }: { sendingEnabled: boole
 
     try {
       const saved = await uploadCarrierDocument(file, kind, expiresOn || null);
-      setDocuments((current) => [...(current ?? []), saved]);
+      setDocuments((current) => inPacketOrder([...(current ?? []), saved]));
       setExpiresOn("");
     } catch (err) {
       setError(errorMessage(err, "Couldn't upload the file. Please try again."));
@@ -91,7 +97,7 @@ export function CarrierPacketSection({ sendingEnabled }: { sendingEnabled: boole
 
     try {
       const saved = await updateCarrierDocument(document.id, update);
-      setDocuments((current) => (current ?? []).map((item) => (item.id === saved.id ? saved : item)));
+      setDocuments((current) => inPacketOrder((current ?? []).map((item) => (item.id === saved.id ? saved : item))));
     } catch (err) {
       setError(errorMessage(err, "Couldn't change the document. Please try again."));
     } finally {

@@ -3506,3 +3506,8 @@ body.file-viewer-open {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Short settings forms (one select) don't need the full width */
+.settings-narrow {
+  max-width: 360px;
+}

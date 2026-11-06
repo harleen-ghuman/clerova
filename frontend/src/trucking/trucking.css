@@ -2045,3 +2045,9 @@ label.rq-button.is-disabled {
   border-radius: 8px;
   font: inherit;
 }
+
+/* A button row after a details list in a panel */
+.tk-panel .tk-kv + .tk-actions,
+.tk-panel .tk-kv + .tk-packet-send {
+  margin-top: 14px;
+}

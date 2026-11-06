@@ -41,7 +41,7 @@ export function TimeZoneSection({ organization, onSaved }: { organization: Organ
     <section className="settings-section" aria-labelledby={`${id}-title`}>
       <h2 id={`${id}-title`}>Time zone</h2>
       <p>Invoice dates, due dates and the monthly spreadsheet use this time zone.</p>
-      <div className="settings-form">
+      <div className="auth-form settings-form settings-narrow">
         <label>
           Your time zone
           <select value={current} onChange={(event) => change(event.target.value)} disabled={saving}>
