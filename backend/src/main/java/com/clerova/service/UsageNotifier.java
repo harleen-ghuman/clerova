@@ -94,18 +94,22 @@ public class UsageNotifier {
                 .format(DateTimeFormatter.ofPattern("MMMM d", Locale.US));
         String app = billingProperties.getAppUrl();
 
+        boolean trucking = organization.getIndustry() == com.clerova.domain.Industry.TRUCKING;
+        String unit = trucking ? "loads" : "requests";
         String usage = event.limitReached()
-                ? "%s has used all %d requests included this month. New emails are saved and will be organized on %s."
-                        .formatted(organization.getName(), event.limit(), resetDate)
-                : "%s has used %d of the %d requests included this month. At %d, new emails wait until %s."
-                        .formatted(organization.getName(), event.used(), event.limit(), event.limit(), resetDate);
+                ? "%s has used all %d %s included this month. New emails are saved and will be organized on %s."
+                        .formatted(organization.getName(), event.limit(), unit, resetDate)
+                : "%s has used %d of the %d %s included this month. At %d, new emails wait until %s."
+                        .formatted(organization.getName(), event.used(), event.limit(), unit, event.limit(), resetDate);
 
-        String next = organization.getPlan() == Plan.STARTER
+        String next = trucking
+                ? "Running more trucks? Update your trucks in Clerova's Settings: %s".formatted(app)
+                : organization.getPlan() == Plan.STARTER
                 ? "To keep going, open Clerova and click Upgrade to Growth (%d requests a month): %s"
                         .formatted(billingProperties.getGrowthMonthlyRequests(), app)
                 : "Need more? Reply to this email and we'll help.";
 
-        String retry = event.limitReached() && organization.getPlan() == Plan.STARTER
+        String retry = event.limitReached() && organization.getPlan() == Plan.STARTER && !trucking
                 ? "\n\nAfter you upgrade, waiting emails are organized right away."
                 : "";
 

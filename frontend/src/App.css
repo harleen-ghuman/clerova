@@ -3126,3 +3126,69 @@ body.demo-bar-open .jobs-page {
 .auth-demo-two .auth-demo-button:hover {
   background: var(--brand-hover);
 }
+
+/* Trucking plan page: how many trucks */
+.plan-trucks-label {
+  display: block;
+  margin-top: 20px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.plan-trucks {
+  display: inline-flex;
+  align-items: stretch;
+  margin: 8px 0 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.plan-trucks button {
+  width: 44px;
+  border: 0;
+  background: var(--surface-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.plan-trucks button:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.plan-trucks input {
+  width: 72px;
+  padding: 10px 0;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  color: var(--text);
+  font: inherit;
+  font-size: 18px;
+  font-weight: 650;
+  text-align: center;
+}
+
+.plan-trucks input:focus {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+
+.plan-card .plan-option {
+  margin-top: 12px;
+}
+
+.settings-trucks {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-trucks input {
+  max-width: 120px;
+}

@@ -24,7 +24,9 @@ public record OrganizationResponse(
         boolean foundingCustomer,
         boolean billingEnabled,
         /** True when a plan must be chosen before using Clerova. */
-        boolean subscriptionRequired
+        boolean subscriptionRequired,
+        /** Trucks on a trucking plan; null otherwise. */
+        Integer trucks
 ) {
 
     public static OrganizationResponse from(
@@ -52,7 +54,8 @@ public record OrganizationResponse(
                 organization.isCancelAtPeriodEnd(),
                 organization.isFoundingCustomer(),
                 billingEnabled,
-                subscriptionRequired
+                subscriptionRequired,
+                organization.getTrucks()
         );
     }
 }

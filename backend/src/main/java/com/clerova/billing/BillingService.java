@@ -1,5 +1,6 @@
 package com.clerova.billing;
 
+import com.clerova.domain.Industry;
 import com.clerova.domain.Organization;
 import com.clerova.domain.Plan;
 import com.clerova.exception.ApiException;
@@ -108,18 +109,24 @@ public class BillingService {
      *
      * @return the Checkout page to send the user to
      */
-    public String startCheckout(UUID organizationId, String email, Plan plan, String interval) {
+    public String startCheckout(UUID organizationId, String email, Plan plan, String interval, Integer trucks) {
         requireEnabled();
-
-        if (plan != Plan.STARTER && plan != Plan.GROWTH) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PLAN", "Choose Starter or Growth.");
-        }
 
         if (!interval.equals("month") && !interval.equals("year")) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PLAN", "Choose monthly or yearly billing.");
         }
 
         Organization organization = findOrganization(organizationId);
+        boolean trucking = organization.getIndustry() == Industry.TRUCKING;
+        int quantity = 1;
+
+        // A carrier is priced by its trucks, and gets the cheaper of Starter and Fleet
+        if (trucking) {
+            quantity = requireTrucks(trucks);
+            plan = truckingPlan(quantity);
+        } else if (plan != Plan.STARTER && plan != Plan.GROWTH) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PLAN", "Choose Starter or Growth.");
+        }
 
         if (!requiresSubscription(organization)) {
             throw new ApiException(
@@ -147,20 +154,28 @@ public class BillingService {
         }
 
         boolean founding = organization.isFoundingCustomer() || foundingSpotsLeft() > 0;
-        String priceId = findPrice(lookupKey(plan, interval, founding))
-                .or(() -> founding ? findPrice(lookupKey(plan, interval, false)) : Optional.empty())
+        Plan chosen = plan;
+        String priceId = findPrice(lookupKey(chosen, interval, founding, trucking))
+                .or(() -> founding ? findPrice(lookupKey(chosen, interval, false, trucking)) : Optional.empty())
                 .orElseThrow(() -> new ApiException(
                         HttpStatus.SERVICE_UNAVAILABLE,
                         "BILLING_ERROR",
                         "This plan is not available yet. Please contact hello@clerova-ai.com."
                 ));
 
+        if (trucking) {
+            // Saved earlier when the Stripe customer was made, so read it fresh
+            Organization current = findOrganization(organizationId);
+            current.setTrucks(quantity);
+            organizationRepository.save(current);
+        }
+
         Map<String, String> form = new LinkedHashMap<>();
         form.put("mode", "subscription");
         form.put("customer", customerId);
         form.put("client_reference_id", organizationId.toString());
         form.put("line_items[0][price]", priceId);
-        form.put("line_items[0][quantity]", "1");
+        form.put("line_items[0][quantity]", String.valueOf(quantity));
         form.put("payment_method_collection", "always");
         form.put("subscription_data[metadata][organization_id]", organizationId.toString());
         form.put("success_url", properties.getAppUrl() + "/?checkout=success&session_id={CHECKOUT_SESSION_ID}");
@@ -239,6 +254,7 @@ public class BillingService {
         Organization organization = findOrganization(organizationId);
 
         if (organization.getPlan() != Plan.STARTER
+                || organization.getIndustry() == Industry.TRUCKING
                 || organization.getStripeSubscriptionId() == null
                 || requiresSubscription(organization)) {
             throw new ApiException(HttpStatus.CONFLICT, "CANNOT_UPGRADE", "Only an active Starter plan can be upgraded.");
@@ -249,8 +265,8 @@ public class BillingService {
         String interval = item.path("price").path("recurring").path("interval").asString("month");
         boolean founding = organization.isFoundingCustomer();
 
-        String priceId = findPrice(lookupKey(Plan.GROWTH, interval, founding))
-                .or(() -> founding ? findPrice(lookupKey(Plan.GROWTH, interval, false)) : Optional.empty())
+        String priceId = findPrice(lookupKey(Plan.GROWTH, interval, founding, false))
+                .or(() -> founding ? findPrice(lookupKey(Plan.GROWTH, interval, false, false)) : Optional.empty())
                 .orElseThrow(() -> new ApiException(
                         HttpStatus.SERVICE_UNAVAILABLE,
                         "BILLING_ERROR",
@@ -428,11 +444,19 @@ public class BillingService {
             organization.setCurrentPeriodEnd(epoch(cancelAt));
         }
 
-        Plan plan = lookupKey.contains("growth") ? Plan.GROWTH : Plan.STARTER;
-        organization.setPlan(plan);
-        organization.setAiMonthlyLimit(plan == Plan.GROWTH
-                ? properties.getGrowthMonthlyRequests()
-                : properties.getStarterMonthlyRequests());
+        if (lookupKey.contains("trucking")) {
+            // Priced per truck: the plan and fair use follow the trucks on the subscription
+            int trucks = Math.max(1, item.path("quantity").asInt(1));
+            organization.setPlan(lookupKey.contains("fleet") ? Plan.FLEET : Plan.STARTER);
+            organization.setTrucks(trucks);
+            organization.setAiMonthlyLimit(loadsAllowance(trucks));
+        } else {
+            Plan plan = lookupKey.contains("growth") ? Plan.GROWTH : Plan.STARTER;
+            organization.setPlan(plan);
+            organization.setAiMonthlyLimit(plan == Plan.GROWTH
+                    ? properties.getGrowthMonthlyRequests()
+                    : properties.getStarterMonthlyRequests());
+        }
 
         if (lookupKey.startsWith("founding_")) {
             organization.setFoundingCustomer(true);
@@ -447,9 +471,86 @@ public class BillingService {
     }
 
     static String lookupKey(Plan plan, String interval, boolean founding) {
+        return lookupKey(plan, interval, founding, false);
+    }
+
+    /** Like founding_trucking_fleet_yearly for trucking, or growth_monthly. */
+    static String lookupKey(Plan plan, String interval, boolean founding, boolean trucking) {
         return (founding ? "founding_" : "")
+                + (trucking ? "trucking_" : "")
                 + plan.name().toLowerCase()
                 + (interval.equals("year") ? "_yearly" : "_monthly");
+    }
+
+    // ------------------------------------------------------------- trucking
+
+    /** From this many trucks, Fleet ($20 a truck, $199 at least) costs less than Starter. */
+    public static final int FLEET_FROM_TRUCKS = 9;
+    public static final int MAX_TRUCKS = 500;
+
+    /** Fair use: about this many loads a truck a month. */
+    public static final int LOADS_PER_TRUCK = 40;
+
+    /** The cheaper trucking plan for this many trucks. */
+    public static Plan truckingPlan(int trucks) {
+        return trucks >= FLEET_FROM_TRUCKS ? Plan.FLEET : Plan.STARTER;
+    }
+
+    /** Loads a month for this many trucks; Starter's price covers 4 trucks, so at least that. */
+    public static int loadsAllowance(int trucks) {
+        return Math.max(trucks, 4) * LOADS_PER_TRUCK;
+    }
+
+    private static int requireTrucks(Integer trucks) {
+        if (trucks == null || trucks < 1 || trucks > MAX_TRUCKS) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_TRUCKS",
+                    "Enter how many trucks you run, from 1 to " + MAX_TRUCKS + ".");
+        }
+
+        return trucks;
+    }
+
+    /**
+     * Sets how many trucks a carrier runs. With a plan, the subscription
+     * changes too (Starter or Fleet, whichever costs less), and Stripe
+     * adds the difference to the next bill. Nothing is charged in a trial.
+     */
+    public void changeTrucks(UUID organizationId, Integer trucks) {
+        int quantity = requireTrucks(trucks);
+        Organization organization = findOrganization(organizationId);
+
+        if (organization.getIndustry() != Industry.TRUCKING) {
+            throw new ApiException(HttpStatus.CONFLICT, "NOT_TRUCKING", "Only trucking plans are priced by truck.");
+        }
+
+        if (!properties.isEnabled() || organization.getStripeSubscriptionId() == null
+                || requiresSubscription(organization)) {
+            organization.setTrucks(quantity);
+            organizationRepository.save(organization);
+            return;
+        }
+
+        JsonNode subscription = fetchSubscription(organization.getStripeSubscriptionId());
+        JsonNode item = subscription.path("items").path("data").path(0);
+        String interval = item.path("price").path("recurring").path("interval").asString("month");
+        boolean founding = organization.isFoundingCustomer();
+        Plan plan = truckingPlan(quantity);
+
+        String priceId = findPrice(lookupKey(plan, interval, founding, true))
+                .or(() -> founding ? findPrice(lookupKey(plan, interval, false, true)) : Optional.empty())
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "BILLING_ERROR",
+                        "This plan is not available yet. Please contact hello@clerova-ai.com."
+                ));
+
+        Map<String, String> form = new LinkedHashMap<>();
+        form.put("items[0][id]", item.path("id").asString());
+        form.put("items[0][price]", priceId);
+        form.put("items[0][quantity]", String.valueOf(quantity));
+        form.put("proration_behavior", "create_prorations");
+
+        syncSubscription(stripe.post("/v1/subscriptions/" + encode(subscription.path("id").asString()), form));
     }
 
     private String ensureCustomer(Organization organization, String email) {

@@ -13,12 +13,18 @@ export function getBillingOffer(): Promise<{
 /** Returns the Stripe Checkout page to send the user to. */
 export function startCheckout(
   plan: PaidPlan,
-  interval: BillingInterval
+  interval: BillingInterval,
+  trucks?: number
 ): Promise<{ url: string }> {
   return apiRequest("/api/billing/checkout", {
     method: "POST",
-    body: { plan, interval },
+    body: { plan, interval, trucks },
   });
+}
+
+/** A carrier's number of trucks; with a plan, the subscription changes too. */
+export function changeTrucks(trucks: number): Promise<unknown> {
+  return apiRequest("/api/billing/trucks", { method: "POST", body: { trucks } });
 }
 
 export function completeCheckout(sessionId: string): Promise<unknown> {

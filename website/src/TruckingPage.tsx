@@ -66,6 +66,25 @@ const faqs = [
   },
 ];
 
+const truckPlans = [
+  {
+    name: "Starter",
+    note: "For 1 to 8 trucks",
+    price: "$99",
+    unit: "/ month for up to 4 trucks",
+    founding: "Then $25 a truck. Founding carriers: $69, then $18 a truck, for as long as you stay",
+    points: ["Rate con checks and broker replies", "Detention and extra pay", "Invoices and packets for your factor"],
+  },
+  {
+    name: "Fleet",
+    note: "For 9 trucks or more",
+    price: "$20",
+    unit: "/ truck a month",
+    founding: "$199 a month at least. Founding carriers: $14 a truck, $139 at least, for as long as you stay",
+    points: ["Everything in Starter", "Lower price per truck", "About 40 loads a truck a month"],
+  },
+];
+
 const TRUST = ["No password sharing", "You approve everything", "Works with your factor", "Cancel anytime"];
 
 /** A load as Clerova shows it: the check, detention and the invoice. */
@@ -245,30 +264,38 @@ export function TruckingPage() {
           </ul>
         </section>
 
-        <section className="section split" id="pricing">
-          <div>
+        <section className="section" id="pricing">
+          <div className="heading">
             <span className="kicker">Pricing</span>
-            <h2>Founding carriers wanted</h2>
-            <p>
-              We're setting up our first carriers now. Founding carriers get a lower price for as long as they
-              stay, and I set up every one personally over a video call.
-            </p>
-            <p>
-              Start with 14 days free, or email me to talk about your fleet first.
-            </p>
-            <div className="founder-links">
-              <a className="button button-primary" href={trialUrl()}>
-                Start free trial
-              </a>
-              <a href="mailto:hello@clerova-ai.com?subject=Clerova%20for%20trucking">hello@clerova-ai.com</a>
-            </div>
+            <h2>Priced by the trucks you run. 14 days free.</h2>
+            <p>Every plan includes all features. Pay yearly and get two months free.</p>
           </div>
-          <ul className="checks">
-            <li>All features on every plan</li>
-            <li>Priced by the number of trucks you run</li>
-            <li>Works with your factoring company</li>
-            <li>Cancel anytime</li>
-          </ul>
+          <div className="pricing">
+            {truckPlans.map((plan) => (
+              <article key={plan.name} className="price-card">
+                <h3>{plan.name}</h3>
+                <p className="price-note">{plan.note}</p>
+                <p className="price">
+                  <strong>{plan.price}</strong> {plan.unit}
+                </p>
+                <p className="price-founding">{plan.founding}</p>
+                <ul>
+                  {plan.points.map((point) => (
+                    <li key={point}>{point}</li>
+                  ))}
+                </ul>
+                <a className="button button-primary" href={trialUrl()}>
+                  Start free trial
+                </a>
+              </article>
+            ))}
+          </div>
+          <p className="pricing-footnote">
+            You enter your trucks when you start, and Clerova picks the plan that costs less. Change your trucks
+            anytime in Settings. Founding prices are for our first 20 customers and stay the same for as long as
+            you stay. Each plan covers about 40 loads a truck a month. Running a dispatch service or more than 50
+            trucks? Email hello@clerova-ai.com.
+          </p>
         </section>
 
         <section className="section" id="faq">

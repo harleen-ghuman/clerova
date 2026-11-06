@@ -25,7 +25,11 @@ public class BillingController {
         this.currentUserService = currentUserService;
     }
 
-    public record CheckoutRequest(@NotNull Plan plan, @NotBlank String interval) {
+    /** trucks is for trucking workspaces, which are priced by truck (plan is then ignored). */
+    public record CheckoutRequest(@NotNull Plan plan, @NotBlank String interval, Integer trucks) {
+    }
+
+    public record TrucksRequest(Integer trucks) {
     }
 
     /** What the plan picker needs before checkout. */
@@ -43,7 +47,8 @@ public class BillingController {
                 currentUserService.requireOrganizationId(),
                 currentUserService.currentEmail(),
                 request.plan(),
-                request.interval()
+                request.interval(),
+                request.trucks()
         ));
     }
 
@@ -69,6 +74,13 @@ public class BillingController {
     @PostMapping("/api/billing/keep")
     public Map<String, Boolean> keep() {
         billingService.keepPlan(currentUserService.requireOrganizationId());
+        return Map.of("ok", true);
+    }
+
+    /** A carrier's number of trucks; with a plan, the subscription follows. */
+    @PostMapping("/api/billing/trucks")
+    public Map<String, Boolean> trucks(@RequestBody TrucksRequest request) {
+        billingService.changeTrucks(currentUserService.requireOrganizationId(), request.trucks());
         return Map.of("ok", true);
     }
 

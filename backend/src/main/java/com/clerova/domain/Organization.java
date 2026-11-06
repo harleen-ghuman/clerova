@@ -33,6 +33,9 @@ public class Organization {
     @Column(nullable = false, length = 50)
     private Plan plan;
 
+    /** Trucks the carrier runs; trucking plans are priced by it. */
+    private Integer trucks;
+
     private Instant trialEndsAt;
 
     @Column(nullable = false)
@@ -138,6 +141,14 @@ public class Organization {
 
     public void setReferralSource(String referralSource) {
         this.referralSource = referralSource;
+    }
+
+    public Integer getTrucks() {
+        return trucks;
+    }
+
+    public void setTrucks(Integer trucks) {
+        this.trucks = trucks;
     }
 
     public Plan getPlan() {

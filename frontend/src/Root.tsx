@@ -10,6 +10,7 @@ import { AuthPage } from "./pages/AuthPage";
 import { rememberAccount } from "./auth/referral";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { PlanPage } from "./pages/PlanPage";
+import { TruckingPlanPage } from "./trucking/TruckingPlanPage";
 import { TruckingApp } from "./trucking/TruckingApp";
 import type { Me } from "./types/Account";
 
@@ -216,8 +217,10 @@ export function Root() {
   }
 
   if (currentMe.organization.subscriptionRequired) {
+    const ChosenPlanPage = currentMe.organization.industry === "TRUCKING" ? TruckingPlanPage : PlanPage;
+
     return (
-      <PlanPage
+      <ChosenPlanPage
         organization={currentMe.organization}
         notice={
           checkoutReturn.result === "cancelled"

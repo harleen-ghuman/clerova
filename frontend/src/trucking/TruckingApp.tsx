@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { fileEmail, getInvoices, getLoads } from "../api/loads";
 import { getEmailSettings } from "../api/email";
 import { getMe } from "../api/account";
+import { openBillingPortal } from "../api/billing";
 import { errorMessage } from "../api/client";
 import { REFRESH_EVENT } from "../demo/mode";
 import { Sidebar, type AppView, type SidebarItem } from "../components/Sidebar";
@@ -83,6 +84,19 @@ export function TruckingApp({
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [invoicesError, setInvoicesError] = useState<string | null>(null);
   const [focusCarrier, setFocusCarrier] = useState(false);
+  const [billingError, setBillingError] = useState<string | null>(null);
+
+  /** Stripe's page for the card and past invoices. */
+  async function manageBilling() {
+    setBillingError(null);
+
+    try {
+      const { url } = await openBillingPortal();
+      window.location.assign(url);
+    } catch (err) {
+      setBillingError(errorMessage(err, "Couldn't open billing. Please try again."));
+    }
+  }
   const [emailSettings, setEmailSettings] = useState<EmailSettings | null>(null);
   const [emailSettingsError, setEmailSettingsError] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -365,7 +379,8 @@ export function TruckingApp({
                 }
                 onAccountUpdated(me);
               }}
-              onManageBilling={() => undefined}
+              onManageBilling={() => void manageBilling()}
+              billingError={billingError}
               upgradeQuestion=""
               onBillingChanged={loadOrganization}
               onUpgrade={() => undefined}
