@@ -23,8 +23,11 @@ function readSource(): string {
 
 const source = readSource();
 
-export function signUpUrl(plan?: "starter" | "growth", email?: string): string {
-  const params = new URLSearchParams({ utm_source: source });
+/** Which page the visitor is on: the app shows the matching demo and sign-up choice. */
+export type Industry = "property-management" | "trucking";
+
+export function signUpUrl(plan?: "starter" | "growth", email?: string, industry: Industry = "property-management"): string {
+  const params = new URLSearchParams({ utm_source: source, industry });
 
   if (plan) {
     params.set("plan", plan);
@@ -40,5 +43,6 @@ export function signUpUrl(plan?: "starter" | "growth", email?: string): string {
 
 export const SIGN_IN_URL = `${APP_URL}?mode=sign-in`;
 
-/** The no-sign-up demo: the real app on sample data. */
+/** The no-sign-up demos: the real app on sample data. */
 export const DEMO_URL = "https://app.clerova-ai.com/demo";
+export const TRUCKING_DEMO_URL = "https://app.clerova-ai.com/demo/trucking";

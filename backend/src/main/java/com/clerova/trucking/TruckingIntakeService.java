@@ -177,7 +177,23 @@ public class TruckingIntakeService {
             return new Result(InboundMessageStatus.IGNORED, NO_RATE_CON_ATTACHED_REASON, null);
         }
 
+        // Order, shipping and account notices (like Amazon's) aren't about a load
+        if (document.isEmpty() && isAutomaticSender(message.getFromEmail())) {
+            return new Result(InboundMessageStatus.IGNORED, com.clerova.email.InboundEmailProcessor.NOTICE_REASON, null);
+        }
+
         return new Result(InboundMessageStatus.IGNORED, NOT_MATCHED_REASON, null);
+    }
+
+    private static final java.util.regex.Pattern AUTOMATIC_SENDER = java.util.regex.Pattern.compile(
+            "(?i)^(no-?reply|do-?not-?reply|donotreply|auto-?confirm|order-?update|orders?|shipment-?tracking|"
+                    + "shipping|tracking|notifications?|notify|alerts?|news(letter)?|marketing|promotions?|"
+                    + "receipts?|mailer-daemon|postmaster|account-?update|digest)([._+-].*)?@");
+
+    /** A sender that only sends automatic notices, never a person writing about a load. */
+    static boolean isAutomaticSender(String email) {
+        return email != null && (AUTOMATIC_SENDER.matcher(email.strip()).find()
+                || email.toLowerCase(java.util.Locale.ROOT).matches(".*@([a-z0-9-]+\\.)*amazon\\.com$"));
     }
 
     public static final String NO_RATE_CON_ATTACHED_REASON =

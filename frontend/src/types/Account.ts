@@ -4,7 +4,7 @@ export interface Organization {
   id: string;
   name: string;
   industry: Industry;
-  plan: "TRIAL" | "STARTER" | "GROWTH" | "INTERNAL";
+  plan: "TRIAL" | "STARTER" | "GROWTH" | "FLEET" | "INTERNAL";
   trialEndsAt: string | null;
   aiMonthlyLimit: number;
   aiRequestsUsedThisMonth: number;
@@ -17,6 +17,8 @@ export interface Organization {
   billingEnabled: boolean;
   /** A plan must be chosen before the app can be used. */
   subscriptionRequired: boolean;
+  /** Trucks on a trucking plan (priced by truck); null otherwise. */
+  trucks?: number | null;
 }
 
 export interface Me {

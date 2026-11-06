@@ -1,0 +1,90 @@
+/* The load shown in the trucking page's hero */
+.load-preview {
+  display: grid;
+  gap: 12px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--white);
+  box-shadow: 0 18px 40px rgba(22, 24, 29, 0.08);
+  text-align: left;
+}
+
+.load-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.load-head strong {
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.load-meta {
+  margin: -6px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.load-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.load-row strong {
+  display: block;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.load-row p {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.load-pill {
+  align-self: start;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.load-pill-fix {
+  background: #fef3f2;
+  color: var(--urgent);
+}
+
+.load-pill-note {
+  background: #fffaeb;
+  color: var(--waiting);
+}
+
+.load-pill-good {
+  background: #ecfdf3;
+  color: var(--done);
+}
+
+.load-pill-info {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+@media (max-width: 520px) {
+  .load-preview {
+    padding: 16px;
+  }
+
+  .load-row {
+    grid-template-columns: 1fr;
+  }
+}

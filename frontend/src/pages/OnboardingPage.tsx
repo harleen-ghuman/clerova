@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 
 import { completeOnboarding, getMe } from "../api/account";
 import { ApiRequestError, errorMessage } from "../api/client";
-import { getReferralSource } from "../auth/referral";
+import { forgetChosenIndustry, getChosenIndustry, getReferralSource } from "../auth/referral";
 import type { Industry, Me } from "../types/Account";
 import { TRUCKING_ENABLED } from "../config";
 
@@ -38,7 +38,10 @@ export function OnboardingPage({
 
   const [fullName, setFullName] = useState(suggestedName);
   const [organizationName, setOrganizationName] = useState("");
-  const [industry, setIndustry] = useState<Industry>("PROPERTY_MANAGEMENT");
+  // Coming from the trucking page picks trucking; it can still be changed here
+  const [industry, setIndustry] = useState<Industry>(
+    TRUCKING_ENABLED && getChosenIndustry() === "TRUCKING" ? "TRUCKING" : "PROPERTY_MANAGEMENT"
+  );
   const [companySize, setCompanySize] = useState("");
   const trucking = industry === "TRUCKING";
   const [referralSource, setReferralSource] = useState(
@@ -62,6 +65,7 @@ export function OnboardingPage({
         referralSource: referralSource || storedSource || "",
       });
 
+      forgetChosenIndustry();
       onComplete(me);
     } catch (err) {
       // Set up meanwhile (another tab or a double click): just continue

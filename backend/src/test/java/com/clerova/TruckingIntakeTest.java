@@ -22,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -61,6 +62,9 @@ class TruckingIntakeTest {
 
     @Autowired
     private InboundEmailProcessor processor;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @MockitoBean
     private TruckingAiService truckingAiService;
@@ -187,6 +191,22 @@ class TruckingIntakeTest {
         assertThat(usedThisMonth()).isZero();
         // And never as a property management request
         verify(aiService, never()).extract(anyString());
+    }
+
+    @Test
+    void atTheLoadLimitARateConWaitsWithWordingForCarriers() throws Exception {
+        String organizationId = json(mockMvc.perform(get("/api/me").with(user))).get("organization").get("id").asText();
+        jdbcTemplate.update("update organizations set ai_monthly_limit = 0 where id = ?", UUID.fromString(organizationId));
+
+        deliver("<limit@x>", "Rate Confirmation 88213", "Please sign.", TruckingIntakeTestPdf.pdf("RATE CONFIRMATION"));
+        processor.processDue();
+
+        verify(truckingAiService, never()).readRateCon(anyString(), anyString(), anyList());
+        JsonNode waiting = json(mockMvc.perform(get("/api/inbox").with(user))).get(0);
+        assertThat(waiting.get("status").asText()).isEqualTo("RECEIVED");
+        assertThat(waiting.get("statusReason").asText())
+                .contains("loads for this month are used up")
+                .contains("as soon as you add trucks");
     }
 
     @Test

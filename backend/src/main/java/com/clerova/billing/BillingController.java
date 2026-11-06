@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.util.Map;
 
 @RestController
@@ -25,7 +26,11 @@ public class BillingController {
         this.currentUserService = currentUserService;
     }
 
-    public record CheckoutRequest(@NotNull Plan plan, @NotBlank String interval) {
+    /** trucks is for trucking workspaces, which are priced by truck (plan is then ignored). */
+    public record CheckoutRequest(@NotNull Plan plan, @NotBlank String interval, BigDecimal trucks) {
+    }
+
+    public record TrucksRequest(BigDecimal trucks) {
     }
 
     /** What the plan picker needs before checkout. */
@@ -43,7 +48,8 @@ public class BillingController {
                 currentUserService.requireOrganizationId(),
                 currentUserService.currentEmail(),
                 request.plan(),
-                request.interval()
+                request.interval(),
+                wholeTrucks(request.trucks())
         ));
     }
 
@@ -72,6 +78,13 @@ public class BillingController {
         return Map.of("ok", true);
     }
 
+    /** A carrier's number of trucks; with a plan, the subscription follows. */
+    @PostMapping("/api/billing/trucks")
+    public Map<String, Boolean> trucks(@RequestBody TrucksRequest request) {
+        billingService.changeTrucks(currentUserService.requireOrganizationId(), wholeTrucks(request.trucks()));
+        return Map.of("ok", true);
+    }
+
     @PostMapping("/api/billing/upgrade")
     public Map<String, Boolean> upgrade() {
         billingService.upgradeToGrowth(currentUserService.requireOrganizationId());
@@ -86,5 +99,21 @@ public class BillingController {
     ) {
         billingService.handleWebhook(payload, signature);
         return Map.of("received", true);
+    }
+
+    /**
+     * JSON would otherwise turn 2.5 trucks into 2; a part of a truck is
+     * refused like any other wrong number.
+     */
+    static Integer wholeTrucks(BigDecimal trucks) {
+        if (trucks == null) {
+            return null;
+        }
+
+        try {
+            return trucks.stripTrailingZeros().intValueExact();
+        } catch (ArithmeticException notWhole) {
+            return -1;
+        }
     }
 }

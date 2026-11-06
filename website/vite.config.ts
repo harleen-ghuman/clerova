@@ -7,9 +7,10 @@ export default defineConfig({
   plugins: [react()],
   build: {
     rollupOptions: {
-      // Each page is its own HTML file, served at /, /terms, /privacy and /guides/...
+      // Each page is its own HTML file, served at /, /trucking, /terms, /privacy and /guides/...
       input: {
         main: resolve(__dirname, 'index.html'),
+        trucking: resolve(__dirname, 'trucking/index.html'),
         terms: resolve(__dirname, 'terms/index.html'),
         privacy: resolve(__dirname, 'privacy/index.html'),
         guides: resolve(__dirname, 'guides/index.html'),

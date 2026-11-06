@@ -16,6 +16,8 @@ import com.clerova.trucking.TruckingIntakeService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -56,6 +58,12 @@ public class InboundEmailProcessor {
 
     static final String PLAN_WAIT_REASON =
             "Your plan has ended. This email will be organized as soon as you choose a plan.";
+
+    /** The same for carriers, whose plan covers loads and grows with their trucks. */
+    static final String TRUCKING_QUOTA_WAIT_REASON =
+            "Your plan's loads for this month are used up. This email will be read on %s, or as soon as you add trucks in Settings.";
+    static final String TRUCKING_PLAN_WAIT_REASON =
+            "Your plan has ended. This email will be read as soon as you start a plan again.";
 
     public static final String FAILED_REASON = "Couldn't read this email. Click Retry to try again.";
 
@@ -113,11 +121,29 @@ public class InboundEmailProcessor {
         this.replyCopyService = replyCopyService;
     }
 
+    /** Set when the app starts shutting down: no new emails are claimed after that. */
+    private volatile boolean stopping = false;
+
     @Scheduled(fixedDelayString = "${app.email.processing.interval-ms}")
     public void runScheduled() {
-        if (enabled) {
+        if (enabled && !stopping) {
             processDue();
         }
+    }
+
+    /**
+     * The first sign of a shutdown (deploy or restart). The email being
+     * processed is finished; the rest stay RECEIVED for the next instance.
+     */
+    @EventListener(ContextClosedEvent.class)
+    public void stopClaiming() {
+        stopping = true;
+        log.info("Shutting down: no new inbound emails will be claimed");
+    }
+
+    /** Only for tests that share one application context. */
+    public void resumeAfterTest() {
+        stopping = false;
     }
 
     /** Processes emails that are due. Returns how many were processed. */
@@ -137,6 +163,10 @@ public class InboundEmailProcessor {
         int processed = 0;
 
         for (UUID id : dueIds) {
+            if (stopping) {
+                break;
+            }
+
             Integer claimed = transactionTemplate.execute(status ->
                     inboundMessageRepository.claim(id, Instant.now())
             );
@@ -398,7 +428,8 @@ public class InboundEmailProcessor {
 
         message.setStatus(InboundMessageStatus.RECEIVED);
         message.setAttempts(0);
-        message.setStatusReason(QUOTA_WAIT_REASON.formatted(
+        boolean trucking = truckingIntakeService.isTruckingWorkspace(message.getOrganizationId());
+        message.setStatusReason((trucking ? TRUCKING_QUOTA_WAIT_REASON : QUOTA_WAIT_REASON).formatted(
                 DateTimeFormatter.ofPattern("MMMM d", Locale.US).withZone(ZoneOffset.UTC).format(reset)
         ));
         message.setNextAttemptAt(reset);
@@ -413,7 +444,9 @@ public class InboundEmailProcessor {
     private void waitForPlan(InboundMessage message) {
         message.setStatus(InboundMessageStatus.RECEIVED);
         message.setAttempts(0);
-        message.setStatusReason(PLAN_WAIT_REASON);
+        message.setStatusReason(truckingIntakeService.isTruckingWorkspace(message.getOrganizationId())
+                ? TRUCKING_PLAN_WAIT_REASON
+                : PLAN_WAIT_REASON);
         message.setNextAttemptAt(Instant.now().plus(Duration.ofDays(7)));
 
         inboundMessageRepository.save(message);

@@ -57,6 +57,9 @@ const MOBILE_NAV: { view: AppView; label: string }[] = [
   { view: "settings", label: "Settings" },
 ];
 
+/** This app's screens; history can also hold the trucking app's, from an earlier sign-in. */
+const VIEWS: AppView[] = ["today", "requests", "jobs", "inbox", "email-setup", "settings"];
+
 function App({
   welcome = false,
   organization: initialOrganization,
@@ -70,7 +73,7 @@ function App({
   // the same screen (and open request) comes back instead of Today
   const [restoredNav] = useState<NavState | null>(() => {
     const state = window.history.state as NavState | null;
-    return state?.clerova ? state : null;
+    return state?.clerova && VIEWS.includes(state.view) ? state : null;
   });
   const [activeView, setActiveView] = useState<AppView>(restoredNav?.view ?? "today");
   const mobileNav = useRef<HTMLElement>(null);
@@ -256,7 +259,7 @@ function App({
     function onPopState(event: PopStateEvent) {
       const state = event.state as NavState | null;
 
-      if (state?.clerova) {
+      if (state?.clerova && VIEWS.includes(state.view)) {
         setActiveView(state.view);
         setSelectedId(state.selectedId);
         setHighlightJobFor(null);
@@ -628,7 +631,11 @@ function App({
               }}
               onManageBilling={manageBilling}
               billingError={billingError}
-              onBillingChanged={loadOrganization}
+              onBillingChanged={() => {
+                // A change went through, so an earlier billing error is stale
+                setBillingError(null);
+                return loadOrganization();
+              }}
               onUpgrade={upgrade}
               upgrading={upgrading}
               upgradeQuestion={upgradeQuestion}

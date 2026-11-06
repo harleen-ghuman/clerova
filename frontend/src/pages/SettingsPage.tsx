@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { updateAccount } from "../api/account";
-import { cancelPlan, keepPlan } from "../api/billing";
+import { cancelPlan, changeTrucks, keepPlan } from "../api/billing";
 import { errorMessage } from "../api/client";
 import {
   COMPANY_INFO_FIELDS,
@@ -20,6 +20,7 @@ import { isDemo } from "../demo/mode";
 import { CarrierSection } from "../trucking/CarrierSection";
 import type { Me, Organization } from "../types/Account";
 import { PLANS, planName, planPrice } from "../utils/plans";
+import { MAX_TRUCKS, truckingPrice } from "../utils/truckingPlans";
 
 interface SettingsPageProps {
   email: string;
@@ -195,8 +196,7 @@ export function SettingsPage({
   onSignOut,
   propertyManagement = true,
 }: SettingsPageProps) {
-  const hasBilling =
-    propertyManagement && organization.billingEnabled && Boolean(organization.subscriptionStatus);
+  const hasBilling = organization.billingEnabled && Boolean(organization.subscriptionStatus);
 
   return (
     <div className="settings">
@@ -204,7 +204,9 @@ export function SettingsPage({
         <h1>Settings</h1>
         <p>
           {!propertyManagement
-            ? "Your details, carrier details for invoices, and sign-in."
+            ? hasBilling
+              ? "Your details, carrier details for invoices, sign-in and billing."
+              : "Your details, carrier details for invoices, and sign-in."
             : hasBilling
               ? "Your details, company info, sign-in and billing."
               : "Your details, company info and sign-in."}
@@ -567,14 +569,20 @@ function BillingSection({
   const canCancel = !cancelling && (trialing || status === "active" || status === "past_due");
   const ends = longDate(trialing ? organization.trialEndsAt ?? organization.currentPeriodEnd : organization.currentPeriodEnd);
 
+  const trucking = organization.industry === "TRUCKING";
+  const interval = organization.billingInterval === "year" ? "year" : "month";
   const plan = PLANS.find((item) => item.plan === organization.plan);
-  const price = plan
-    ? planPrice(
-        organization.foundingCustomer ? plan.foundingMonthly : plan.monthly,
-        organization.billingInterval === "year" ? "year" : "month"
-      )
-    : null;
+  const price = trucking
+    ? organization.trucks
+      ? truckingPrice(organization.trucks, interval, organization.foundingCustomer)
+      : null
+    : plan
+      ? planPrice(organization.foundingCustomer ? plan.foundingMonthly : plan.monthly, interval)
+      : null;
   const priceText = price ? `$${price.amount.toLocaleString()} a ${price.per}` : null;
+  const name = trucking
+    ? `${organization.plan === "FLEET" ? "Fleet" : "Starter"}${organization.trucks ? ` for ${organization.trucks} ${organization.trucks === 1 ? "truck" : "trucks"}` : ""}`
+    : planName(organization.plan);
 
   const summary = cancelling
     ? trialing
@@ -583,8 +591,8 @@ function BillingSection({
     : status === "past_due"
       ? "Your last payment didn't go through. Update your card to keep Clerova running."
       : trialing
-        ? `${planName(organization.plan)} · free trial${ends ? ` until ${ends}` : ""}.${priceText ? ` Then ${priceText}.` : ""}`
-        : `${planName(organization.plan)}${priceText ? ` · ${priceText}` : ""}${ends ? ` · renews on ${ends}` : ""}.`;
+        ? `${name} · free trial${ends ? ` until ${ends}` : ""}.${priceText ? ` Then ${priceText}.` : ""}`
+        : `${name}${priceText ? ` · ${priceText}` : ""}${ends ? ` · renews on ${ends}` : ""}.`;
 
   function run(kind: "cancel" | "keep") {
     setBusy(kind);
@@ -648,8 +656,9 @@ function BillingSection({
             {trialing
               ? `Clerova keeps working until your trial ends${ends ? ` on ${ends}` : ""}. You won't be charged.`
               : `Clerova keeps working until ${ends ?? "the end of this billing period"}. You won't be charged again.`}{" "}
-            After that, new emails won't be organized. Your requests and
-            history stay saved, and you can choose a plan again anytime.
+            {trucking
+              ? "After that, new rate cons won't be read. Your loads and history stay saved, and you can start a plan again anytime."
+              : "After that, new emails won't be organized. Your requests and history stay saved, and you can choose a plan again anytime."}
           </p>
           <div className="settings-actions">
             <button
@@ -682,7 +691,7 @@ function BillingSection({
               {busy === "keep" ? "Keeping your plan..." : "Keep my plan"}
             </button>
           )}
-          {organization.plan === "STARTER" && status !== "past_due" && (
+          {organization.plan === "STARTER" && !trucking && status !== "past_due" && (
             <button
               type="button"
               className="secondary-action-button"
@@ -717,6 +726,10 @@ function BillingSection({
         </div>
       )}
 
+      {trucking && !cancelling && !confirming && (
+        <TrucksForm organization={organization} onChanged={onBillingChanged} />
+      )}
+
       {done && (
         <p className="request-success" role="status">
           {done}
@@ -729,5 +742,71 @@ function BillingSection({
         </p>
       )}
     </section>
+  );
+}
+
+/** A carrier's number of trucks: the price follows, prorated by Stripe. */
+function TrucksForm({ organization, onChanged }: { organization: Organization; onChanged: () => Promise<unknown> }) {
+  const current = organization.trucks ?? 1;
+  const [trucks, setTrucks] = useState(String(current));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const count = Number(trucks);
+  const valid = Number.isInteger(count) && count >= 1 && count <= MAX_TRUCKS;
+  const interval = organization.billingInterval === "year" ? "year" : "month";
+  const next = valid ? truckingPrice(count, interval, organization.foundingCustomer) : null;
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!valid) {
+      setError(`Enter how many trucks you run, from 1 to ${MAX_TRUCKS}.`);
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+
+    try {
+      await changeTrucks(count);
+      await onChanged();
+      setSaved(true);
+    } catch (err) {
+      setError(errorMessage(err, "Couldn't change your trucks. Please try again."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="auth-form settings-form settings-trucks" onSubmit={save}>
+      <label>
+        Trucks
+        <input
+          inputMode="numeric"
+          maxLength={3}
+          value={trucks}
+          onChange={(event) => {
+            setTrucks(event.target.value.replace(/\D/g, ""));
+            setSaved(false);
+          }}
+          disabled={saving}
+        />
+        <span className="auth-hint">
+          {next && count !== current
+            ? `With ${count} ${count === 1 ? "truck" : "trucks"}: ${next.plan === "FLEET" ? "Fleet" : "Starter"}, $${next.amount.toLocaleString()} a ${next.per}. Stripe adds or credits the difference for this period.`
+            : "Running more or fewer trucks? Change it here and your price follows."}
+        </span>
+      </label>
+      {error && <p className="action-error">{error}</p>}
+      <div className="settings-actions">
+        <button type="submit" className="primary-button" disabled={saving || !valid || count === current}>
+          {saving ? "Saving..." : "Change trucks"}
+        </button>
+        {saved && <span className="request-success">Saved.</span>}
+      </div>
+    </form>
   );
 }

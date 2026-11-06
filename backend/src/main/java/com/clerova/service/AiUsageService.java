@@ -108,7 +108,11 @@ public class AiUsageService {
 
         String next;
 
-        if (billingService.isEnabled() && organization.getPlan() == Plan.STARTER) {
+        if (organization.getIndustry() == com.clerova.domain.Industry.TRUCKING) {
+            // Fair use for carriers is about 40 loads a truck a month
+            next = "Clerova can read new rate cons again on %s. Add trucks in Settings, or email %s if you need more."
+                    .formatted(reset, supportAddress);
+        } else if (billingService.isEnabled() && organization.getPlan() == Plan.STARTER) {
             next = "Upgrade to Growth for %,d a month, or Clerova can organize new ones again on %s."
                     .formatted(growthMonthlyRequests, reset);
         } else if (billingService.isEnabled() && organization.getPlan() == Plan.GROWTH) {

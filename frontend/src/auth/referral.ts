@@ -2,6 +2,7 @@ const STORAGE_KEY = "clerova.referralSource";
 const PLAN_KEY = "clerova.chosenPlan";
 const EMAIL_KEY = "clerova.prefillEmail";
 const SIGNING_UP_KEY = "clerova.signingUp";
+const INDUSTRY_KEY = "clerova.industry";
 
 /**
  * Remembers where a visitor came from (utm_source or ref in the URL, e.g.
@@ -22,6 +23,13 @@ export function captureReferralSource() {
 
     if (plan === "STARTER" || plan === "GROWTH") {
       localStorage.setItem(PLAN_KEY, plan);
+    }
+
+    // Which landing page they came from: picks the demo and the sign-up choice
+    const industry = params.get("industry")?.toLowerCase();
+
+    if (industry === "trucking" || industry === "property-management") {
+      localStorage.setItem(INDUSTRY_KEY, industry === "trucking" ? "TRUCKING" : "PROPERTY_MANAGEMENT");
     }
 
     const email = params.get("email");
@@ -51,7 +59,7 @@ function stripWebsiteParams() {
     const url = new URL(window.location.href);
     let changed = false;
 
-    for (const name of ["email", "plan", "utm_source", "ref"]) {
+    for (const name of ["email", "plan", "utm_source", "ref", "industry"]) {
       if (url.searchParams.has(name)) {
         url.searchParams.delete(name);
         changed = true;
@@ -149,5 +157,33 @@ export function prefilledEmail(): string {
     );
   } catch {
     return "";
+  }
+}
+
+/** The kind of business the visitor said they run on the website, if any. */
+export function getChosenIndustry(): "PROPERTY_MANAGEMENT" | "TRUCKING" | null {
+  try {
+    const industry = localStorage.getItem(INDUSTRY_KEY);
+    return industry === "TRUCKING" || industry === "PROPERTY_MANAGEMENT" ? industry : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Once the workspace is made, so the next person on this browser starts fresh. */
+export function forgetChosenIndustry(): void {
+  try {
+    localStorage.removeItem(INDUSTRY_KEY);
+  } catch {
+    // Nothing saved
+  }
+}
+
+/** Once checkout starts, so the next person on this browser starts fresh. */
+export function forgetChosenPlan(): void {
+  try {
+    localStorage.removeItem(PLAN_KEY);
+  } catch {
+    // Nothing saved
   }
 }

@@ -2,23 +2,26 @@ import { useEffect, useState } from "react";
 
 import App from "../App";
 import { getMe } from "../api/account";
+import { TruckingApp } from "../trucking/TruckingApp";
 import type { Me } from "../types/Account";
 import { resetDemo, simulateNewEmail, simulateUrgentReply } from "./fakeApi";
+import { isTruckingDemo } from "./mode";
 
 const WEBSITE = "https://clerova-ai.com";
 
 /** The real app on sample data, with a small bar to try the main flows. */
 export function DemoRoot() {
   const [me, setMe] = useState<Me | null>(null);
+  const trucking = isTruckingDemo();
 
   useEffect(() => {
-    document.title = "Clerova demo";
+    document.title = trucking ? "Clerova trucking demo" : "Clerova demo";
     document.body.classList.add("demo-mode");
 
     getMe().then(setMe);
 
     return () => document.body.classList.remove("demo-mode");
-  }, []);
+  }, [trucking]);
 
   if (!me?.organization) {
     return (
@@ -30,22 +33,36 @@ export function DemoRoot() {
 
   return (
     <>
-      <App
-        organization={me.organization}
-        userEmail={me.email}
-        fullName={me.fullName}
-        onAccountUpdated={setMe}
-        onSignOut={() => window.location.assign("/")}
-      />
-      <DemoBar />
+      {trucking ? (
+        <TruckingApp
+          organization={me.organization}
+          userEmail={me.email}
+          fullName={me.fullName}
+          onAccountUpdated={setMe}
+          onSignOut={() => window.location.assign("/")}
+        />
+      ) : (
+        <App
+          organization={me.organization}
+          userEmail={me.email}
+          fullName={me.fullName}
+          onAccountUpdated={setMe}
+          onSignOut={() => window.location.assign("/")}
+        />
+      )}
+      <DemoBar trucking={trucking} />
     </>
   );
 }
 
-function DemoBar() {
+type Simulation = { key: string; label: string; busyLabel: string; run: () => Promise<string> };
+
+function DemoBar({ trucking }: { trucking: boolean }) {
   const [open, setOpen] = useState(true);
-  const [busy, setBusy] = useState<"email" | "urgent" | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [simulations, setSimulations] = useState<Simulation[]>([]);
+  const [reset, setReset] = useState<(() => void) | null>(null);
 
   // Room below the page so the panel never hides the end of it
   useEffect(() => {
@@ -53,10 +70,41 @@ function DemoBar() {
     return () => document.body.classList.remove("demo-bar-open");
   }, [open]);
 
-  function simulate(kind: "email" | "urgent") {
-    setBusy(kind);
+  // The trucking demo's controls load with its sample data
+  useEffect(() => {
+    if (!trucking) {
+      return;
+    }
+
+    let current = true;
+
+    void import("./truckingFakeApi").then((api) => {
+      if (current) {
+        setSimulations([
+          { key: "ratecon", label: "Simulate a rate con", busyLabel: "Receiving...", run: api.simulateRateCon },
+          { key: "broker", label: "Simulate a broker email", busyLabel: "Receiving...", run: api.simulateBrokerEmail },
+        ]);
+        setReset(() => api.resetTruckingDemo);
+      }
+    });
+
+    return () => {
+      current = false;
+    };
+  }, [trucking]);
+
+  const shown: Simulation[] = trucking
+    ? simulations
+    : [
+        { key: "email", label: "Simulate a tenant email", busyLabel: "Receiving...", run: simulateNewEmail },
+        { key: "urgent", label: "Simulate an urgent reply", busyLabel: "Receiving...", run: simulateUrgentReply },
+      ];
+
+  function simulate(simulation: Simulation) {
+    setBusy(simulation.key);
     setNote(null);
-    (kind === "email" ? simulateNewEmail() : simulateUrgentReply())
+    simulation
+      .run()
       .then(setNote)
       .finally(() => setBusy(null));
   }
@@ -80,27 +128,26 @@ function DemoBar() {
         </button>
       </div>
       <p className="demo-desc">
-        Try it like a property manager would. Clerova's suggestions here are
-        pre-written examples.
+        {trucking
+          ? "Try it like a dispatcher would. Clerova's drafts here are pre-written examples."
+          : "Try it like a property manager would. Clerova's suggestions here are pre-written examples."}
       </p>
+      <a className="demo-switch" href={trucking ? "/demo" : "/demo/trucking"}>
+        {trucking ? "See the property management demo" : "Run a trucking company? See the trucking demo"}
+      </a>
 
       <div className="demo-actions demo-simulate">
-        <button
-          type="button"
-          className="rq-button rq-button-small"
-          onClick={() => simulate("email")}
-          disabled={busy !== null}
-        >
-          {busy === "email" ? "Receiving..." : "Simulate a tenant email"}
-        </button>
-        <button
-          type="button"
-          className="rq-button rq-button-small"
-          onClick={() => simulate("urgent")}
-          disabled={busy !== null}
-        >
-          {busy === "urgent" ? "Receiving..." : "Simulate an urgent reply"}
-        </button>
+        {shown.map((simulation) => (
+          <button
+            key={simulation.key}
+            type="button"
+            className="rq-button rq-button-small"
+            onClick={() => simulate(simulation)}
+            disabled={busy !== null}
+          >
+            {busy === simulation.key ? simulation.busyLabel : simulation.label}
+          </button>
+        ))}
       </div>
 
       {note && (
@@ -110,20 +157,27 @@ function DemoBar() {
       )}
 
       <div className="demo-actions">
-        <a className="rq-button rq-button-small rq-button-primary" href="/?utm_source=demo">
+        <a
+          className="rq-button rq-button-small rq-button-primary"
+          href={trucking ? "/?utm_source=demo&industry=trucking" : "/?utm_source=demo"}
+        >
           Start free trial
         </a>
         <button
           type="button"
           className="rq-button rq-button-small rq-button-quiet"
           onClick={() => {
-            resetDemo();
+            if (trucking) {
+              reset?.();
+            } else {
+              resetDemo();
+            }
             setNote("The demo is back to the start.");
           }}
         >
           Reset
         </button>
-        <a className="rq-button rq-button-small rq-button-quiet" href={WEBSITE}>
+        <a className="rq-button rq-button-small rq-button-quiet" href={trucking ? `${WEBSITE}/trucking` : WEBSITE}>
           Exit demo
         </a>
       </div>

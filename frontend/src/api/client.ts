@@ -1,7 +1,7 @@
 import { API_BASE_URL } from "../config";
 import { noteSessionEnded } from "../auth/referral";
 import { supabase } from "../auth/supabase";
-import { isDemo } from "../demo/mode";
+import { isDemo, isTruckingDemo } from "../demo/mode";
 
 export class ApiRequestError extends Error {
   readonly status: number;
@@ -23,6 +23,11 @@ export async function apiRequest<T>(
 ): Promise<T> {
   if (isDemo()) {
     // Loaded only in the demo, so the app bundle doesn't carry it
+    if (isTruckingDemo()) {
+      const { handleTruckingDemoRequest } = await import("../demo/truckingFakeApi");
+      return handleTruckingDemoRequest<T>(path, options);
+    }
+
     const { handleDemoRequest } = await import("../demo/fakeApi");
     return handleDemoRequest<T>(path, options);
   }

@@ -414,6 +414,98 @@ class TruckingInvoiceTest {
     }
 
     @Test
+    void anotherWorkspaceCantReachAnyTruckingRecord() throws Exception {
+        saveCarrier(false);
+        String loadId = load("88213");
+        uploadPod(loadId);
+        when(truckingAiService.draftBrokerReply(anyString(), anyString(), anyString())).thenAnswer(call -> {
+            var result = new com.clerova.trucking.BrokerReplyResult();
+            result.needsReply = true;
+            result.kind = com.clerova.trucking.ReplyKind.STATUS;
+            result.summary = "Asks where the truck is";
+            result.draft = "Hi Dana,\n\nOn the way.";
+            return result;
+        });
+        deliverText("<q-88213@x>", "Where is the truck on 88213?");
+        processor.processDue();
+        mockMvc.perform(post("/api/loads/{id}/charges", loadId).with(user).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"kind\":\"LUMPER\",\"amountCents\":5000}")).andExpect(status().is2xxSuccessful());
+
+        JsonNode load = json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user)));
+        String replyId = load.get("draft").get("id").asText();
+        String chargeId = load.get("charges").get(0).get("id").asText();
+        String flagId = load.get("flags").isEmpty() ? UUID.randomUUID().toString() : load.get("flags").get(0).get("id").asText();
+        String brokerId = load.get("broker").get("id").asText();
+        String documentId = load.get("documents").get(0).get("id").asText();
+        String messageId = json(mockMvc.perform(get("/api/inbox").with(user))).get(0).get("id").asText();
+        String invoiceId = json(mockMvc.perform(post("/api/loads/{id}/invoice", loadId).with(user))).get("id").asText();
+
+        RequestPostProcessor other = signUp("Other Carrier");
+        var json = MediaType.APPLICATION_JSON;
+        List<org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder<?>> attempts = List.of(
+                get("/api/loads/{id}", loadId),
+                patch("/api/loads/{id}", loadId).contentType(json).content("{\"status\":\"CANCELLED\"}"),
+                post("/api/loads/{id}/flags/{f}/resolve", loadId, flagId),
+                post("/api/loads/{id}/replies/{r}/send", loadId, replyId).contentType(json).content("{\"body\":\"x\"}"),
+                post("/api/loads/{id}/replies/{r}/dismiss", loadId, replyId),
+                post("/api/loads/{id}/messages", loadId).contentType(json)
+                        .content("{\"kind\":\"STATUS\",\"subject\":\"x\",\"body\":\"x\"}"),
+                patch("/api/loads/{id}/charges/{c}", loadId, chargeId).contentType(json).content("{\"amountCents\":1}"),
+                delete("/api/loads/{id}/charges/{c}", loadId, chargeId),
+                post("/api/loads/{l}/emails/{m}", loadId, messageId),
+                put("/api/brokers/{id}/mc-number", brokerId).contentType(json).content("{\"mcNumber\":\"111111\"}"),
+                get("/api/load-documents/{id}/file", documentId),
+                patch("/api/load-documents/{id}", documentId).contentType(json).content("{\"kind\":\"BOL\"}"),
+                delete("/api/load-documents/{id}", documentId),
+                multipart("/api/load-documents").file(new MockMultipartFile("file", "pod.pdf", "application/pdf", pdf("POD")))
+                        .param("loadId", loadId),
+                get("/api/invoices/{id}/pdf", invoiceId),
+                patch("/api/invoices/{id}", invoiceId).contentType(json).content("{\"notes\":\"x\"}"),
+                post("/api/invoices/{id}/send", invoiceId).contentType(json).content("{}"),
+                post("/api/invoices/{id}/mark-sent", invoiceId),
+                post("/api/invoices/{id}/unpaid", invoiceId)
+        );
+
+        for (var attempt : attempts) {
+            int code = mockMvc.perform(attempt.with(other)).andReturn().getResponse().getStatus();
+            assertThat(code).as(attempt.toString()).isIn(400, 404);
+        }
+
+        // Nothing of the first carrier shows in the other's lists or export
+        assertThat(json(mockMvc.perform(get("/api/loads").with(other)))).isEmpty();
+        assertThat(json(mockMvc.perform(get("/api/brokers").with(other)))).isEmpty();
+        assertThat(json(mockMvc.perform(get("/api/inbox").with(other)))).isEmpty();
+        assertThat(json(mockMvc.perform(get("/api/load-documents").with(other)))).isEmpty();
+        assertThat(mockMvc.perform(get("/api/invoices/export").with(other)).andReturn().getResponse()
+                .getContentAsString()).doesNotContain("88213");
+        assertThat(json(mockMvc.perform(get("/api/carrier").with(other))).get("legalName").isNull()).isTrue();
+
+        // And the first carrier's records are untouched
+        JsonNode after = json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user)));
+        assertThat(after.get("status").asText()).isEqualTo(load.get("status").asText());
+        assertThat(after.get("draft").get("status").asText()).isEqualTo("DRAFT");
+        assertThat(after.get("charges")).hasSize(load.get("charges").size());
+        assertThat(after.get("charges").get(0).get("amountCents").asLong()).isEqualTo(5000);
+        assertThat(after.get("documents")).hasSize(load.get("documents").size());
+        assertThat(after.get("broker").get("mcNumber").asText()).isEqualTo("845210");
+    }
+
+    @Test
+    void aPropertyManagerCantUseTruckingAndACarrierCantUseRequests() throws Exception {
+        String loadId = load("88213");
+        RequestPostProcessor manager = WorkItemWorkflowTest.userToken(UUID.randomUUID());
+        mockMvc.perform(post("/api/onboarding").with(manager).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"organizationName\":\"Oak Property Co\",\"industry\":\"PROPERTY_MANAGEMENT\"}"))
+                .andExpect(status().isCreated());
+
+        assertThat(mockMvc.perform(get("/api/loads/{id}", loadId).with(manager)).andReturn().getResponse().getStatus())
+                .isIn(403, 404);
+        assertThat(json(mockMvc.perform(get("/api/loads").with(manager)))).isEmpty();
+        assertThat(mockMvc.perform(post("/api/billing/trucks").with(manager).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"trucks\":5}")).andReturn().getResponse().getStatus()).isIn(409, 503);
+    }
+
+    @Test
     void aCancelledLoadCanBeBilledItsTonu() throws Exception {
         saveCarrier(false);
         String loadId = load("88213");
@@ -605,6 +697,21 @@ class TruckingInvoiceTest {
                         .header("Authorization", WEBHOOK_AUTH)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(root)))
+                .andExpect(status().isOk());
+    }
+
+    private void deliverText(String messageId, String subject) throws Exception {
+        var root = objectMapper.createObjectNode();
+        root.put("MessageID", UUID.randomUUID().toString());
+        root.put("From", "dana@crestline.example");
+        root.putObject("FromFull").put("Email", "dana@crestline.example").put("Name", "Dana Ruiz");
+        root.putArray("ToFull").addObject().put("Email", "dispatch@sierrarun.example");
+        root.put("OriginalRecipient", forwardingAddress);
+        root.put("Subject", subject);
+        root.put("TextBody", "Receiver is asking for an ETA.");
+        root.putArray("Headers").addObject().put("Name", "Message-ID").put("Value", messageId);
+        mockMvc.perform(post("/api/inbound/postmark").header("Authorization", WEBHOOK_AUTH)
+                        .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(root)))
                 .andExpect(status().isOk());
     }
 

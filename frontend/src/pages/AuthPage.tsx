@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 
-import { prefilledEmail, takeSessionEndedMessage, wantsSignIn } from "../auth/referral";
+import { getChosenIndustry, prefilledEmail, takeSessionEndedMessage, wantsSignIn } from "../auth/referral";
 import { friendlyError } from "../auth/friendlyError";
 import { MIN_PASSWORD_LENGTH, PASSWORD_HINT, passwordProblem } from "../auth/passwordRules";
 import { fetchGoogleSignInEnabled, supabase } from "../auth/supabase";
@@ -76,6 +76,8 @@ export function AuthPage({
         : "sign-up"
   );
   const [email, setEmail] = useState(prefilledEmail);
+  // Set by the website's trucking or property management page, else unknown
+  const [industry] = useState(getChosenIndustry);
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(() => oauthError() ?? takeSessionEndedMessage());
@@ -263,9 +265,11 @@ export function AuthPage({
     "sign-up": {
       title: "Create your account",
       // With trucking open at sign-up, the wording fits both kinds of business
-      description: TRUCKING_ENABLED
-        ? "Turn the emails in your inbox into organized work, with replies ready for you to approve. 14 days free, and you can cancel anytime before it ends."
-        : "Turn your property requests inbox into organized work, with replies ready for you to approve. 14 days free, and you can cancel anytime before it ends.",
+      description: !TRUCKING_ENABLED || industry === "PROPERTY_MANAGEMENT"
+        ? "Turn your property requests inbox into organized work, with replies ready for you to approve. 14 days free, and you can cancel anytime before it ends."
+        : industry === "TRUCKING"
+          ? "Turn your rate cons and broker emails into organized loads, with replies ready for you to approve. 14 days free, and you can cancel anytime before it ends."
+          : "Turn the emails in your inbox into organized work, with replies ready for you to approve. 14 days free, and you can cancel anytime before it ends.",
       submit: "Create account",
     },
     "sign-in": {
@@ -286,20 +290,38 @@ export function AuthPage({
   }[mode];
 
   const needsEmail = mode !== "reset-password";
+  // Trucking can only be picked when trucking sign-ups are open
+  const demoFor = TRUCKING_ENABLED ? industry : "PROPERTY_MANAGEMENT";
   const needsPassword = mode !== "forgot-password";
   const offersGoogle = googleEnabled && (mode === "sign-up" || mode === "sign-in");
 
   return (
     <div className="auth-shell" role="main">
-      {(mode === "sign-up" || mode === "sign-in") && (
-        <a className="auth-demo" href="/demo">
-          <span>
-            <strong>Just looking around?</strong> Try Clerova with sample data.
-            No sign-up.
-          </span>
-          <span className="auth-demo-button">Try the demo</span>
-        </a>
-      )}
+      {(mode === "sign-up" || mode === "sign-in") &&
+        (demoFor === null ? (
+          // Not known which kind of business: offer both demos
+          <div className="auth-demo auth-demo-two">
+            <span>
+              <strong>Just looking around?</strong> Try Clerova with sample data. No sign-up. Pick a demo:
+            </span>
+            <span className="auth-demo-choices">
+              <a className="auth-demo-button" href="/demo">
+                Property management
+              </a>
+              <a className="auth-demo-button" href="/demo/trucking">
+                Trucking
+              </a>
+            </span>
+          </div>
+        ) : (
+          <a className="auth-demo" href={demoFor === "TRUCKING" ? "/demo/trucking" : "/demo"}>
+            <span>
+              <strong>Just looking around?</strong> Try Clerova with sample data.
+              No sign-up.
+            </span>
+            <span className="auth-demo-button">Try the demo</span>
+          </a>
+        ))}
 
       <div className="auth-card">
         <div className="auth-brand">

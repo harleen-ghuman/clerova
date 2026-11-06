@@ -8,7 +8,7 @@ import {
   type PaidPlan,
 } from "../api/billing";
 import type { Organization } from "../types/Account";
-import { getChosenPlan } from "../auth/referral";
+import { forgetChosenPlan, getChosenPlan } from "../auth/referral";
 import { PLANS, planPrice } from "../utils/plans";
 
 interface PlanPageProps {
@@ -62,6 +62,7 @@ export function PlanPage({ organization, notice, onSignOut }: PlanPageProps) {
       setError(null);
 
       const { url } = await startCheckout(plan, interval);
+      forgetChosenPlan();
       window.location.assign(url);
     } catch (err) {
       // The plan is already active (another tab, or Stripe just confirmed):

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { fileEmail, getInvoices, getLoads } from "../api/loads";
 import { getEmailSettings } from "../api/email";
 import { getMe } from "../api/account";
+import { keepPlan, openBillingPortal } from "../api/billing";
 import { errorMessage } from "../api/client";
 import { REFRESH_EVENT } from "../demo/mode";
 import { Sidebar, type AppView, type SidebarItem } from "../components/Sidebar";
@@ -37,10 +38,7 @@ interface NavState {
 
 const VIEWS: AppView[] = ["today", "loads", "invoices", "brokers", "inbox", "email-setup", "settings"];
 
-/**
- * Trucking plans (priced per truck) come later, so the sidebar counts the
- * loads added this month instead of the property management allowance.
- */
+/** Without billing, the sidebar counts the loads added this month. */
 function loadsThisMonthText(loads: LoadSummary[]): string {
   const now = new Date();
   const count = loads.filter((load) => {
@@ -83,6 +81,30 @@ export function TruckingApp({
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [invoicesError, setInvoicesError] = useState<string | null>(null);
   const [focusCarrier, setFocusCarrier] = useState(false);
+  const [billingError, setBillingError] = useState<string | null>(null);
+
+  /** Stripe's page for the card and past invoices. */
+  async function manageBilling() {
+    setBillingError(null);
+
+    try {
+      const { url } = await openBillingPortal();
+      window.location.assign(url);
+    } catch (err) {
+      setBillingError(errorMessage(err, "Couldn't open billing. Please try again."));
+    }
+  }
+  const [keeping, setKeeping] = useState(false);
+
+  /** Undoes a scheduled cancellation, in one click. */
+  function keep() {
+    setKeeping(true);
+    setBillingError(null);
+    keepPlan()
+      .then(() => loadOrganization())
+      .catch((err) => setBillingError(errorMessage(err, "Couldn't keep your plan. Please try again.")))
+      .finally(() => setKeeping(false));
+  }
   const [emailSettings, setEmailSettings] = useState<EmailSettings | null>(null);
   const [emailSettingsError, setEmailSettingsError] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -244,6 +266,34 @@ export function TruckingApp({
   ];
   const forwardingAddress = emailSettings?.intakeEnabled ? emailSettings.forwardingAddress : null;
 
+  // Plan and fair use, as in the property management app
+  const billing = organization.billingEnabled && organization.plan !== "INTERNAL";
+  const planEnds = organization.currentPeriodEnd
+    ? new Date(organization.currentPeriodEnd).toLocaleDateString([], { month: "long", day: "numeric" })
+    : null;
+  const billingNotice = !billing
+    ? null
+    : organization.subscriptionStatus === "past_due"
+      ? "Your last payment didn't go through. Update your card to keep Clerova running."
+      : organization.cancelAtPeriodEnd && planEnds
+        ? organization.subscriptionStatus === "trialing"
+          ? `Your plan is cancelled. Your trial ends on ${planEnds} and you won't be charged.`
+          : `Your plan is cancelled. You can keep using Clerova until ${planEnds}.`
+        : null;
+  const used = organization.aiRequestsUsedThisMonth;
+  const limit = organization.aiMonthlyLimit;
+  const usageLevel =
+    !billing || limit <= 0 ? null : used >= limit ? "limit" : used >= Math.ceil(limit * 0.8) ? "warning" : null;
+  const resetDate = new Date(
+    Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 1)
+  ).toLocaleDateString([], { month: "long", day: "numeric", timeZone: "UTC" });
+  const usageNotice =
+    usageLevel === "limit"
+      ? `You've added all ${limit.toLocaleString()} loads your plan covers this month. New rate cons are saved and will be read on ${resetDate}, or as soon as you add trucks.`
+      : usageLevel === "warning"
+        ? `You've added ${used} of the ${limit.toLocaleString()} loads your plan covers this month.`
+        : null;
+
   return (
     <div className="app-shell">
       <Sidebar
@@ -256,8 +306,12 @@ export function TruckingApp({
         onSignOut={onSignOut}
         onManageBilling={() => navigate("settings")}
         items={items}
-        usageText={loadsThisMonthText(loads)}
-        showBilling={false}
+        usageText={
+          billing && limit > 0
+            ? `${used} of ${limit.toLocaleString()} loads this month`
+            : loadsThisMonthText(loads)
+        }
+        showBilling={billing}
       />
 
       <nav className="mobile-nav" aria-label="Mobile navigation" ref={mobileNav}>
@@ -277,6 +331,37 @@ export function TruckingApp({
       </nav>
 
       <main className="app-main">
+        {/* On Settings, billing errors show next to the billing buttons instead */}
+        {(billingNotice || (billingError && activeView !== "settings")) && (
+          <div className="billing-banner" role="status">
+            <span>{billingError ?? billingNotice}</span>
+            {billingError && (
+              <button type="button" className="rq-button rq-button-small rq-button-quiet" onClick={() => setBillingError(null)}>
+                Dismiss
+              </button>
+            )}
+            {!billingError && organization.subscriptionStatus === "past_due" && (
+              <button type="button" className="rq-button rq-button-small" onClick={() => void manageBilling()}>
+                Update card
+              </button>
+            )}
+            {!billingError && organization.cancelAtPeriodEnd && (
+              <button type="button" className="rq-button rq-button-small" onClick={keep} disabled={keeping}>
+                {keeping ? "Keeping your plan..." : "Keep my plan"}
+              </button>
+            )}
+          </div>
+        )}
+
+        {usageNotice && activeView !== "settings" && (
+          <div className={`billing-banner ${usageLevel === "limit" ? "billing-banner-limit" : ""}`} role="status">
+            <span>{usageNotice}</span>
+            <button type="button" className="rq-button rq-button-small" onClick={() => navigate("settings")}>
+              Change trucks
+            </button>
+          </div>
+        )}
+
         {activeView === "today" && (
           <TodayView
             loads={loads}
@@ -365,9 +450,14 @@ export function TruckingApp({
                 }
                 onAccountUpdated(me);
               }}
-              onManageBilling={() => undefined}
+              onManageBilling={() => void manageBilling()}
+              billingError={billingError}
               upgradeQuestion=""
-              onBillingChanged={loadOrganization}
+              onBillingChanged={() => {
+                // A change went through, so an earlier billing error is stale
+                setBillingError(null);
+                return loadOrganization();
+              }}
               onUpgrade={() => undefined}
               upgrading={false}
               onSignOut={onSignOut}

@@ -10,6 +10,7 @@ import { AuthPage } from "./pages/AuthPage";
 import { rememberAccount } from "./auth/referral";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { PlanPage } from "./pages/PlanPage";
+import { TruckingPlanPage } from "./trucking/TruckingPlanPage";
 import { TruckingApp } from "./trucking/TruckingApp";
 import type { Me } from "./types/Account";
 
@@ -140,6 +141,13 @@ export function Root() {
     };
   }, [waitingForPlan]);
 
+  // Signed out: forget the last screen, so whoever signs in next starts on Today
+  useEffect(() => {
+    if (session === null && (window.history.state as { clerova?: boolean } | null)?.clerova) {
+      window.history.replaceState(null, "");
+    }
+  }, [session]);
+
   async function handleSignOut() {
     await supabase.auth.signOut();
     setMe(null);
@@ -216,8 +224,10 @@ export function Root() {
   }
 
   if (currentMe.organization.subscriptionRequired) {
+    const ChosenPlanPage = currentMe.organization.industry === "TRUCKING" ? TruckingPlanPage : PlanPage;
+
     return (
-      <PlanPage
+      <ChosenPlanPage
         organization={currentMe.organization}
         notice={
           checkoutReturn.result === "cancelled"
