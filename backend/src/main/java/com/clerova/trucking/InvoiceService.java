@@ -992,7 +992,7 @@ public class InvoiceService {
         return String.join(", ", words.subList(0, words.size() - 1)) + " and " + words.getLast();
     }
 
-    private static String fileSafe(String value) {
+    static String fileSafe(String value) {
         return value.replaceAll("[^A-Za-z0-9 ._-]", "-");
     }
 
