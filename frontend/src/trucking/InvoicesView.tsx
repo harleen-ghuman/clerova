@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { errorMessage } from "../api/client";
+import { createInvoice } from "../api/loads";
 import type { Invoice, LoadSummary } from "../types/Load";
 import { downloadFile, dueText, isOverdue } from "./billing";
 import { lane, money } from "./format";
@@ -11,6 +12,8 @@ interface InvoicesViewProps {
   error: string | null;
   onOpenLoad: (id: string) => void;
   onRetry?: () => void;
+  /** Refreshes loads and invoices after one is made here. */
+  onChanged?: () => void;
 }
 
 type Filter = "todo" | "waiting" | "overdue" | "paid";
@@ -21,11 +24,13 @@ function thisMonth(): string {
 }
 
 /** Every invoice: what to send, what's owed, what's late, what's paid. */
-export function InvoicesView({ loads, invoices, loading, error, onOpenLoad, onRetry }: InvoicesViewProps) {
+export function InvoicesView({ loads, invoices, loading, error, onOpenLoad, onRetry, onChanged }: InvoicesViewProps) {
   const [filter, setFilter] = useState<Filter>("todo");
   const [month, setMonth] = useState(thisMonth);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [creating, setCreating] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<{ loadId: string; text: string } | null>(null);
 
   const invoiced = new Set(invoices.map((invoice) => invoice.loadId));
   const toInvoice = loads.filter((load) => load.status === "DELIVERED" && !invoiced.has(load.id));
@@ -41,6 +46,22 @@ export function InvoicesView({ loads, invoices, loading, error, onOpenLoad, onRe
     { key: "overdue", label: "Overdue", count: overdue.length },
     { key: "paid", label: "Paid", count: paid.length },
   ];
+
+  // Makes the invoice from the rate and approved extra pay, then opens it to check and send
+  async function create(loadId: string) {
+    setCreating(loadId);
+    setCreateError(null);
+
+    try {
+      await createInvoice(loadId);
+      onChanged?.();
+      onOpenLoad(loadId);
+    } catch (err) {
+      setCreateError({ loadId, text: errorMessage(err, "Couldn't make the invoice. Please try again.") });
+    } finally {
+      setCreating(null);
+    }
+  }
 
   async function exportMonth() {
     setExporting(true);
@@ -105,19 +126,34 @@ export function InvoicesView({ loads, invoices, loading, error, onOpenLoad, onRe
       {loading && invoices.length === 0 && loads.length === 0 ? (
         <p className="tk-none">Loading...</p>
       ) : (
-        <section className="tk-panel">
+        <section className="tk-panel tk-invoice-list">
           {filter === "todo" &&
             toInvoice.map((load) => (
-              <button key={load.id} type="button" className="tk-row" onClick={() => onOpenLoad(load.id)}>
-                <span className="tk-row-main">
-                  <span className="tk-lane">{lane(load.origin, load.destination)}</span>
-                  <span className="tk-sub" style={{ display: "block" }}>
-                    {load.loadNumber ? `#${load.loadNumber} · ` : ""}
-                    {load.brokerName ?? "Broker"} · {money(load.rateCents)}
+              <div key={load.id} className="tk-row tk-row-split">
+                <button type="button" className="tk-row-open" onClick={() => onOpenLoad(load.id)}>
+                  <span className="tk-row-main">
+                    <span className="tk-lane">{lane(load.origin, load.destination)}</span>
+                    <span className="tk-sub" style={{ display: "block" }}>
+                      {load.loadNumber ? `#${load.loadNumber} · ` : ""}
+                      {load.brokerName ?? "Broker"} · {money(load.rateCents)} · delivered, no invoice yet
+                    </span>
                   </span>
-                </span>
-                <span className="tk-pill tk-pill-note">Create invoice</span>
-              </button>
+                </button>
+                <button
+                  type="button"
+                  className="rq-button rq-button-small rq-button-primary"
+                  disabled={creating !== null}
+                  aria-label={`Create invoice for ${load.loadNumber ? `load ${load.loadNumber}` : lane(load.origin, load.destination)}`}
+                  onClick={() => void create(load.id)}
+                >
+                  {creating === load.id ? "Making it..." : "Create invoice"}
+                </button>
+                {createError?.loadId === load.id && (
+                  <p className="action-error tk-row-error" role="alert">
+                    {createError.text}
+                  </p>
+                )}
+              </div>
             ))}
 
           {listed.map((invoice) => {
@@ -166,7 +202,7 @@ export function InvoicesView({ loads, invoices, loading, error, onOpenLoad, onRe
 
       <section className="tk-panel" aria-label="Export">
         <h2>For your bookkeeper</h2>
-        <p className="tk-sub">A spreadsheet of the month's invoices: amounts, quick pay fees and payments.</p>
+        <p className="tk-sub">A spreadsheet of the month's sent invoices. Line haul, detention, lumper, TONU, layover and other pay each get a column, with quick pay fees and payments.</p>
         <div className="tk-actions">
           <label className="visually-hidden" htmlFor="export-month">
             Month

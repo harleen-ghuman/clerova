@@ -2122,6 +2122,15 @@ button.file-chip:focus-visible {
   cursor: pointer;
 }
 
+/* Check your email: one choice per line, lined up on the left */
+.auth-links-stack {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-faint, #e4e7ec);
+}
+
 .auth-links button:hover {
   text-decoration: underline;
 }

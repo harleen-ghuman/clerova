@@ -71,7 +71,7 @@ public class UsageNotifier {
                         "Clerova <notifications@" + emailProperties.getInboundDomain() + ">",
                         supportAddress,
                         owner.getEmail(),
-                        subject(event),
+                        subject(event, organization.getIndustry() == com.clerova.domain.Industry.TRUCKING),
                         body(organization, event),
                         null,
                         null
@@ -83,10 +83,11 @@ public class UsageNotifier {
         }
     }
 
-    static String subject(UsageThresholdReached event) {
+    static String subject(UsageThresholdReached event, boolean trucking) {
+        String unit = trucking ? "loads" : "requests";
         return event.limitReached()
-                ? "You've reached your Clerova requests for this month"
-                : "You've used 80% of your Clerova requests this month";
+                ? "You've reached your Clerova " + unit + " for this month"
+                : "You've used 80% of your Clerova " + unit + " this month";
     }
 
     String body(Organization organization, UsageThresholdReached event) {

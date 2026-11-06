@@ -4,7 +4,6 @@ import { ApiRequestError, errorMessage } from "../api/client";
 import { getBillingOffer, startCheckout, type BillingInterval } from "../api/billing";
 import type { Organization } from "../types/Account";
 import {
-  LOADS_PER_TRUCK,
   MAX_TRUCKS,
   truckingPlanSummary,
   truckingPrice,
@@ -155,8 +154,7 @@ export function TruckingPlanPage({ organization, notice, onSignOut }: TruckingPl
                 {founding && <s>${regular.amount.toLocaleString()}</s>}
               </p>
               <p className="plan-requests">
-                {truckingPlanSummary(price.plan, founding)}. Covers about{" "}
-                {(Math.max(count, 4) * LOADS_PER_TRUCK).toLocaleString()} loads a month.
+                {truckingPlanSummary(price.plan, founding)}.
               </p>
             </>
           ) : (

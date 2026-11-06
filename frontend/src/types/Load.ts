@@ -165,6 +165,15 @@ export interface LoadStop {
   arrivedAt: string | null;
   leftAt: string | null;
   detention: StopDetention | null;
+  /** Arrival and detention notices emailed about this stop, oldest first. */
+  emails?: SentEmail[];
+}
+
+/** An email sent from a load: to whom, about what, and when. */
+export interface SentEmail {
+  toEmail: string;
+  subject: string | null;
+  sentAt: string | null;
 }
 
 export type ChargeKind = "DETENTION" | "LUMPER" | "TONU" | "LAYOVER" | "OTHER";
@@ -179,6 +188,8 @@ export interface LoadCharge {
   status: ChargeStatus;
   stopId: string | null;
   claimedAt: string | null;
+  /** Where the claim was emailed from Clerova, if it was. */
+  claimEmail?: SentEmail | null;
 }
 
 export type InvoiceStatus = "DRAFT" | "SENT" | "PAID" | "VOID";

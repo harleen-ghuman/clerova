@@ -40,6 +40,14 @@ public class AccountController {
     }
 
     /** The company's standard answers that suggested replies can use. */
+    public record TimeZoneRequest(String timeZone) {
+    }
+
+    @PutMapping("/me/time-zone")
+    public MeResponse setTimeZone(@RequestBody TimeZoneRequest request) {
+        return accountService.setTimeZone(request.timeZone());
+    }
+
     @GetMapping("/company-info")
     public CompanyInfo getCompanyInfo() {
         return companyInfoService.get(currentUserService.requireOrganizationId());

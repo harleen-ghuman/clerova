@@ -239,7 +239,8 @@ export function CarrierSection({ focus = false }: { focus?: boolean }) {
             <>
               <span className="auth-hint">
                 Invoices tell the broker to pay your factoring company, and the packet is ready to upload to its
-                website.
+                website. Copy the name and remit-to address exactly from your notice of assignment (the letter
+                your factor sent to brokers), then open one invoice with View invoice to check them.
               </span>
               <label>
                 Factoring company

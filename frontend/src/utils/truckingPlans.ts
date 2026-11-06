@@ -10,7 +10,7 @@ export const TRUCKING_PRICES = {
 /** From this many trucks, Fleet costs less than Starter (as on the server). */
 export const FLEET_FROM_TRUCKS = 9;
 export const MAX_TRUCKS = 500;
-export const LOADS_PER_TRUCK = 40;
+export const LOADS_PER_TRUCK = 60;
 
 export type TruckingPlan = "STARTER" | "FLEET";
 

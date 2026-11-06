@@ -63,16 +63,22 @@ function nextStep(load: LoadDetail): { text: string; to?: LoadStatus; label?: st
     case "DELIVERED":
       return {
         text: load.invoice
-          ? "Delivered. Finish the invoice below and send it."
-          : "Delivered. Add the signed BOL or POD under Documents, then create the invoice below.",
+          ? "Delivered. Finish the invoice and send it."
+          : "Delivered. Add the signed BOL or POD under Documents, then create the invoice.",
       };
     case "INVOICED":
-      return { text: "Invoiced. Mark it paid below when the money arrives." };
+      return { text: "Invoiced. Mark it paid on the invoice when the money arrives." };
     case "PAID":
       return { text: "Paid. This load is done." };
     case "CANCELLED":
       return { text: "This load was cancelled." };
   }
+}
+
+/** Emails newest first, like an inbox. */
+function newestFirst<T extends { at: string | null }>(entries: T[]): T[] {
+  const time = (entry: T) => (entry.at ? Date.parse(entry.at) : 0);
+  return [...entries].sort((a, b) => time(b) - time(a));
 }
 
 /** The load's document for a file on one of its emails, if it's listed under Documents. */
@@ -167,6 +173,10 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
   }
 
   const step = nextStep(load);
+  const showInvoice =
+    ["DELIVERED", "INVOICED", "PAID"].includes(load.status) ||
+    Boolean(load.invoice) ||
+    (load.status === "CANCELLED" && load.charges.some((charge) => charge.status === "APPROVED"));
   const origin = load.stops.find((stop) => stop.kind === "PICKUP")?.place ?? load.stops[0]?.place ?? null;
   const destination = [...load.stops].reverse().find((stop) => stop.kind === "DELIVERY")?.place ?? null;
   const noteChanged = note.trim() !== (load.statusNote ?? "");
@@ -289,87 +299,8 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
 
           <StopsPanel load={load} sendingEnabled={sendingEnabled} busy={busy} run={run} />
 
-          {["DELIVERED", "INVOICED", "PAID"].includes(load.status) ||
-          load.invoice ||
-          (load.status === "CANCELLED" && load.charges.some((charge) => charge.status === "APPROVED")) ? (
-            <InvoicePanel load={load} sendingEnabled={sendingEnabled} onChanged={reload} onOpenSettings={onOpenSettings} />
-          ) : null}
-
           <ChargesPanel load={load} sendingEnabled={sendingEnabled} busy={busy} run={run} />
 
-          {load.flags.length > 0 && (
-            <section className="tk-panel" aria-label="Rate con check">
-              <h2>Rate con check</h2>
-              {load.flags.map((flag) => (
-                <div key={flag.id} className={`tk-flag ${flag.resolvedAt ? "done" : ""}`}>
-                  <span className={`tk-pill tk-pill-${flag.resolvedAt ? "good" : flag.level === "FIX" ? "fix" : "note"}`}>
-                    {flag.resolvedAt ? "Done" : flag.level === "FIX" ? "Fix" : "Note"}
-                  </span>
-                  <div>
-                    <strong>{flag.title}</strong>
-                    {flag.detail && <p>{flag.detail}</p>}
-                  </div>
-                  {flag.sourceText && <blockquote>{flag.sourceText}</blockquote>}
-                  {!flag.resolvedAt && (
-                    <div className="tk-actions">
-                      <button
-                        type="button"
-                        className="rq-button rq-button-small"
-                        disabled={busy !== null}
-                        onClick={() => void run(flag.id, () => resolveFlag(loadId, flag.id), "Couldn't update this item.")}
-                      >
-                        {flag.level === "FIX" ? "It's sorted" : "Got it"}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </section>
-          )}
-
-          <DocumentsSection
-            load={load}
-            onChanged={() => void run("documents", () => getLoad(loadId), "Couldn't refresh this load.")}
-          />
-
-          <section className="tk-panel" aria-label="Emails">
-            <h2>Emails</h2>
-            <div className="tk-thread">
-              {load.conversation.length === 0 && <p className="tk-none">No emails on this load yet.</p>}
-              {load.conversation.map((entry) => (
-                <article key={entry.id} className={`tk-msg ${entry.incoming ? "" : "out"}`}>
-                  <div className="tk-msg-head">
-                    <span>{entry.incoming ? entry.from : `You → ${entry.to}`}</span>
-                    <span>{when(entry.at)}</span>
-                  </div>
-                  {entry.subject && <strong className="tk-msg-subject">{entry.subject}</strong>}
-                  {entry.body && <EmailBody text={entry.body.trim()} />}
-                  {/* Files already listed under Documents are named here, not shown twice */}
-                  {entry.files.some((file) => filedDocument(load, file)) && (
-                    <p className="tk-msg-filed">
-                      {entry.files
-                        .map((file) => filedDocument(load, file))
-                        .filter((document) => document !== undefined)
-                        .map((document) => `${kindLabel(document.kind)}: ${document.name}`)
-                        .join(", ")}{" "}
-                      · in Documents above
-                    </p>
-                  )}
-                  {entry.files.some((file) => !filedDocument(load, file)) && (
-                    <FileList
-                      files={entry.files.filter((file) => !filedDocument(load, file)).map((file) => ({
-                        id: file.id,
-                        fileName: file.name,
-                        contentType: file.contentType,
-                        sizeBytes: file.sizeBytes,
-                        available: file.stored,
-                      }))}
-                    />
-                  )}
-                </article>
-              ))}
-            </div>
-          </section>
         </div>
 
         <div className="tk-stack">
@@ -434,6 +365,36 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
             </dl>
           </section>
 
+          {load.flags.length > 0 && (
+            <section className="tk-panel" aria-label="Rate con check">
+              <h2>Rate con check</h2>
+              {load.flags.map((flag) => (
+                <div key={flag.id} className={`tk-flag ${flag.resolvedAt ? "done" : ""}`}>
+                  <span className={`tk-pill tk-pill-${flag.resolvedAt ? "good" : flag.level === "FIX" ? "fix" : "note"}`}>
+                    {flag.resolvedAt ? "Done" : flag.level === "FIX" ? "Fix" : "Note"}
+                  </span>
+                  <div>
+                    <strong>{flag.title}</strong>
+                    {flag.detail && <p>{flag.detail}</p>}
+                  </div>
+                  {flag.sourceText && <blockquote>{flag.sourceText}</blockquote>}
+                  {!flag.resolvedAt && (
+                    <div className="tk-actions">
+                      <button
+                        type="button"
+                        className="rq-button rq-button-small"
+                        disabled={busy !== null}
+                        onClick={() => void run(flag.id, () => resolveFlag(loadId, flag.id), "Couldn't update this item.")}
+                      >
+                        {flag.level === "FIX" ? "It's sorted" : "Got it"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </section>
+          )}
+
           {load.broker && (
             <section className="tk-panel" aria-label="Broker">
               <h2>Broker</h2>
@@ -469,6 +430,68 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
               </dl>
             </section>
           )}
+        </div>
+
+        {/* Once delivered, the invoice is the work: full width, first on a computer, after the next step on a phone */}
+        {showInvoice && (
+          <div className="tk-invoice-row">
+            <InvoicePanel load={load} sendingEnabled={sendingEnabled} onChanged={reload} onOpenSettings={onOpenSettings} />
+          </div>
+        )}
+
+        {/* Full width under both columns: files and emails need the room */}
+        <div className="tk-stack tk-wide">
+          <DocumentsSection
+            load={load}
+            onChanged={() => void run("documents", () => getLoad(loadId), "Couldn't refresh this load.")}
+          />
+
+          <section className="tk-panel" aria-label="Emails" id="load-emails">
+            <h2>Emails</h2>
+            <div className="tk-thread">
+              {load.conversation.length === 0 && <p className="tk-none">No emails on this load yet.</p>}
+              {newestFirst(load.conversation).map((entry) => (
+                <article key={entry.id} className={`tk-msg ${entry.incoming ? "" : "out"}`}>
+                  <div className="tk-msg-head">
+                    <span>
+                      {entry.incoming ? (
+                        entry.from
+                      ) : (
+                        <>
+                          <span className="tk-pill tk-pill-info">Sent</span> by you to {entry.to}
+                        </>
+                      )}
+                    </span>
+                    <span>{when(entry.at)}</span>
+                  </div>
+                  {entry.subject && <strong className="tk-msg-subject">{entry.subject}</strong>}
+                  {entry.body && <EmailBody text={entry.body.trim()} />}
+                  {/* Files already listed under Documents are named here, not shown twice */}
+                  {entry.files.some((file) => filedDocument(load, file)) && (
+                    <p className="tk-msg-filed">
+                      {entry.files
+                        .map((file) => filedDocument(load, file))
+                        .filter((document) => document !== undefined)
+                        .map((document) => `${kindLabel(document.kind)}: ${document.name}`)
+                        .join(", ")}{" "}
+                      · in Documents above
+                    </p>
+                  )}
+                  {entry.files.some((file) => !filedDocument(load, file)) && (
+                    <FileList
+                      files={entry.files.filter((file) => !filedDocument(load, file)).map((file) => ({
+                        id: file.id,
+                        fileName: file.name,
+                        contentType: file.contentType,
+                        sizeBytes: file.sizeBytes,
+                        available: file.stored,
+                      }))}
+                    />
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
         </div>
       </div>
     </div>

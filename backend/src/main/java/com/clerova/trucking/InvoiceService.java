@@ -51,7 +51,27 @@ public class InvoiceService {
     private static final Logger log = LoggerFactory.getLogger(InvoiceService.class);
 
     /** Dates on invoices; Clerova's carriers are in the US, and the first ones in California. */
-    static final ZoneId ZONE = ZoneId.of("America/Los_Angeles");
+    /** Used until a carrier's time zone is known (most early carriers are in California). */
+    static final ZoneId DEFAULT_ZONE = ZoneId.of("America/Los_Angeles");
+
+    /** The carrier's own time zone, for invoice dates, due dates and the month of the export. */
+    ZoneId zoneFor(UUID organizationId) {
+        return organizationRepository.findById(organizationId)
+                .map(organization -> zoneOf(organization.getTimeZone()))
+                .orElse(DEFAULT_ZONE);
+    }
+
+    static ZoneId zoneOf(String timeZone) {
+        if (timeZone == null || timeZone.isBlank()) {
+            return DEFAULT_ZONE;
+        }
+
+        try {
+            return ZoneId.of(timeZone);
+        } catch (RuntimeException e) {
+            return DEFAULT_ZONE;
+        }
+    }
 
     static final int MAX_LINES = 20;
     static final int MAX_MESSAGE = 5_000;
@@ -507,11 +527,17 @@ public class InvoiceService {
             throw invalid("Pick a month.");
         }
 
+        ZoneId zone = zoneFor(organizationId);
         Map<UUID, Load> loads = loadRepository.findForOrganization(organizationId).stream()
                 .collect(Collectors.toMap(Load::getId, Function.identity()));
-        StringBuilder csv = new StringBuilder(
-                "Invoice,Invoice date,Load,Broker,From,To,Sent to,Status,Lines,Total,Quick pay fee,Due date,Paid date,Amount paid\r\n");
+        StringBuilder csv = new StringBuilder();
+        List<String> header = new ArrayList<>(List.of("Invoice", "Invoice date", "Load", "Broker", "From", "To", "Sent to", "Status"));
+        header.addAll(List.of(EXPORT_COLUMNS));
+        header.addAll(List.of("Total", "Quick pay fee", "Due date", "Paid date", "Amount paid", "Line details"));
+        row(csv, header.toArray(String[]::new));
+        long[] columnTotals = new long[EXPORT_COLUMNS.length];
         long total = 0;
+        long fees = 0;
         long paid = 0;
 
         List<Invoice> invoices = invoiceRepository.findByOrganizationIdOrderByCreatedAtDesc(organizationId).reversed();
@@ -522,7 +548,7 @@ public class InvoiceService {
                 continue;
             }
 
-            LocalDate date = LocalDate.ofInstant(invoice.getSentAt(), ZONE);
+            LocalDate date = LocalDate.ofInstant(invoice.getSentAt(), zone);
 
             if (!YearMonth.from(date).equals(period)) {
                 continue;
@@ -530,11 +556,20 @@ public class InvoiceService {
 
             Load load = loads.get(invoice.getLoadId());
             List<LoadStop> stops = load == null ? List.of() : load.getStops();
+            long[] columns = new long[EXPORT_COLUMNS.length];
+            boolean[] used = new boolean[EXPORT_COLUMNS.length];
+
+            for (InvoiceLine line : invoice.getLines()) {
+                int column = exportColumn(line.getDescription());
+                columns[column] += line.getAmountCents();
+                used[column] = true;
+            }
+
             String lines = invoice.getLines().stream()
                     .map(line -> line.getDescription() + " " + Money.dollars(line.getAmountCents()))
                     .collect(Collectors.joining("; "));
 
-            row(csv,
+            List<String> cells = new ArrayList<>(List.of(
                     invoice.getNumber(),
                     date.toString(),
                     load == null ? "" : orEmpty(load.getLoadNumber()),
@@ -542,28 +577,74 @@ public class InvoiceService {
                     stops.isEmpty() ? "" : town(stops.getFirst().getPlace()),
                     stops.size() < 2 ? "" : town(stops.getLast().getPlace()),
                     invoice.getSendTo() == Invoice.SendTo.FACTOR ? "Factor" : "Broker",
-                    invoice.getStatus() == InvoiceStatus.PAID ? "Paid" : "Waiting on payment",
-                    lines,
+                    invoice.getStatus() == InvoiceStatus.PAID ? "Paid" : "Waiting on payment"));
+
+            for (int i = 0; i < columns.length; i++) {
+                cells.add(used[i] ? amount(columns[i]) : "");
+                columnTotals[i] += columns[i];
+            }
+
+            cells.addAll(List.of(
                     amount(invoice.getTotalCents()),
                     invoice.getQuickPayFeeCents() == null ? "" : amount(invoice.getQuickPayFeeCents()),
                     invoice.getDueDate() == null ? "" : invoice.getDueDate().toString(),
-                    invoice.getPaidAt() == null ? "" : LocalDate.ofInstant(invoice.getPaidAt(), ZONE).toString(),
-                    invoice.getPaidCents() == null ? "" : amount(invoice.getPaidCents()));
+                    invoice.getPaidAt() == null ? "" : LocalDate.ofInstant(invoice.getPaidAt(), zone).toString(),
+                    invoice.getPaidCents() == null ? "" : amount(invoice.getPaidCents()),
+                    lines));
+            row(csv, cells.toArray(String[]::new));
             total += invoice.getTotalCents();
+            fees += invoice.getQuickPayFeeCents() == null ? 0 : invoice.getQuickPayFeeCents();
             paid += invoice.getPaidCents() == null ? 0 : invoice.getPaidCents();
         }
 
-        row(csv, "Total", "", "", "", "", "", "", "", "", amount(total), "", "", "", amount(paid));
+        List<String> totals = new ArrayList<>(List.of("Total", "", "", "", "", "", "", ""));
+
+        for (long column : columnTotals) {
+            totals.add(amount(column));
+        }
+
+        totals.addAll(List.of(amount(total), amount(fees), "", "", amount(paid), ""));
+        row(csv, totals.toArray(String[]::new));
         return new FileDownload("Clerova invoices " + period + ".csv",
                 ("﻿" + csv).getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     // --------------------------------------------------------------- helpers
 
+    /** The spreadsheet's money columns, so a bookkeeper can total each kind of pay. */
+    static final String[] EXPORT_COLUMNS = {"Line haul", "Detention", "Lumper", "TONU", "Layover", "Other"};
+
+    /** Which money column an invoice line goes in, from its description (lines can be edited by hand). */
+    static int exportColumn(String description) {
+        String text = description == null ? "" : description.toLowerCase(Locale.ROOT);
+
+        if (text.contains("line haul") || text.contains("linehaul") || text.startsWith("freight") || text.startsWith("rate")) {
+            return 0;
+        }
+
+        if (text.contains("detention")) {
+            return 1;
+        }
+
+        if (text.contains("lumper")) {
+            return 2;
+        }
+
+        if (text.contains("tonu") || text.contains("truck ordered")) {
+            return 3;
+        }
+
+        if (text.contains("layover")) {
+            return 4;
+        }
+
+        return 5;
+    }
+
     private void markSent(Invoice invoice, Load load, Invoice.SentVia via, String email) {
         if (invoice.getStatus() == InvoiceStatus.DRAFT) {
             invoice.setSentAt(Instant.now());
-            invoice.setDueDate(dueDate(invoice, load, LocalDate.now(ZONE)));
+            invoice.setDueDate(dueDate(invoice, load, LocalDate.now(zoneFor(invoice.getOrganizationId()))));
         }
 
         invoice.setStatus(InvoiceStatus.SENT);
@@ -706,11 +787,12 @@ public class InvoiceService {
         CarrierProfile carrier = carrierRepository.findById(invoice.getOrganizationId())
                 .orElseGet(() -> CarrierService.blank(invoice.getOrganizationId()));
         List<String[]> stops = new ArrayList<>();
+        ZoneId zone = zoneFor(invoice.getOrganizationId());
 
         for (LoadStop stop : load.getStops()) {
             String when = stop.getLeftAt() != null
                     ? (stop.getKind() == StopKind.PICKUP ? "Picked up " : "Delivered ") + InvoicePdf.safe(java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)
-                            .format(LocalDate.ofInstant(stop.getLeftAt(), ZONE)))
+                            .format(LocalDate.ofInstant(stop.getLeftAt(), zone)))
                     : stop.getAppointment();
             stops.add(new String[] {
                     stop.getKind() == StopKind.PICKUP ? "Pickup" : "Delivery",
@@ -718,7 +800,7 @@ public class InvoiceService {
             });
         }
 
-        LocalDate date = invoice.getSentAt() != null ? LocalDate.ofInstant(invoice.getSentAt(), ZONE) : LocalDate.now(ZONE);
+        LocalDate date = invoice.getSentAt() != null ? LocalDate.ofInstant(invoice.getSentAt(), zone) : LocalDate.now(zone);
         LocalDate due = invoice.getDueDate() != null ? invoice.getDueDate() : dueDate(invoice, load, date);
         String references = load.getReferenceNumbers() == null ? null
                 : java.util.Arrays.stream(load.getReferenceNumbers().split("\\s+"))

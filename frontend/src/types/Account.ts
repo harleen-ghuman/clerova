@@ -19,6 +19,8 @@ export interface Organization {
   subscriptionRequired: boolean;
   /** Trucks on a trucking plan (priced by truck); null otherwise. */
   trucks?: number | null;
+  /** IANA time zone for invoice dates, like America/Chicago; null until set. */
+  timeZone?: string | null;
 }
 
 export interface Me {

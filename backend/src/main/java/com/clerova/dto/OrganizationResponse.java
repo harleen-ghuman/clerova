@@ -26,7 +26,9 @@ public record OrganizationResponse(
         /** True when a plan must be chosen before using Clerova. */
         boolean subscriptionRequired,
         /** Trucks on a trucking plan; null otherwise. */
-        Integer trucks
+        Integer trucks,
+        /** IANA time zone used for invoice dates; null until set (Pacific then). */
+        String timeZone
 ) {
 
     public static OrganizationResponse from(
@@ -55,7 +57,8 @@ public record OrganizationResponse(
                 organization.isFoundingCustomer(),
                 billingEnabled,
                 subscriptionRequired,
-                organization.getTrucks()
+                organization.getTrucks(),
+                organization.getTimeZone()
         );
     }
 }

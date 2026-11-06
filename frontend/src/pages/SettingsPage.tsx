@@ -18,6 +18,7 @@ import { supabase } from "../auth/supabase";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { isDemo } from "../demo/mode";
 import { CarrierSection } from "../trucking/CarrierSection";
+import { TimeZoneSection } from "../trucking/TimeZoneSection";
 import type { Me, Organization } from "../types/Account";
 import { PLANS, planName, planPrice } from "../utils/plans";
 import { MAX_TRUCKS, truckingPrice } from "../utils/truckingPlans";
@@ -39,6 +40,8 @@ interface SettingsPageProps {
   /** Start at Company info with the cursor in the first answer. */
   focusCompanyInfo?: boolean;
   onCompanyInfoFocused?: () => void;
+  /** Goes up each time the sidebar's Plan and billing is clicked: scrolls there. */
+  focusBilling?: number;
   onSignOut: () => void;
   /** Off in a trucking workspace: company info and plans are for property management. */
   propertyManagement?: boolean;
@@ -193,10 +196,20 @@ export function SettingsPage({
   upgradeQuestion,
   focusCompanyInfo = false,
   onCompanyInfoFocused,
+  focusBilling = 0,
   onSignOut,
   propertyManagement = true,
 }: SettingsPageProps) {
   const hasBilling = organization.billingEnabled && Boolean(organization.subscriptionStatus);
+
+  // The sidebar's Plan and billing opens Settings at that section
+  useEffect(() => {
+    if (focusBilling > 0) {
+      const heading = document.getElementById("plan-and-billing-title");
+      heading?.scrollIntoView({ block: "start" });
+      heading?.focus({ preventScroll: true });
+    }
+  }, [focusBilling]);
 
   return (
     <div className="settings">
@@ -222,7 +235,10 @@ export function SettingsPage({
       {propertyManagement ? (
         <CompanyInfoSection focus={focusCompanyInfo} onFocused={onCompanyInfoFocused} />
       ) : (
-        <CarrierSection focus={focusCompanyInfo} />
+        <>
+          <CarrierSection focus={focusCompanyInfo} />
+          {!isDemo() && <TimeZoneSection organization={organization} onSaved={onSaved} />}
+        </>
       )}
       {isDemo() ? (
         <section className="settings-section">
@@ -620,8 +636,10 @@ function BillingSection({
   }
 
   return (
-    <section className="settings-section" aria-label="Plan and billing">
-      <h2>Plan and billing</h2>
+    <section className="settings-section" id="plan-and-billing" aria-label="Plan and billing">
+      <h2 id="plan-and-billing-title" tabIndex={-1}>
+        Plan and billing
+      </h2>
       <p>{summary}</p>
 
       {confirmingUpgrade ? (

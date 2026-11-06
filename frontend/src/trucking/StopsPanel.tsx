@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { sendLoadMessage, setStopTimes } from "../api/loads";
 import type { LoadDetail, LoadStop } from "../types/Load";
 import { MessageComposer, type MessageDraft } from "./MessageComposer";
-import { clock, duration, emailTime, fromLocalInput, money, placeName, toLocalInput } from "./format";
+import { clock, duration, emailTime, fromLocalInput, money, placeName, toLocalInput, when } from "./format";
 
 interface StopsPanelProps {
   load: LoadDetail;
@@ -50,6 +50,19 @@ function detentionStarted(load: LoadDetail, stop: LoadStop): MessageDraft {
   };
 }
 
+/** "Left 12:26 AM", with the date when the truck left on another day than it arrived. */
+function leftText(arrivedAt: string, leftAt: string): string {
+  const sameDay = new Date(arrivedAt).toDateString() === new Date(leftAt).toDateString();
+  return sameDay
+    ? new Date(leftAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : new Date(leftAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+/** Scrolls to the load's emails, where sent messages and the broker's replies are. */
+function showEmails() {
+  document.getElementById("load-emails")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 function StopTimesForm({ stop, busy, onSave, onCancel }: {
   stop: LoadStop;
   busy: boolean;
@@ -62,11 +75,15 @@ function StopTimesForm({ stop, busy, onSave, onCancel }: {
   return (
     <form
       className="tk-times-form"
+      aria-label={`${stop.kind === "PICKUP" ? "Pickup" : "Delivery"} times`}
       onSubmit={(event) => {
         event.preventDefault();
         onSave(fromLocalInput(arrived), fromLocalInput(left));
       }}
     >
+      <strong className="tk-times-title">
+        {stop.kind === "PICKUP" ? "Pickup" : "Delivery"} times at {placeName(stop.place)}
+      </strong>
       <label>
         Arrived
         <input type="datetime-local" value={arrived} onChange={(event) => setArrived(event.target.value)} disabled={busy} />
@@ -92,6 +109,7 @@ export function StopsPanel({ load, sendingEnabled, busy, run }: StopsPanelProps)
   const [now, setNow] = useState(() => Date.now());
   const [editing, setEditing] = useState<string | null>(null);
   const [composing, setComposing] = useState<{ stopId: string; draft: MessageDraft } | null>(null);
+  const [sentNote, setSentNote] = useState<{ stopId: string; to: string } | null>(null);
   const locked = LOCKED.includes(load.status);
   const waiting = load.stops.some((stop) => stop.arrivedAt && !stop.leftAt);
 
@@ -156,7 +174,7 @@ export function StopsPanel({ load, sendingEnabled, busy, run }: StopsPanelProps)
                   {stop.arrivedAt && (
                     <span className="tk-stop-log">
                       Arrived {clock(stop.arrivedAt)}
-                      {stop.leftAt && ` · Left ${clock(stop.leftAt)}`} · {duration(onSite)} on site
+                      {stop.leftAt && ` · Left ${leftText(stop.arrivedAt, stop.leftAt)}`} · {duration(onSite)} on site
                     </span>
                   )}
 
@@ -179,6 +197,27 @@ export function StopsPanel({ load, sendingEnabled, busy, run }: StopsPanelProps)
                     <span className="tk-stop-log">
                       The rate con has no detention rate. Add the amount under Extra pay.
                     </span>
+                  )}
+
+                  {(stop.emails ?? []).length > 0 && (
+                    <ul className="tk-stop-sent" aria-label="Emails sent about this stop">
+                      {(stop.emails ?? []).map((email, emailIndex) => (
+                        <li key={emailIndex}>
+                          Emailed {email.toEmail}
+                          {email.sentAt ? ` · ${when(email.sentAt)}` : ""}
+                          {email.subject ? `: ${email.subject}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {sentNote?.stopId === stop.id && (
+                    <p className="request-success tk-sent-note" role="status">
+                      Sent to {sentNote.to}. The broker's reply will show under Emails on this load.{" "}
+                      <button type="button" className="tk-link" onClick={showEmails}>
+                        See Emails
+                      </button>
+                    </p>
                   )}
 
                   {!locked && (
@@ -218,7 +257,7 @@ export function StopsPanel({ load, sendingEnabled, busy, run }: StopsPanelProps)
                         </button>
                       )}
                       <button type="button" className="tk-link tk-link-small" onClick={() => setEditing(stop.id)}>
-                        {stop.arrivedAt ? "Edit times" : "Enter times"}
+                        {stop.arrivedAt ? "Edit" : "Enter"} {stop.kind === "PICKUP" ? "pickup" : "delivery"} times
                       </button>
                     </div>
                   )}
@@ -231,9 +270,16 @@ export function StopsPanel({ load, sendingEnabled, busy, run }: StopsPanelProps)
                   sendingEnabled={sendingEnabled}
                   busy={busy === `message-${stop.id}`}
                   onSend={(message) =>
-                    void run(`message-${stop.id}`, () => sendLoadMessage(load.id, message), "Couldn't send the email.").then(
-                      (sent) => sent && setComposing(null)
-                    )
+                    void run(
+                      `message-${stop.id}`,
+                      () => sendLoadMessage(load.id, { ...message, stopId: stop.id }),
+                      "Couldn't send the email."
+                    ).then((sent) => {
+                      if (sent) {
+                        setComposing(null);
+                        setSentNote({ stopId: stop.id, to: message.to });
+                      }
+                    })
                   }
                   onCancel={() => setComposing(null)}
                 />

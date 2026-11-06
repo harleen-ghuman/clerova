@@ -66,6 +66,8 @@ interface DemoLoad {
   flags: LoadFlag[];
   statusNote: string | null;
   replies: LoadReply[];
+  /** Which stop or charge each sent email was about, by reply id (as load_replies.stop_id / charge_id). */
+  links?: Record<string, { stopId?: string; chargeId?: string }>;
   conversation: ConversationEntry[];
   documents: LoadDocument[];
   charges: LoadCharge[];
@@ -623,7 +625,7 @@ function detail(load: DemoLoad): LoadDetail {
     detentionMaxCents: load.detentionMaxCents,
     quickPayPercent: load.quickPayPercent,
     invoiceEmail: load.invoiceEmail,
-    stops: load.stops,
+    stops: load.stops.map((stop) => ({ ...stop, emails: linkedEmails(load, "stopId", stop.id) })),
     flags: load.flags,
     statusNote: load.statusNote,
     draft: load.replies.find((reply) => reply.status === "DRAFT") ?? null,
@@ -631,7 +633,7 @@ function detail(load: DemoLoad): LoadDetail {
       .map((entry) => ({ ...entry, files: entry.files.map((file) => ({ ...file, id: sameDocument(load, file.name)?.id ?? file.id })) }))
       .sort((a, b) => (a.at ?? "").localeCompare(b.at ?? "")),
     documents: load.documents,
-    charges: load.charges,
+    charges: load.charges.map((charge) => ({ ...charge, claimEmail: linkedEmails(load, "chargeId", charge.id).at(-1) ?? null })),
     invoice: invoice ? invoiceInfo(invoice, true) : null,
     createdAt: load.createdAt,
     updatedAt: load.updatedAt,
@@ -651,12 +653,26 @@ function signOff(text: string): string {
   return `${trimmed}${last.trim().endsWith(",") ? "\n" : "\n\n"}${name}`;
 }
 
-function recordSent(load: DemoLoad, to: string, subject: string, body: string, kind: LoadReply["kind"]) {
+function recordSent(
+  load: DemoLoad, to: string, subject: string, body: string, kind: LoadReply["kind"],
+  link?: { stopId?: string; chargeId?: string }
+) {
+  const replyId = id("reply");
   load.replies.push({
-    id: id("reply"), toEmail: to, subject, kind, summary: subject, body: signOff(body), status: "SENT",
+    id: replyId, toEmail: to, subject, kind, summary: subject, body: signOff(body), status: "SENT",
     createdAt: now(), sentAt: now(),
   });
+  if (link) {
+    load.links = { ...(load.links ?? {}), [replyId]: link };
+  }
   touch(load);
+}
+
+/** The sent emails linked to a stop or a charge, like the server's detail. */
+function linkedEmails(load: DemoLoad, key: "stopId" | "chargeId", value: string) {
+  return load.replies
+    .filter((reply) => reply.status === "SENT" && load.links?.[reply.id]?.[key] === value)
+    .map((reply) => ({ toEmail: reply.toEmail, subject: reply.subject, sentAt: reply.sentAt }));
 }
 
 function markSent(invoice: DemoInvoice, load: DemoLoad, via: "EMAIL" | "PORTAL", email: string | null) {
@@ -776,16 +792,37 @@ export async function demoTruckingFile(path: string): Promise<Blob> {
   }
 
   if ((match = path.match(/^\/api\/invoices\/export\?month=(\d{4}-\d{2})$/))) {
+    // Same columns as the server: each kind of pay gets its own column
+    const kinds = ["Line haul", "Detention", "Lumper", "TONU", "Layover", "Other"];
+    const column = (description: string) => {
+      const text = description.toLowerCase();
+      if (text.includes("line haul") || text.includes("linehaul") || text.startsWith("freight") || text.startsWith("rate")) return 0;
+      if (text.includes("detention")) return 1;
+      if (text.includes("lumper")) return 2;
+      if (text.includes("tonu") || text.includes("truck ordered")) return 3;
+      if (text.includes("layover")) return 4;
+      return 5;
+    };
+    const dollars = (cents: number) => (cents / 100).toFixed(2);
+    const cell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
     const rows = state.invoices
       .filter((invoice) => invoice.status === "SENT" || invoice.status === "PAID")
       .map((invoice) => {
         const load = findLoad(invoice.loadId);
+        const amounts: (number | null)[] = kinds.map(() => null);
+        invoice.lines.forEach((line) => {
+          const index = column(line.description);
+          amounts[index] = (amounts[index] ?? 0) + line.amountCents;
+        });
         return [invoice.number, (invoice.sentAt ?? "").slice(0, 10), load.loadNumber, findBroker(load).name,
-          invoice.status === "PAID" ? "Paid" : "Waiting on payment", (invoice.totalCents / 100).toFixed(2),
-          invoice.paidCents === null ? "" : (invoice.paidCents / 100).toFixed(2)]
-          .map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",");
+          invoice.status === "PAID" ? "Paid" : "Waiting on payment",
+          ...amounts.map((cents) => (cents === null ? "" : dollars(cents))), dollars(invoice.totalCents),
+          invoice.quickPayFeeCents === null ? "" : dollars(invoice.quickPayFeeCents),
+          invoice.paidCents === null ? "" : dollars(invoice.paidCents)]
+          .map(cell).join(",");
       });
-    return new Blob([`\uFEFFInvoice,Invoice date,Load,Broker,Status,Total,Amount paid\r\n${rows.join("\r\n")}\r\n`], { type: "text/csv" });
+    const header = ["Invoice", "Invoice date", "Load", "Broker", "Status", ...kinds, "Total", "Quick pay fee", "Amount paid"].join(",");
+    return new Blob([`\uFEFF${header}\r\n${rows.join("\r\n")}\r\n`], { type: "text/csv" });
   }
 
   // A document on a load or an email attachment
@@ -1014,8 +1051,13 @@ function handle(route: string, body: Record<string, unknown>, form: FormData | n
     const to = text(body.to) || findBroker(load).email || "";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) invalid("Enter the broker's email address.");
     if (!text(body.body)) conflict("The message is empty. Add a message before sending.");
-    recordSent(load, to, text(body.subject) || `Load ${load.loadNumber}`, text(body.body), "DETENTION");
     const charge = load.charges.find((candidate) => candidate.id === body.chargeId);
+    const stop = load.stops.find((candidate) => candidate.id === body.stopId);
+    if (body.stopId && !stop) throw new ApiRequestError("Stop not found", 404);
+    recordSent(load, to, text(body.subject) || `Load ${load.loadNumber}`, text(body.body), "DETENTION", {
+      stopId: stop?.id,
+      chargeId: charge?.id,
+    });
     if (charge && charge.status === "TO_CLAIM") {
       charge.status = "CLAIMED";
       charge.claimedAt = now();

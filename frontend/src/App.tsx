@@ -87,6 +87,7 @@ function App({
   const [remindFor, setRemindFor] = useState<string | null>(null);
   // Opened from the get-started step: Settings starts at Company info
   const [focusCompanyInfo, setFocusCompanyInfo] = useState(false);
+  const [focusBilling, setFocusBilling] = useState(0);
 
   const [openRequests, setOpenRequests] = useState<WorkItem[]>([]);
   const [closedRequests, setClosedRequests] = useState<WorkItem[]>([]);
@@ -438,7 +439,10 @@ function App({
         userEmail={userEmail}
         onNavigate={navigate}
         onSignOut={onSignOut}
-        onManageBilling={() => navigate("settings")}
+        onManageBilling={() => {
+          navigate("settings");
+          setFocusBilling((count) => count + 1);
+        }}
       />
 
       <nav className="mobile-nav" aria-label="Mobile navigation" ref={mobileNav}>
@@ -640,6 +644,7 @@ function App({
               upgrading={upgrading}
               upgradeQuestion={upgradeQuestion}
               focusCompanyInfo={focusCompanyInfo}
+              focusBilling={focusBilling}
               onCompanyInfoFocused={() => setFocusCompanyInfo(false)}
               onSignOut={onSignOut}
             />
