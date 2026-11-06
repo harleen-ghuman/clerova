@@ -280,7 +280,11 @@ class TruckingIntakeTest {
                 .thenReturn(reply(true, "Hi Dana,\n\nThe driver is loaded and on the way."));
         when(emailSender.send(org.mockito.ArgumentMatchers.any())).thenReturn("pm-out-1");
 
-        // The dispatcher's update is what the AI may use
+        // The rate con check is done first, then the dispatcher's update is what the AI may use
+        for (var flag : json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user))).get("flags")) {
+            mockMvc.perform(post("/api/loads/{id}/flags/{flagId}/resolve", loadId, flag.get("id").asText()).with(user));
+        }
+
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/loads/{id}", loadId)
                         .with(user).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"IN_TRANSIT\",\"statusNote\":\"Loaded at 9:40, ETA Phoenix 6 AM\"}"))

@@ -159,6 +159,7 @@ class TruckingInvoiceTest {
     @Test
     void stopTimesMoveTheLoadAlongAndMakeTheDetentionCharge() throws Exception {
         String loadId = load("88213");
+        resolveChecks(loadId);
         JsonNode load = json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user)));
         String pickup = load.get("stops").get(0).get("id").asText();
         String delivery = load.get("stops").get(1).get("id").asText();
@@ -200,6 +201,7 @@ class TruckingInvoiceTest {
     @Test
     void aClaimEmailsTheBrokerAndMarksTheChargeClaimed() throws Exception {
         String loadId = load("88213");
+        pickedUp(loadId);
         JsonNode load = json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user)));
         String delivery = load.get("stops").get(1).get("id").asText();
         Instant arrived = Instant.now().minus(6, ChronoUnit.HOURS);
@@ -228,6 +230,7 @@ class TruckingInvoiceTest {
     @Test
     void emailsFromAStopOrAChargeShowWhereAndWhenTheyWent() throws Exception {
         String loadId = load("88213");
+        pickedUp(loadId);
         JsonNode load = json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user)));
         String delivery = load.get("stops").get(1).get("id").asText();
         Instant arrived = Instant.now().minus(6, ChronoUnit.HOURS);
@@ -658,6 +661,7 @@ class TruckingInvoiceTest {
     void detentionStaysPutOnceTheInvoiceIsSent() throws Exception {
         saveCarrier(false);
         String loadId = load("88213");
+        pickedUp(loadId);
         String delivery = json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user)))
                 .get("stops").get(1).get("id").asText();
         Instant arrived = Instant.now().minus(8, ChronoUnit.HOURS);
@@ -722,6 +726,63 @@ class TruckingInvoiceTest {
     }
 
     /** A load from a Crestline rate con: $1,057.50, 2h free then $50/hour up to $200, Net 30, 2.5% quick pay. */
+    /** Marks every rate con check done, as the dispatcher must before the truck rolls. */
+    private void resolveChecks(String loadId) throws Exception {
+        JsonNode load = json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user)));
+
+        for (JsonNode flag : load.get("flags")) {
+            if (flag.get("resolvedAt").isNull()) {
+                mockMvc.perform(post("/api/loads/{id}/flags/{flagId}/resolve", loadId, flag.get("id").asText()).with(user))
+                        .andExpect(status().isOk());
+            }
+        }
+    }
+
+    /** The checks done and the load marked picked up. */
+    private void pickedUp(String loadId) throws Exception {
+        resolveChecks(loadId);
+        mockMvc.perform(patch("/api/loads/{id}", loadId).with(user).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"IN_TRANSIT\"}")).andExpect(status().isOk());
+    }
+
+    @Test
+    void aLoadMovesOneStepAtATimeAndOnlyOnceTheRateConIsChecked() throws Exception {
+        String loadId = load("88213");
+        JsonNode load = json(mockMvc.perform(get("/api/loads/{id}", loadId).with(user)));
+        String delivery = load.get("stops").get(1).get("id").asText();
+        String pickup = load.get("stops").get(0).get("id").asText();
+        assertThat(load.get("flags").size()).isPositive();
+
+        // Not picked up yet: no delivery times, no skipping to Delivered, no leaving the pickup with checks open
+        times(loadId, delivery, Instant.now().minus(1, ChronoUnit.HOURS), null).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Mark the load picked up first, or log the pickup times."));
+        moveTo(loadId, "DELIVERED").andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("A load goes Booked, In transit, Delivered, one step at a time."));
+        moveTo(loadId, "IN_TRANSIT").andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith("Go through the rate con check first")));
+        Instant arrived = Instant.now().minus(3, ChronoUnit.HOURS);
+        times(loadId, pickup, arrived, arrived.plus(1, ChronoUnit.HOURS)).andExpect(status().isConflict());
+
+        // Checked: on its way, then back a step, forward again, delivered, back to in transit
+        resolveChecks(loadId);
+        moveTo(loadId, "IN_TRANSIT").andExpect(jsonPath("$.status").value("IN_TRANSIT"));
+        moveTo(loadId, "BOOKED").andExpect(jsonPath("$.status").value("BOOKED"));
+        moveTo(loadId, "IN_TRANSIT").andExpect(status().isOk());
+        moveTo(loadId, "DELIVERED").andExpect(jsonPath("$.status").value("DELIVERED"));
+        moveTo(loadId, "BOOKED").andExpect(status().isConflict());
+        moveTo(loadId, "IN_TRANSIT").andExpect(jsonPath("$.status").value("IN_TRANSIT"));
+
+        // Cancelled, then reopened
+        moveTo(loadId, "CANCELLED").andExpect(jsonPath("$.status").value("CANCELLED"));
+        moveTo(loadId, "BOOKED").andExpect(jsonPath("$.status").value("BOOKED"));
+        moveTo(loadId, "PAID").andExpect(status().isConflict());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions moveTo(String loadId, String to) throws Exception {
+        return mockMvc.perform(patch("/api/loads/{id}", loadId).with(user).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"" + to + "\"}"));
+    }
+
     private String load(String loadNumber) throws Exception {
         RateConResult read = new RateConResult();
         read.isRateConfirmation = true;

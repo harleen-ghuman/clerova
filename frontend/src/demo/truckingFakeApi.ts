@@ -119,6 +119,17 @@ const LATE_ARRIVAL = (() => {
   return Math.round((Date.now() - arrived.getTime()) / 60_000);
 })();
 
+/** Every rate con check done before the truck rolls, as on the server. */
+function requireChecksDone(load: { flags: LoadFlag[] }) {
+  const open = load.flags.filter((flag) => !flag.resolvedAt).length;
+  if (open > 0) {
+    throw new ApiRequestError(
+      `Go through the rate con check first: ${open === 1 ? "1 item is" : `${open} items are`} still open. Mark each one done, then the load can move to In transit.`,
+      409
+    );
+  }
+}
+
 function stop(kind: "PICKUP" | "DELIVERY", place: string, appointment: string, arrived?: number, left?: number): LoadStop {
   return {
     id: id("stop"),
@@ -981,7 +992,28 @@ function handle(route: string, body: Record<string, unknown>, form: FormData | n
   if ((match = route.match(/^GET \/api\/loads\/([^/]+)$/))) return detail(findLoad(match[1]));
   if ((match = route.match(/^PATCH \/api\/loads\/([^/]+)$/))) {
     const load = findLoad(match[1]);
-    if (body.status) load.status = body.status as LoadStatus;
+    const to = body.status as LoadStatus | undefined;
+    if (to && to !== load.status) {
+      // Same steps as the server: one at a time, rate con checked before the truck rolls
+      const steps: Record<LoadStatus, LoadStatus[]> = {
+        BOOKED: ["IN_TRANSIT", "CANCELLED"],
+        IN_TRANSIT: ["BOOKED", "DELIVERED", "CANCELLED"],
+        DELIVERED: ["IN_TRANSIT"],
+        CANCELLED: ["BOOKED"],
+        INVOICED: [],
+        PAID: [],
+      };
+      if (!steps[load.status].includes(to)) {
+        conflict(["INVOICED", "PAID"].includes(load.status)
+          ? "This load is invoiced. Void the invoice first to change it."
+          : "A load goes Booked, In transit, Delivered, one step at a time.");
+      }
+      if (load.status === "BOOKED" && to === "IN_TRANSIT") requireChecksDone(load);
+      if (load.status === "CANCELLED" && state.invoices.some((invoice) => invoice.loadId === load.id && invoice.status !== "VOID")) {
+        conflict("This load has an invoice. Void it first to reopen the load.");
+      }
+      load.status = to;
+    }
     if (typeof body.statusNote === "string") load.statusNote = text(body.statusNote) || null;
     touch(load);
     return detail(load);
@@ -1018,6 +1050,8 @@ function handle(route: string, body: Record<string, unknown>, form: FormData | n
     if (left && !arrived) invalid("Log when the truck arrived first.");
     if ((arrived && Date.parse(arrived) > latest) || (left && Date.parse(left) > latest)) invalid("That time is in the future.");
     if (arrived && left && Date.parse(left) < Date.parse(arrived)) invalid("The truck can't leave before it arrived. Check the times.");
+    if (arrived && item !== load.stops[0] && load.status === "BOOKED") conflict("Mark the load picked up first, or log the pickup times.");
+    if (left && load.status === "BOOKED") requireChecksDone(load);
     item.arrivedAt = arrived;
     item.leftAt = left;
     if (left && item.kind === "PICKUP" && load.status === "BOOKED") load.status = "IN_TRANSIT";

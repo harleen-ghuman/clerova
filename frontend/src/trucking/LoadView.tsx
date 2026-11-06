@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { dismissReply, getLoad, resolveFlag, sendReply, updateLoad } from "../api/loads";
+import { dismissReply, getLoad, resolveFlag, sendLoadMessage, sendReply, updateLoad } from "../api/loads";
 import { errorMessage } from "../api/client";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { ConfirmInline } from "../components/ConfirmInline";
@@ -10,6 +10,7 @@ import { distinctDocuments } from "./documents";
 import { flashSection, onLoadTab, showLoadTab, type LoadTab, type OpenLoadOptions } from "./loadTabs";
 import { InvoicePanel } from "./InvoicePanel";
 import { StopsPanel } from "./StopsPanel";
+import { MessageComposer } from "./MessageComposer";
 import { Email } from "./Email";
 import type { LoadDetail, LoadStatus } from "../types/Load";
 import { STATUS_LABELS, city, detention, kindLabel, money, when } from "./format";
@@ -59,7 +60,7 @@ function nextStep(load: LoadDetail): { text: string; to?: LoadStatus; label?: st
     case "BOOKED":
       return open.length > 0
         ? {
-            text: `Check the ${open.length === 1 ? "item" : `${open.length} items`} below before you sign the rate con.`,
+            text: `Go through the rate con check first: ${open.length === 1 ? "1 item is" : `${open.length} items are`} still open. Mark each one done, then sign the rate con and mark the load picked up.`,
             to: "IN_TRANSIT",
             label: "Mark picked up",
           }
@@ -105,6 +106,9 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
   const [note, setNote] = useState("");
   const [draft, setDraft] = useState("");
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmBack, setConfirmBack] = useState(false);
+  const [emailingUpdate, setEmailingUpdate] = useState(false);
+  const [updateSent, setUpdateSent] = useState<string | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -212,6 +216,15 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
   const noteChanged = note.trim() !== (load.statusNote ?? "");
   const documentCount = distinctDocuments(load.documents).length;
   const openFlags = load.flags.filter((flag) => !flag.resolvedAt).length;
+  // One step back, or reopening a cancelled load, when something changed (the server checks the same rules)
+  const back: { to: LoadStatus; label: string; question: string } | null =
+    load.status === "IN_TRANSIT"
+      ? { to: "BOOKED", label: "Move back to Booked", question: "Move this load back to Booked? Use this if it wasn't picked up after all." }
+      : load.status === "DELIVERED" && !load.invoice
+        ? { to: "IN_TRANSIT", label: "Move back to In transit", question: "Move this load back to In transit? Use this if it wasn't delivered after all." }
+        : load.status === "CANCELLED" && !load.invoice
+          ? { to: "BOOKED", label: "Reopen load", question: "Reopen this load? It goes back to Booked." }
+          : null;
 
   // Arrow keys move between tabs, as screen reader users expect
   function moveTab(event: KeyboardEvent<HTMLDivElement>) {
@@ -355,13 +368,19 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
                 <button
                   type="button"
                   className="rq-button rq-button-small rq-button-primary"
-                  disabled={busy !== null}
+                  disabled={busy !== null || (load.status === "BOOKED" && openFlags > 0)}
+                  title={load.status === "BOOKED" && openFlags > 0 ? "Finish the rate con check first" : undefined}
                   onClick={() => void run("status", () => updateLoad(loadId, { status: step.to }), "Couldn't update the load.")}
                 >
                   {step.label}
                 </button>
               )}
-              {(load.status === "BOOKED" || load.status === "IN_TRANSIT") && !confirmCancel && (
+              {back && !confirmBack && !confirmCancel && (
+                <button type="button" className="rq-button rq-button-small rq-button-quiet" onClick={() => setConfirmBack(true)}>
+                  {back.label}
+                </button>
+              )}
+              {(load.status === "BOOKED" || load.status === "IN_TRANSIT") && !confirmCancel && !confirmBack && (
                 <button type="button" className="rq-button rq-button-small rq-button-quiet" onClick={() => setConfirmCancel(true)}>
                   Cancel load
                 </button>
@@ -380,6 +399,20 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
                 onKeep={() => setConfirmCancel(false)}
               />
             )}
+            {confirmBack && back && (
+              <ConfirmInline
+                message={back.question}
+                confirmLabel={back.label}
+                keepLabel="Keep it"
+                tone="primary"
+                busy={busy !== null}
+                onConfirm={() => {
+                  setConfirmBack(false);
+                  void run("status", () => updateLoad(loadId, { status: back.to }), "Couldn't change the status.");
+                }}
+                onKeep={() => setConfirmBack(false)}
+              />
+            )}
 
             <form className="tk-note-form" onSubmit={saveNote}>
               <label className="visually-hidden" htmlFor="load-note">
@@ -396,8 +429,59 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
               <button type="submit" className="rq-button rq-button-small" disabled={busy !== null || !noteChanged}>
                 {busy === "note" ? "Saving..." : "Save update"}
               </button>
+              {!["PAID", "CANCELLED"].includes(load.status) && !emailingUpdate && (
+                <button
+                  type="button"
+                  className="rq-button rq-button-small"
+                  disabled={busy !== null}
+                  onClick={() => {
+                    setEmailingUpdate(true);
+                    setUpdateSent(null);
+                  }}
+                >
+                  Email the broker
+                </button>
+              )}
             </form>
-            <p className="tk-hint">Drafted replies to the broker use this update, and nothing else about where the truck is.</p>
+            {emailingUpdate && (
+              <MessageComposer
+                draft={{
+                  title: "Tell the broker what's happening",
+                  to: load.broker?.email ?? "",
+                  subject: `${load.loadNumber ? `Load ${load.loadNumber}` : "Load"}: update`,
+                  body: `Hi,\n\nAn update on ${load.loadNumber ? `load ${load.loadNumber}` : "this load"}: ${note.trim() || "[what happened, like: the truck broke down near Barstow. New ETA tomorrow 10 AM.]"}\n\nThanks,`,
+                }}
+                sendingEnabled={sendingEnabled}
+                busy={busy === "update-email"}
+                onSend={(message) =>
+                  void (async () => {
+                    // Save the update too, so drafted replies know about it
+                    if (noteChanged) {
+                      await run("note", () => updateLoad(loadId, { statusNote: note }), "Couldn't save the update.");
+                    }
+
+                    const sent = await run("update-email", () => sendLoadMessage(loadId, message), "Couldn't send the email.");
+
+                    if (sent) {
+                      setEmailingUpdate(false);
+                      setUpdateSent(message.to);
+                    }
+                  })()
+                }
+                onCancel={() => setEmailingUpdate(false)}
+              />
+            )}
+            {updateSent && (
+              <p className="request-success tk-sent-note" role="status">
+                Sent to {updateSent}. The broker's reply will show in this load's Emails tab.{" "}
+                <button type="button" className="tk-link" onClick={() => showLoadTab("emails")}>
+                  See Emails
+                </button>
+              </p>
+            )}
+            <p className="tk-hint">
+              Something happened, like a breakdown or a delay? Write it here, then Email the broker. Drafted replies use this update too.
+            </p>
           </section>
 
           {load.draft && (
