@@ -617,13 +617,20 @@ function detail(load: DemoLoad): LoadDetail {
     flags: load.flags,
     statusNote: load.statusNote,
     draft: load.replies.find((reply) => reply.status === "DRAFT") ?? null,
-    conversation: [...load.conversation, ...sent].sort((a, b) => (a.at ?? "").localeCompare(b.at ?? "")),
+    conversation: [...load.conversation, ...sent]
+      .map((entry) => ({ ...entry, files: entry.files.map((file) => ({ ...file, id: sameDocument(load, file.name)?.id ?? file.id })) }))
+      .sort((a, b) => (a.at ?? "").localeCompare(b.at ?? "")),
     documents: load.documents,
     charges: load.charges,
     invoice: invoice ? invoiceInfo(invoice, true) : null,
     createdAt: load.createdAt,
     updatedAt: load.updatedAt,
   };
+}
+
+/** As on the server, an emailed file and its document share one id. */
+function sameDocument(load: DemoLoad, name: string | null): LoadDocument | undefined {
+  return load.documents.find((document) => document.source === "EMAIL" && document.name === name);
 }
 
 function signOff(text: string): string {

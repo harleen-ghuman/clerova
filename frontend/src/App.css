@@ -3192,3 +3192,93 @@ body.demo-bar-open .jobs-page {
 .settings-trucks input {
   max-width: 120px;
 }
+
+/* Demo bar: the full panel on wide screens, one short row on phones */
+.demo-bar .demo-more {
+  display: grid;
+  gap: 10px;
+}
+
+.demo-bar .demo-phone-only,
+.demo-bar .demo-title-short {
+  display: none;
+}
+
+.demo-bar-head strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.demo-bar-head .demo-tag {
+  margin-right: 0;
+}
+
+@media (max-width: 800px) {
+  .demo-bar {
+    padding: 8px 10px;
+  }
+
+  .demo-bar-head {
+    gap: 6px;
+  }
+
+  .demo-bar-head strong {
+    flex: 1 1 auto;
+  }
+
+  .demo-bar .demo-phone-only {
+    display: inline-flex;
+  }
+
+  .demo-bar .demo-wide-only,
+  .demo-bar .demo-title-long {
+    display: none;
+  }
+
+  .demo-bar .demo-title-short {
+    display: inline;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .demo-bar:not(.more) .demo-more {
+    display: none;
+  }
+
+  body.demo-bar-open .app-main,
+  body.demo-mode.demo-bar-open .app-main {
+    padding-bottom: 96px;
+  }
+
+  body.demo-bar-open.demo-bar-more .app-main {
+    padding-bottom: 260px;
+  }
+
+  body.demo-bar-open .page-padded,
+  body.demo-bar-open .rq-list,
+  body.demo-bar-open .rq-detail,
+  body.demo-bar-open .jobs-page {
+    padding-bottom: 96px;
+  }
+
+  body.demo-bar-open.demo-bar-more .page-padded,
+  body.demo-bar-open.demo-bar-more .rq-list,
+  body.demo-bar-open.demo-bar-more .rq-detail,
+  body.demo-bar-open.demo-bar-more .jobs-page {
+    padding-bottom: 260px;
+  }
+}
+
+@media (max-width: 360px) {
+  .demo-bar .demo-title-short {
+    display: none;
+  }
+}
+
+.demo-bar-head a {
+  text-decoration: none;
+}

@@ -1540,3 +1540,26 @@ label.rq-button.is-disabled {
     grid-column: 2;
   }
 }
+
+/* An emailed file that's already under Documents: named, not shown twice */
+.tk-msg-filed {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+/* Phones: one column, with the rate and terms right after what needs doing */
+@media (max-width: 900px) {
+  .tk-detail > .tk-stack {
+    display: contents;
+  }
+
+  .tk-detail .tk-next,
+  .tk-detail .tk-draft {
+    order: -2;
+  }
+
+  .tk-detail .tk-terms {
+    order: -1;
+  }
+}
