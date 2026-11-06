@@ -17,6 +17,7 @@ import { MIN_PASSWORD_LENGTH, PASSWORD_HINT, passwordProblem } from "../auth/pas
 import { supabase } from "../auth/supabase";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { isDemo } from "../demo/mode";
+import { CarrierPacketSection } from "../trucking/CarrierPacketSection";
 import { CarrierSection } from "../trucking/CarrierSection";
 import { TimeZoneSection } from "../trucking/TimeZoneSection";
 import type { Me, Organization } from "../types/Account";
@@ -42,6 +43,8 @@ interface SettingsPageProps {
   onCompanyInfoFocused?: () => void;
   /** Goes up each time the sidebar's Plan and billing is clicked: scrolls there. */
   focusBilling?: number;
+  /** Trucking: the carrier packet can be emailed from Clerova. */
+  emailSendingEnabled?: boolean;
   onSignOut: () => void;
   /** Off in a trucking workspace: company info and plans are for property management. */
   propertyManagement?: boolean;
@@ -197,6 +200,7 @@ export function SettingsPage({
   focusCompanyInfo = false,
   onCompanyInfoFocused,
   focusBilling = 0,
+  emailSendingEnabled = false,
   onSignOut,
   propertyManagement = true,
 }: SettingsPageProps) {
@@ -237,6 +241,7 @@ export function SettingsPage({
       ) : (
         <>
           <CarrierSection focus={focusCompanyInfo} />
+          <CarrierPacketSection sendingEnabled={emailSendingEnabled} />
           {!isDemo() && <TimeZoneSection organization={organization} onSaved={onSaved} />}
         </>
       )}

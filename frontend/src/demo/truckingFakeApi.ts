@@ -21,6 +21,7 @@ import type {
   LoadSummary,
   UploadedDocument,
 } from "../types/Load";
+import type { CarrierDocument, CarrierDocumentKind } from "../api/carrierPacket";
 import { REFRESH_EVENT } from "./mode";
 import { makePdf, PageWriter } from "./pdf";
 
@@ -87,6 +88,7 @@ interface State {
   invoices: DemoInvoice[];
   inbox: InboundMessage[];
   uploads: UploadedDocument[];
+  carrierDocuments: CarrierDocument[];
   settings: EmailSettings;
   nextLoad: number;
 }
@@ -106,6 +108,36 @@ function broker(name: string, mc: string | null, email: string, phone: string): 
     fmcsaName: mc ? name.toUpperCase() : null,
     fmcsaCheckedAt: mc ? minutesAgo(600) : null,
   };
+}
+
+/** A date this many days from today, as YYYY-MM-DD. */
+function inDays(days: number): string {
+  const date = new Date(Date.now() + days * 86_400_000);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+const CARRIER_KIND_LABELS: Record<CarrierDocumentKind, string> = {
+  AUTHORITY: "MC authority letter",
+  INSURANCE: "Certificate of insurance",
+  W9: "W-9",
+  NOA: "Notice of assignment (factoring)",
+  VOID_CHECK: "Voided check",
+  OTHER: "Other",
+};
+const CARRIER_KIND_ORDER: CarrierDocumentKind[] = ["AUTHORITY", "INSURANCE", "W9", "NOA", "VOID_CHECK", "OTHER"];
+
+function carrierDocument(document: CarrierDocument): CarrierDocument {
+  return {
+    ...document,
+    kindLabel: CARRIER_KIND_LABELS[document.kind],
+    expired: Boolean(document.expiresOn && document.expiresOn < inDays(0)),
+  };
+}
+
+function carrierDocuments(): CarrierDocument[] {
+  return [...state.carrierDocuments]
+    .sort((a, b) => CARRIER_KIND_ORDER.indexOf(a.kind) - CARRIER_KIND_ORDER.indexOf(b.kind))
+    .map(carrierDocument);
 }
 
 /**
@@ -350,6 +382,11 @@ function seed(): State {
     loads,
     invoices: [invoice(invoiced, "SR-1041", "SENT", 12 * 1440), invoice(paid, "SR-1040", "PAID", 20 * 1440, 6 * 1440)],
     inbox: [],
+    carrierDocuments: [
+      { id: "carrier-authority", kind: "AUTHORITY", kindLabel: "MC authority letter", name: "MC authority 1048817.pdf", contentType: "application/pdf", sizeBytes: 81_204, expiresOn: null, expired: false, at: minutesAgo(40_000) },
+      { id: "carrier-insurance", kind: "INSURANCE", kindLabel: "Certificate of insurance", name: "COI 2026.pdf", contentType: "application/pdf", sizeBytes: 152_330, expiresOn: inDays(24), expired: false, at: minutesAgo(39_000) },
+      { id: "carrier-w9", kind: "W9", kindLabel: "W-9", name: "W9 Sierra Run.pdf", contentType: "application/pdf", sizeBytes: 64_918, expiresOn: null, expired: false, at: minutesAgo(38_000) },
+    ],
     uploads: [],
     settings: { intakeEnabled: true, sendingEnabled: true, forwardingAddress: FORWARDING, gmailConfirmation: null, replyCopyEmail: null },
     nextLoad: 0,
@@ -813,6 +850,30 @@ export async function demoTruckingFile(path: string): Promise<Blob> {
     return makePdf(pages);
   }
 
+  if (path === "/api/carrier/packet" || (match = path.match(/^\/api\/carrier\/documents\/([^/]+)\/file$/))) {
+    const documents = path === "/api/carrier/packet"
+      ? carrierDocuments()
+      : carrierDocuments().filter((document) => document.id === match![1]);
+    if (documents.length === 0) throw new ApiRequestError("This file isn't available.", 404);
+    const carrier = state.carrier;
+    const pages = documents.map((document) => {
+      const writer = new PageWriter();
+      writer.line(document.kindLabel, { size: 16, bold: true });
+      writer.line(carrier.legalName ?? "Sierra Run Transport LLC", { size: 12, bold: true });
+      writer.line(`MC ${carrier.mcNumber ?? "-"}   DOT ${carrier.dotNumber ?? "-"}`, { grey: true });
+      writer.line(document.expiresOn ? `Valid until ${document.expiresOn}` : "Sample document for the demo", { grey: true });
+      return writer.pages[0];
+    });
+    if (path === "/api/carrier/packet") {
+      const cover = new PageWriter();
+      cover.line("Carrier packet", { size: 20, bold: true });
+      cover.line(carrier.legalName ?? "Sierra Run Transport LLC", { size: 13, bold: true });
+      documents.forEach((document, index) => cover.line(`${index + 1}. ${document.kindLabel}`));
+      pages.unshift(cover.pages[0]);
+    }
+    return makePdf(pages);
+  }
+
   if ((match = path.match(/^\/api\/invoices\/export\?month=(\d{4}-\d{2})$/))) {
     // Same columns as the server: each kind of pay gets its own column
     const kinds = ["Line haul", "Detention", "Lumper", "TONU", "Layover", "Other"];
@@ -1190,6 +1251,37 @@ function handle(route: string, body: Record<string, unknown>, form: FormData | n
       return document;
     }
     return { id: match[2], loadId: null, kind: body.kind ?? "OTHER", name: "document", contentType: null, sizeBytes: 0, at: now(), newLoad: false };
+  }
+
+  // Carrier packet
+  if (route === "GET /api/carrier/documents") return carrierDocuments();
+  if (route === "POST /api/carrier/documents") {
+    const file = form?.get("file") as File | null;
+    const kind = ((form?.get("kind") as string | null) ?? "OTHER") as CarrierDocumentKind;
+    const expiresOn = (form?.get("expiresOn") as string | null) || null;
+    if (state.carrierDocuments.length >= 20) conflict("The carrier packet holds up to 20 documents. Remove an old one first.");
+    const document = carrierDocument({
+      id: id("carrier"), kind, kindLabel: "", name: file?.name ?? "document.pdf", contentType: file?.type ?? "application/pdf",
+      sizeBytes: file?.size ?? 0, expiresOn, expired: false, at: now(),
+    });
+    state.carrierDocuments.push(document);
+    return document;
+  }
+  if ((match = route.match(/^(PATCH|DELETE) \/api\/carrier\/documents\/([^/]+)$/))) {
+    const document = state.carrierDocuments.find((candidate) => candidate.id === match![2]);
+    if (!document) throw new ApiRequestError("Document not found", 404);
+    if (match[1] === "DELETE") {
+      state.carrierDocuments = state.carrierDocuments.filter((candidate) => candidate !== document);
+      return undefined;
+    }
+    if (body.kind) document.kind = body.kind as CarrierDocumentKind;
+    if (typeof body.expiresOn === "string") document.expiresOn = body.expiresOn || null;
+    return carrierDocument(document);
+  }
+  if (route === "POST /api/carrier/packet/send") {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text(body.to))) invalid("Enter the broker's email address.");
+    if (state.carrierDocuments.length === 0) conflict("Add your documents first, like your W-9, MC authority and insurance certificate.");
+    return { sent: true };
   }
 
   // Inbox

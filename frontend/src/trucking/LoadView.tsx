@@ -11,6 +11,7 @@ import { flashSection, onLoadTab, showLoadTab, type LoadTab, type OpenLoadOption
 import { InvoicePanel } from "./InvoicePanel";
 import { StopsPanel } from "./StopsPanel";
 import { MessageComposer } from "./MessageComposer";
+import { SendCarrierPacket } from "./SendCarrierPacket";
 import { Email } from "./Email";
 import type { LoadDetail, LoadStatus } from "../types/Load";
 import { STATUS_LABELS, city, detention, kindLabel, money, when } from "./format";
@@ -116,6 +117,7 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
   const [emailingUpdate, setEmailingUpdate] = useState(false);
   const [updateSent, setUpdateSent] = useState<string | null>(null);
   const [showDoneChecks, setShowDoneChecks] = useState(false);
+  const [sendingPacket, setSendingPacket] = useState(false);
 
   useEffect(() => {
     let current = true;
@@ -683,6 +685,15 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
                   </>
                 )}
               </dl>
+              {sendingPacket ? (
+                <SendCarrierPacket to={load.broker.email ?? ""} sendingEnabled={sendingEnabled} onDone={() => setSendingPacket(false)} />
+              ) : (
+                <div className="tk-actions">
+                  <button type="button" className="rq-button rq-button-small" onClick={() => setSendingPacket(true)}>
+                    Send carrier packet
+                  </button>
+                </div>
+              )}
             </section>
           )}
         </div>

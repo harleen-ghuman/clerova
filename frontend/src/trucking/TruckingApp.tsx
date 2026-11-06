@@ -496,6 +496,7 @@ export function TruckingApp({
               propertyManagement={false}
               focusCompanyInfo={focusCarrier}
               focusBilling={focusBilling}
+              emailSendingEnabled={emailSettings?.sendingEnabled ?? false}
             />
           </div>
         )}
