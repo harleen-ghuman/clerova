@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 
 import { completeOnboarding, getMe } from "../api/account";
 import { ApiRequestError, errorMessage } from "../api/client";
-import { forgetChosenIndustry, getChosenIndustry, getReferralSource } from "../auth/referral";
+import { forgetChosenIndustry, getChosenIndustry, getReferralSource, looksCanadian } from "../auth/referral";
 import type { Industry, Me } from "../types/Account";
 import { TRUCKING_ENABLED } from "../config";
 
@@ -44,7 +44,8 @@ export function OnboardingPage({
   );
   const [companySize, setCompanySize] = useState("");
   const trucking = industry === "TRUCKING";
-  const [canadian, setCanadian] = useState(false);
+  // Pre-ticked for a Canadian link, time zone or language; it can be changed
+  const [canadian, setCanadian] = useState(() => looksCanadian());
   const [referralSource, setReferralSource] = useState(
     trackedSource ?? ""
   );
