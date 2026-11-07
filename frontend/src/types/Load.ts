@@ -6,6 +6,8 @@ export type ReplyStatus = "DRAFT" | "SENT" | "DISMISSED";
 
 /** Amounts are in cents. */
 export interface LoadSummary {
+  /** USD or CAD, from the rate con. */
+  currency: "USD" | "CAD";
   id: string;
   loadNumber: string | null;
   status: LoadStatus;
@@ -112,6 +114,8 @@ export interface UploadedDocument {
 }
 
 export interface LoadDetail {
+  /** USD or CAD, from the rate con. */
+  currency: "USD" | "CAD";
   id: string;
   loadNumber: string | null;
   status: LoadStatus;
@@ -200,6 +204,8 @@ export interface InvoiceLine {
 }
 
 export interface Invoice {
+  /** USD or CAD, from the rate con. */
+  currency: "USD" | "CAD";
   id: string;
   loadId: string;
   number: string;

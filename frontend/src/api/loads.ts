@@ -63,6 +63,8 @@ export interface NewLoad {
   invoiceEmail: string | null;
   /** The Inbox email it comes from; it's filed under the new load. */
   fromEmailId: string | null;
+  /** CAD or USD; the carrier's own currency when left out. */
+  currency?: "CAD" | "USD";
 }
 
 /** A load typed in by hand. Counts toward the plan like a rate con. */

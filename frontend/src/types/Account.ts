@@ -21,6 +21,8 @@ export interface Organization {
   trucks?: number | null;
   /** IANA time zone for invoice dates, like America/Chicago; null until set. */
   timeZone?: string | null;
+  /** US or CA. Canadian carriers pay in CAD. */
+  country?: "US" | "CA";
 }
 
 export interface Me {
@@ -36,4 +38,6 @@ export interface OnboardingDetails {
   companySize: string;
   referralSource: string;
   fullName: string;
+  /** CA for a Canadian carrier. */
+  country?: "US" | "CA";
 }

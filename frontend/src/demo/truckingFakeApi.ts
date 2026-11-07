@@ -76,7 +76,7 @@ interface DemoLoad {
   updatedAt: string;
 }
 
-interface DemoInvoice extends Omit<Invoice, "loadNumber" | "brokerName" | "origin" | "destination" | "packet" | "missingPaperwork" | "suggestedEmail" | "factoring"> {
+interface DemoInvoice extends Omit<Invoice, "currency" | "loadNumber" | "brokerName" | "origin" | "destination" | "packet" | "missingPaperwork" | "suggestedEmail" | "factoring"> {
   organizationId: string;
 }
 
@@ -665,6 +665,7 @@ function invoiceInfo(invoice: DemoInvoice, withPacket: boolean): Invoice {
 
   return {
     ...invoice,
+    currency: "USD",
     billTo: invoice.status === "DRAFT" || !invoice.billTo
       ? [brokerInfo.name, brokerInfo.mcNumber ? `MC ${brokerInfo.mcNumber}` : null, load.invoiceEmail ?? brokerInfo.email].filter(Boolean).join("\n")
       : invoice.billTo,
@@ -705,6 +706,7 @@ function summary(load: DemoLoad): LoadSummary {
   const open = load.flags.filter((item) => !item.resolvedAt);
   return {
     id: load.id,
+    currency: "USD",
     loadNumber: load.loadNumber,
     status: load.status,
     brokerName: findBroker(load).name,
@@ -732,6 +734,7 @@ function detail(load: DemoLoad): LoadDetail {
 
   return {
     id: load.id,
+    currency: "USD",
     loadNumber: load.loadNumber,
     status: load.status,
     broker: findBroker(load),

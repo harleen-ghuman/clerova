@@ -123,7 +123,7 @@ export function TodayView({
                 key={load.id}
                 load={load}
                 onOpen={(id) => onOpenLoad(id, { checks: true })}
-                sub={`${load.brokerName ?? "Broker"} · ${money(load.rateCents)}`}
+                sub={`${load.brokerName ?? "Broker"} · ${money(load.rateCents, load.currency)}`}
                 pill={
                   load.fixFlags > 0
                     ? { text: `${load.fixFlags} to fix`, tone: "fix" }
@@ -162,7 +162,7 @@ export function TodayView({
                 key={load.id}
                 load={load}
                 onOpen={onOpenLoad}
-                sub={`${load.brokerName ?? "Broker"} · ${money(load.rateCents)}`}
+                sub={`${load.brokerName ?? "Broker"} · ${money(load.rateCents, load.currency)}`}
                 pill={
                   invoiced.has(load.id)
                     ? { text: "Draft invoice", tone: "info" }
@@ -182,7 +182,7 @@ export function TodayView({
                     key={invoice.id}
                     load={load}
                     onOpen={onOpenLoad}
-                    sub={`${invoice.number} · ${money(invoice.totalCents)} · due ${dueText(invoice.dueDate!)}`}
+                    sub={`${invoice.number} · ${money(invoice.totalCents, invoice.currency)} · due ${dueText(invoice.dueDate!)}`}
                     pill={{ text: "Overdue", tone: "fix" }}
                   />
                 ) : null;

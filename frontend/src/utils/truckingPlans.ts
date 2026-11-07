@@ -23,12 +23,19 @@ export function truckingPlan(trucks: number): TruckingPlan {
   return trucks >= FLEET_FROM_TRUCKS ? "FLEET" : "STARTER";
 }
 
+/** CA$ for Canadian carriers' plans (billed in CAD), $ otherwise. Set once by the app. */
+let planSymbol = "$";
+
+export function setPlanCurrency(currency: "USD" | "CAD") {
+  planSymbol = currency === "CAD" ? "CA$" : "$";
+}
+
 /** Dollars as shown: whole dollars stay whole, cents only when there are some. */
 export function dollars(amount: number): string {
   const rounded = Math.round(amount * 100) / 100;
   return Number.isInteger(rounded)
-    ? `$${rounded.toLocaleString("en-US")}`
-    : `$${rounded.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    ? `${planSymbol}${rounded.toLocaleString("en-US")}`
+    : `${planSymbol}${rounded.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 /** The price for this many trucks, per month or per year. */
@@ -54,6 +61,6 @@ export function truckingPrice(
 export function truckingPlanSummary(plan: TruckingPlan, founding: boolean): string {
   const prices = founding ? TRUCKING_PRICES.founding : TRUCKING_PRICES.regular;
   return plan === "FLEET"
-    ? `Fleet: ${dollars(prices.fleetBase)} a month for 9 to ${prices.fleetBaseTrucks} trucks, then ${dollars(prices.fleetPerTruck)} a truck up to ${MAX_TRUCKS}`
+    ? `Fleet: ${dollars(prices.fleetBase)} a month for ${FLEET_FROM_TRUCKS} to ${prices.fleetBaseTrucks} trucks, then ${dollars(prices.fleetPerTruck)} a truck up to ${MAX_TRUCKS}`
     : `Starter: ${dollars(prices.starterPerTruck)} a truck a month, 1 to 7 trucks`;
 }

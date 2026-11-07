@@ -44,6 +44,7 @@ export function OnboardingPage({
   );
   const [companySize, setCompanySize] = useState("");
   const trucking = industry === "TRUCKING";
+  const [canadian, setCanadian] = useState(false);
   const [referralSource, setReferralSource] = useState(
     trackedSource ?? ""
   );
@@ -63,6 +64,7 @@ export function OnboardingPage({
         industry,
         companySize,
         referralSource: referralSource || storedSource || "",
+        country: trucking && canadian ? "CA" : "US",
       });
 
       forgetChosenIndustry();
@@ -168,6 +170,18 @@ export function OnboardingPage({
               ))}
             </select>
           </label>
+
+          {trucking && (
+            <label className="settings-check">
+              <input
+                type="checkbox"
+                checked={canadian}
+                onChange={(event) => setCanadian(event.target.checked)}
+                disabled={submitting}
+              />
+              We're a Canadian carrier (billed in CAD)
+            </label>
+          )}
 
           {!trackedSource && (
             <label>

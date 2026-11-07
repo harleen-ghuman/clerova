@@ -155,8 +155,9 @@ public class BillingService {
 
         boolean founding = organization.isFoundingCustomer() || foundingSpotsLeft() > 0;
         Plan chosen = plan;
-        String priceId = findPrice(lookupKey(chosen, interval, founding, trucking))
-                .or(() -> founding ? findPrice(lookupKey(chosen, interval, false, trucking)) : Optional.empty())
+        boolean cad = trucking && organization.isCanadian();
+        String priceId = findPrice(lookupKey(chosen, interval, founding, trucking, cad))
+                .or(() -> founding ? findPrice(lookupKey(chosen, interval, false, trucking, cad)) : Optional.empty())
                 .orElseThrow(() -> new ApiException(
                         HttpStatus.SERVICE_UNAVAILABLE,
                         "BILLING_ERROR",
@@ -476,10 +477,16 @@ public class BillingService {
 
     /** Like founding_trucking_fleet_yearly for trucking, or growth_monthly. */
     static String lookupKey(Plan plan, String interval, boolean founding, boolean trucking) {
+        return lookupKey(plan, interval, founding, trucking, false);
+    }
+
+    /** Canadian carriers pay in CAD: the same trucking prices with _cad, like trucking_starter_monthly_cad. */
+    static String lookupKey(Plan plan, String interval, boolean founding, boolean trucking, boolean cad) {
         return (founding ? "founding_" : "")
                 + (trucking ? "trucking_" : "")
                 + plan.name().toLowerCase()
-                + (interval.equals("year") ? "_yearly" : "_monthly");
+                + (interval.equals("year") ? "_yearly" : "_monthly")
+                + (trucking && cad ? "_cad" : "");
     }
 
     // ------------------------------------------------------------- trucking
@@ -546,8 +553,9 @@ public class BillingService {
         boolean founding = organization.isFoundingCustomer();
         Plan plan = truckingPlan(quantity);
 
-        String priceId = findPrice(lookupKey(plan, interval, founding, true))
-                .or(() -> founding ? findPrice(lookupKey(plan, interval, false, true)) : Optional.empty())
+        boolean cad = organization.isCanadian();
+        String priceId = findPrice(lookupKey(plan, interval, founding, true, cad))
+                .or(() -> founding ? findPrice(lookupKey(plan, interval, false, true, cad)) : Optional.empty())
                 .orElseThrow(() -> new ApiException(
                         HttpStatus.SERVICE_UNAVAILABLE,
                         "BILLING_ERROR",

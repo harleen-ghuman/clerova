@@ -21,6 +21,8 @@ final class RateConChecks {
     static final String PAPERWORK_FINE = "PAPERWORK_FINE";
     static final String QUICK_PAY_FEE = "QUICK_PAY_FEE";
     static final String MC_MISSING = "MC_MISSING";
+    /** A Canadian carrier's broker with no US MC: often a Canadian company, which FMCSA doesn't list. */
+    static final String CANADIAN_BROKER = "CANADIAN_BROKER";
     static final String BROKER_NOT_FOUND = "BROKER_NOT_FOUND";
     static final String BROKER_NOT_AUTHORIZED = "BROKER_NOT_AUTHORIZED";
     static final String BROKER_NAME_MISMATCH = "BROKER_NAME_MISMATCH";
@@ -36,6 +38,10 @@ final class RateConChecks {
     }
 
     static List<LoadFlag> flags(RateConResult read, Load load, String mcNumber, BrokerCheck check) {
+        return flags(read, load, mcNumber, check, false);
+    }
+
+    static List<LoadFlag> flags(RateConResult read, Load load, String mcNumber, BrokerCheck check, boolean canadian) {
         List<LoadFlag> flags = new ArrayList<>();
 
         if (load.getRateCents() == null || load.getStops().isEmpty()) {
@@ -114,20 +120,31 @@ final class RateConChecks {
                     read.paymentQuote));
         }
 
-        flags.addAll(brokerFlags(load, mcNumber, check));
+        flags.addAll(brokerFlags(load, mcNumber, check, canadian));
 
         return flags;
     }
 
     /** Codes of the broker checks, replaced when the broker's MC changes. */
     static final java.util.Set<String> BROKER_CODES = java.util.Set.of(
-            MC_MISSING, BROKER_NOT_FOUND, BROKER_NOT_AUTHORIZED, BROKER_NAME_MISMATCH);
+            MC_MISSING, CANADIAN_BROKER, BROKER_NOT_FOUND, BROKER_NOT_AUTHORIZED, BROKER_NAME_MISMATCH);
 
     /** The FMCSA side of the check: no MC, unknown MC, no broker authority, another company's MC. */
     static List<LoadFlag> brokerFlags(Load load, String mcNumber, BrokerCheck check) {
+        return brokerFlags(load, mcNumber, check, false);
+    }
+
+    /** canadian: the carrier is Canadian, so a broker without a US MC is likely Canadian too. */
+    static List<LoadFlag> brokerFlags(Load load, String mcNumber, BrokerCheck check, boolean canadian) {
         List<LoadFlag> flags = new java.util.ArrayList<>();
 
-        if (mcNumber == null) {
+        if (mcNumber == null && canadian) {
+            flags.add(flag(CANADIAN_BROKER, FlagLevel.NOTE,
+                    "No US MC number, so FMCSA can't check this broker",
+                    "If the broker is a Canadian company, look them up in Canada's business registry before you sign. "
+                            + "If they're American, ask for their MC number.",
+                    null));
+        } else if (mcNumber == null) {
             flags.add(flag(MC_MISSING, FlagLevel.FIX,
                     "No MC number for the broker",
                     "Clerova can't check this broker with FMCSA. Ask for their MC number before you sign.",

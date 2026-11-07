@@ -28,8 +28,8 @@ function defaultMessage(load: LoadDetail, invoice: Invoice): string {
   const lane = load.loadNumber ? `load ${load.loadNumber}` : "this load";
   return invoice.sendTo === "FACTOR"
     ? `Hi,\n\nAttached is invoice ${invoice.number} for ${lane}${load.broker ? ` (${load.broker.name})` : ""}, ` +
-        `with the rate con and signed paperwork, for ${money(invoice.totalCents)}. Please fund it.\n\nThanks,`
-    : `Hi,\n\nAttached is invoice ${invoice.number} for ${lane}, for ${money(invoice.totalCents - (invoice.quickPayFeeCents ?? 0))}` +
+        `with the rate con and signed paperwork, for ${money(invoice.totalCents, invoice.currency)}. Please fund it.\n\nThanks,`
+    : `Hi,\n\nAttached is invoice ${invoice.number} for ${lane}, for ${money(invoice.totalCents - (invoice.quickPayFeeCents ?? 0), invoice.currency)}` +
         `${invoice.quickPay ? " (quick pay requested)" : ""}, with the rate con and signed paperwork.\n\nThanks,`;
 }
 
@@ -123,7 +123,7 @@ function LinesEditor({ invoice, busy, onSave, onDirtyChange }: {
         >
           Add a line
         </button>
-        <strong className="tk-money">Total {money(total)}</strong>
+        <strong className="tk-money">Total {money(total, invoice.currency)}</strong>
       </div>
       {problem && (
         <p className="action-error" role="alert">
@@ -328,7 +328,7 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
               />
               Ask for quick pay ({load.quickPayPercent}% fee
               {invoice.quickPay && invoice.quickPayFeeCents !== null
-                ? `: ${money(invoice.quickPayFeeCents)}, you get ${money(due)}`
+                ? `: ${money(invoice.quickPayFeeCents, invoice.currency)}, you get ${money(due, invoice.currency)}`
                 : ""}
               )
             </label>
@@ -340,8 +340,8 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
         <dl className="tk-kv">
           <dt>Total</dt>
           <dd className="tk-money">
-            {money(invoice.totalCents)}
-            {invoice.quickPayFeeCents !== null && <div className="tk-sub">Quick pay: {money(due)} after the fee</div>}
+            {money(invoice.totalCents, invoice.currency)}
+            {invoice.quickPayFeeCents !== null && <div className="tk-sub">Quick pay: {money(due, invoice.currency)} after the fee</div>}
           </dd>
           <dt>Sent</dt>
           <dd>
@@ -364,7 +364,7 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
             <>
               <dt>Paid</dt>
               <dd>
-                {money(invoice.paidCents)}
+                {money(invoice.paidCents, invoice.currency)}
                 {invoice.paidAt && ` on ${new Date(invoice.paidAt).toLocaleDateString([], { month: "short", day: "numeric" })}`}
               </dd>
             </>

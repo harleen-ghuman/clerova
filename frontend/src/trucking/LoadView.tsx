@@ -33,6 +33,9 @@ const TABS: { id: LoadTab; label: string }[] = [
   { id: "emails", label: "Emails" },
 ];
 
+/** Canada's federal business registry search, for brokers FMCSA doesn't list. */
+const CANADIAN_COMPANY_SEARCH = "https://ised-isde.canada.ca/cc/lgcy/fdrlCrpSrch.html";
+
 /** Broker emails can be long (quoted history, signatures): show the start first. */
 const LONG_EMAIL = 900;
 
@@ -277,7 +280,7 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
           <p className="tk-meta">
             <span>{load.loadNumber ? `Load #${load.loadNumber}` : "No load number"}</span>
             {load.broker && <span>{load.broker.name}</span>}
-            {load.rateCents !== null && <span className="tk-money">{money(load.rateCents)}</span>}
+            {load.rateCents !== null && <span className="tk-money">{money(load.rateCents, load.currency)}</span>}
           </p>
         </div>
       </div>
@@ -561,23 +564,23 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
             <h2>Rate and terms</h2>
             <dl className="tk-kv">
               <dt>Rate</dt>
-              <dd>{load.rateCents !== null ? money(load.rateCents) : "Not read"}</dd>
+              <dd>{load.rateCents !== null ? money(load.rateCents, load.currency) : "Not read"}</dd>
               {load.agreedRateCents !== null && (
                 <>
                   <dt>Email said</dt>
-                  <dd>{money(load.agreedRateCents)}</dd>
+                  <dd>{money(load.agreedRateCents, load.currency)}</dd>
                 </>
               )}
               <dt>Detention</dt>
               <dd>
                 {detention(load.detentionRateCents, load.detentionFreeMinutes)}
-                {load.detentionMaxCents !== null && `, up to ${money(load.detentionMaxCents)}`}
+                {load.detentionMaxCents !== null && `, up to ${money(load.detentionMaxCents, load.currency)}`}
                 {load.detentionRule && <div className="tk-sub">{load.detentionRule}</div>}
               </dd>
               {load.tonuCents !== null && (
                 <>
                   <dt>TONU</dt>
-                  <dd>{money(load.tonuCents)}</dd>
+                  <dd>{money(load.tonuCents, load.currency)}</dd>
                 </>
               )}
               {load.paperworkRule && (
@@ -642,6 +645,13 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
                   <div>
                     <strong>{flag.title}</strong>
                     {flag.detail && <p>{flag.detail}</p>}
+                    {flag.code === "CANADIAN_BROKER" && (
+                      <p>
+                        <a href={CANADIAN_COMPANY_SEARCH} target="_blank" rel="noreferrer">
+                          Look up a Canadian company
+                        </a>
+                      </p>
+                    )}
                   </div>
                   {flag.sourceText && <blockquote>{flag.sourceText}</blockquote>}
                   {!flag.resolvedAt && (

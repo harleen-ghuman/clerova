@@ -96,6 +96,8 @@ public class AccountService {
 
         organization.setName(request.organizationName().trim());
         organization.setIndustry(request.industry());
+        // Canadian carriers pay in CAD; only trucking is offered in Canada
+        organization.setCountry(request.industry() == Industry.TRUCKING && "CA".equalsIgnoreCase(request.country()) ? "CA" : "US");
         organization.setCompanySize(blankToNull(request.companySize()));
         organization.setReferralSource(blankToNull(request.referralSource()));
         organization.setPlan(Plan.TRIAL);

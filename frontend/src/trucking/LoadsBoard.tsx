@@ -116,7 +116,7 @@ export function LoadsBoard({ loads: allLoads, loading, error, onOpenLoad, refres
                   >
                     <span className="tk-card-top">
                       <span>{load.loadNumber ? `#${load.loadNumber}` : "No load number"}</span>
-                      <span>{money(load.rateCents)}</span>
+                      <span>{money(load.rateCents, load.currency)}</span>
                     </span>
                     <span className="tk-lane">{lane(load.origin, load.destination)}</span>
                     <span className="tk-sub">

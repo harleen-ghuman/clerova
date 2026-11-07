@@ -46,7 +46,9 @@ final class InvoicePdf {
             String mcNumber, String dotNumber,
             String billTo, String remitTo, String factorName,
             String loadNumber, String references, List<String[]> stops,
-            List<InvoiceLine> lines, long totalCents, Long quickPayFeeCents, String quickPayPercent
+            List<InvoiceLine> lines, long totalCents, Long quickPayFeeCents, String quickPayPercent,
+            /** Shown with the total (like CAD) for Canadian carriers or a load not in USD; null otherwise. */
+            String currency
     ) {
     }
 
@@ -181,7 +183,8 @@ final class InvoicePdf {
                 }
 
                 y -= 4;
-                right(out, BOLD, 12, INK, right - 8, y, "Total  " + Money.dollars(content.totalCents()));
+                right(out, BOLD, 12, INK, right - 8, y, "Total" + (content.currency() != null ? " (" + content.currency() + ")" : "")
+                        + "  " + Money.dollars(content.totalCents()));
                 y -= 18;
 
                 if (content.quickPayFeeCents() != null) {

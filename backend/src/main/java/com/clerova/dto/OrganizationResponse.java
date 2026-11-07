@@ -28,7 +28,9 @@ public record OrganizationResponse(
         /** Trucks on a trucking plan; null otherwise. */
         Integer trucks,
         /** IANA time zone used for invoice dates; null until set (Pacific then). */
-        String timeZone
+        String timeZone,
+        /** US or CA; Canadian carriers pay in CAD. */
+        String country
 ) {
 
     public static OrganizationResponse from(
@@ -58,7 +60,8 @@ public record OrganizationResponse(
                 billingEnabled,
                 subscriptionRequired,
                 organization.getTrucks(),
-                organization.getTimeZone()
+                organization.getTimeZone(),
+                organization.getCountry()
         );
     }
 }
