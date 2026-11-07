@@ -785,14 +785,14 @@ function PlansList({ organization, interval }: { organization: Organization; int
       {
         key: "STARTER",
         name: "Starter",
-        size: "1 to 8 trucks",
+        size: "1 to 7 trucks",
         price: `${dollars(prices.starterPerTruck * times)} a truck a ${per}`,
         mine: current === "STARTER",
       },
       {
         key: "FLEET",
         name: "Fleet",
-        size: "9 to 49 trucks",
+        size: "8 to 49 trucks",
         price: `${dollars(prices.fleetBase * times)} a ${per} for up to 20 trucks, then ${dollars(prices.fleetPerTruck * times)} a truck`,
         mine: current === "FLEET",
       },

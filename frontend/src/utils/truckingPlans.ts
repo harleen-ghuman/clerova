@@ -2,15 +2,15 @@ import type { BillingInterval } from "../api/billing";
 
 // Must match the trucking prices in Stripe (lookup keys trucking_starter_*,
 // trucking_fleet_* and their founding_ versions). Yearly is 10 months.
-// Starter: a price per truck, 1 to 8 trucks.
-// Fleet: a flat price for 9 to 20 trucks, then a price per truck up to 49.
+// Starter: a price per truck, 1 to 7 trucks.
+// Fleet: a flat price for 8 to 20 trucks, then a price per truck up to 49.
 export const TRUCKING_PRICES = {
   regular: { starterPerTruck: 25, fleetBase: 199, fleetBaseTrucks: 20, fleetPerTruck: 12 },
   founding: { starterPerTruck: 17.5, fleetBase: 139, fleetBaseTrucks: 20, fleetPerTruck: 8.4 },
 };
 
 /** From this many trucks, a carrier is on Fleet (as on the server). */
-export const FLEET_FROM_TRUCKS = 9;
+export const FLEET_FROM_TRUCKS = 8;
 /** Self-serve plans go up to this many trucks; more is a custom plan by email. */
 export const MAX_TRUCKS = 49;
 /** Rate cons (loads) a month per truck, shared by the whole fleet. */
@@ -50,10 +50,10 @@ export function truckingPrice(
     : { plan, amount: rounded(monthly), per: "month" };
 }
 
-/** Like "Starter: $25 a truck a month, 1 to 8 trucks". */
+/** Like "Starter: $25 a truck a month, 1 to 7 trucks". */
 export function truckingPlanSummary(plan: TruckingPlan, founding: boolean): string {
   const prices = founding ? TRUCKING_PRICES.founding : TRUCKING_PRICES.regular;
   return plan === "FLEET"
     ? `Fleet: ${dollars(prices.fleetBase)} a month for 9 to ${prices.fleetBaseTrucks} trucks, then ${dollars(prices.fleetPerTruck)} a truck up to ${MAX_TRUCKS}`
-    : `Starter: ${dollars(prices.starterPerTruck)} a truck a month, 1 to 8 trucks`;
+    : `Starter: ${dollars(prices.starterPerTruck)} a truck a month, 1 to 7 trucks`;
 }

@@ -484,8 +484,8 @@ public class BillingService {
 
     // ------------------------------------------------------------- trucking
 
-    /** Starter is $25 a truck up to 8 trucks; Fleet is $199 for 9 to 20, then $12 a truck. */
-    public static final int FLEET_FROM_TRUCKS = 9;
+    /** Starter is $25 a truck up to 7 trucks; Fleet is $199 for 8 to 20, then $12 a truck (at 8 trucks Fleet costs less). */
+    public static final int FLEET_FROM_TRUCKS = 8;
 
     /** Self-serve plans go up to 49 trucks; 50 or more is a custom plan by email. */
     public static final int MAX_TRUCKS = 49;
@@ -500,8 +500,13 @@ public class BillingService {
 
     /** Loads a month for this many trucks: 20 a truck, shared by the whole fleet. */
     public static int loadsAllowance(int trucks) {
-        return Math.max(trucks, 1) * LOADS_PER_TRUCK;
+        // Fleet's price covers 20 trucks, so its loads do too: 8 to 20 trucks get 400
+        int counted = truckingPlan(trucks) == Plan.FLEET ? Math.max(trucks, FLEET_INCLUDED_TRUCKS) : Math.max(trucks, 1);
+        return counted * LOADS_PER_TRUCK;
     }
+
+    /** Fleet's flat price covers this many trucks (then a price per truck). */
+    public static final int FLEET_INCLUDED_TRUCKS = 20;
 
     private static int requireTrucks(Integer trucks) {
         if (trucks == null || trucks < 1 || trucks > MAX_TRUCKS) {

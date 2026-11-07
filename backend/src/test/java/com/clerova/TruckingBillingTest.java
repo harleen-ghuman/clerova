@@ -33,7 +33,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Trucking plans: priced by truck, Starter up to 8 trucks and Fleet from 9. */
+/** Trucking plans: priced by truck, Starter up to 7 trucks and Fleet from 8. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
@@ -129,7 +129,8 @@ class TruckingBillingTest {
         mockMvc.perform(get("/api/me").with(user))
                 .andExpect(jsonPath("$.organization.plan").value("FLEET"))
                 .andExpect(jsonPath("$.organization.trucks").value(10))
-                .andExpect(jsonPath("$.organization.aiMonthlyLimit").value(200));
+                // Fleet's $199 covers 20 trucks, so 10 trucks get 20 x 20 loads
+                .andExpect(jsonPath("$.organization.aiMonthlyLimit").value(400));
 
         // Growth is for property managers
         mockMvc.perform(post("/api/billing/upgrade").with(user)).andExpect(status().isConflict());
