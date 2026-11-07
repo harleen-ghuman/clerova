@@ -277,4 +277,74 @@ class AiRateConEvaluationTest {
         RateConResult read = truckingAiService.readRateCon("Subject: Invoice 1042", INVOICE);
         assertThat(read.isRateConfirmation).isFalse();
     }
+
+    /** An Alberta broker's rate con: CAD, a postal code, kilometres, an NSC number but no US MC. */
+    private static final String ALBERTA_CAD = """
+            PRAIRIE FREIGHT BROKERS INC.            Load Confirmation
+            4500 72 Ave SE, Calgary AB T2C 4M5      Load #: PF-5521
+            dispatch@prairiefreight.example  (403) 555-0177
+
+            Carrier: Northline Haul Ltd   NSC AB 251-889-004
+            Equipment: 53' Dry Van
+
+            Pick up:  Prairie Grain Co, 9220 52 St SE, Calgary, AB T2C 2R6   Nov 12 2026 08:00
+            Deliver:  Northgate Foods DC, 12520 156 St NW, Edmonton, AB T5V 1E4   Nov 12 2026 15:00 appt
+            Distance: 299 km
+
+            Rate: $1,450.00 CAD all in (fuel included)
+            Detention: $75.00/hr CAD after 2 hrs free at shipper or receiver.
+            TONU: $250.00 CAD
+            Payment: Net 30 days from receipt of invoice and signed POD.
+            Email invoices to ap@prairiefreight.example
+            """;
+
+    /** A US broker's cross-border load for a Canadian carrier, paid in US funds. */
+    private static final String CROSS_BORDER_USD = """
+            BIG SKY TRANSPORT SERVICES LLC  MC# 701552  DOT 2245100
+            RATE CONFIRMATION   Order 77120
+            Carrier: Northline Haul Ltd (Calgary, AB)  USDOT 3901122  MC 1388004
+
+            Stop 1 PICKUP  Foothills Lumber, 11 Industrial Rd, Cranbrook, BC V1C 4H4  11/13/2026 07:00
+            Stop 2 DELIVERY  Spokane Building Supply, 4410 E Trent Ave, Spokane, WA 99212  11/13/2026 16:00
+
+            Total Carrier Pay: $1,980.00 USD
+            Payment terms: Net 30, quick pay 3%.
+            """;
+
+    @Test
+    void readsAnAlbertaRateConInCad() {
+        RateConResult read = truckingAiService.readRateCon("Subject: Load Confirmation PF-5521\n\nPlease sign and return.", ALBERTA_CAD);
+
+        assertThat(read.isRateConfirmation).isTrue();
+        assertThat(read.currency).isEqualToIgnoringCase("CAD");
+        assertThat(read.brokerName).containsIgnoringCase("Prairie Freight");
+        assertThat(TruckingIntakeService.mcNumber(read.brokerMcNumber)).isNull();
+        assertThat(read.loadNumber).contains("PF-5521");
+        assertThat(Money.cents(read.lineHaulRate)).isEqualTo(145000L);
+        assertThat(read.stops).hasSize(2);
+        assertThat(read.stops.getFirst().place).contains("Calgary").contains("T2C");
+        assertThat(read.stops.get(1).place).contains("Edmonton");
+        assertThat(Money.cents(read.detentionRatePerHour)).isEqualTo(7500L);
+        assertThat(Money.cents(read.tonuAmount)).isEqualTo(25000L);
+    }
+
+    @Test
+    void readsACrossBorderRateConInUsd() {
+        RateConResult read = truckingAiService.readRateCon("Subject: Rate con 77120", CROSS_BORDER_USD);
+
+        assertThat(read.isRateConfirmation).isTrue();
+        assertThat(read.currency).isEqualToIgnoringCase("USD");
+        assertThat(TruckingIntakeService.brokerMc(read)).isEqualTo("701552");
+        assertThat(Money.cents(read.lineHaulRate)).isEqualTo(198000L);
+        assertThat(read.stops.getFirst().place).contains("Cranbrook");
+        assertThat(read.stops.get(1).place).contains("Spokane");
+    }
+
+    @Test
+    void leavesTheCurrencyEmptyWhenOnlyADollarSignIsShown() {
+        RateConResult read = truckingAiService.readRateCon("Subject: RC VPB-3301", NO_DETENTION_NO_MC);
+
+        assertThat(read.isRateConfirmation).isTrue();
+        assertThat(read.currency == null || read.currency.isBlank()).isTrue();
+    }
 }

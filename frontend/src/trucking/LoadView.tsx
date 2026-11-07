@@ -14,7 +14,7 @@ import { MessageComposer } from "./MessageComposer";
 import { SendCarrierPacket } from "./SendCarrierPacket";
 import { Email } from "./Email";
 import type { LoadDetail, LoadStatus } from "../types/Load";
-import { STATUS_LABELS, city, detention, kindLabel, money, when } from "./format";
+import { STATUS_LABELS, city, detention, kindLabel, money, when, getHomeCurrency } from "./format";
 
 interface LoadViewProps {
   loadId: string;
@@ -688,7 +688,7 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
                 <dt>Name</dt>
                 <dd>{load.broker.name}</dd>
                 <dt>MC</dt>
-                <dd>{load.broker.mcNumber ?? "Missing"}</dd>
+                <dd>{load.broker.mcNumber ?? (getHomeCurrency() === "CAD" ? "No US MC" : "Missing")}</dd>
                 <dt>FMCSA</dt>
                 <dd>
                   {load.broker.fmcsaStatus === "ACTIVE"
