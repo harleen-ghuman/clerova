@@ -190,9 +190,14 @@ public class TruckingIntakeService {
                     + "shipping|tracking|notifications?|notify|alerts?|news(letter)?|marketing|promotions?|"
                     + "receipts?|mailer-daemon|postmaster|account-?update|digest)([._+-].*)?@");
 
+    /** "noreply" anywhere in the name, like googlecommunityteam-noreply@ or alerts.no-reply@. */
+    private static final java.util.regex.Pattern NO_REPLY_ANYWHERE = java.util.regex.Pattern.compile(
+            "(?i)^[^@]*(^|[._+-])(no-?reply|do-?not-?reply|donotreply)([._+-][^@]*)?@");
+
     /** A sender that only sends automatic notices, never a person writing about a load. */
     static boolean isAutomaticSender(String email) {
         return email != null && (AUTOMATIC_SENDER.matcher(email.strip()).find()
+                || NO_REPLY_ANYWHERE.matcher(email.strip()).find()
                 || email.toLowerCase(java.util.Locale.ROOT).matches(".*@([a-z0-9-]+\\.)*amazon\\.com$"));
     }
 
@@ -208,6 +213,9 @@ public class TruckingIntakeService {
 
     /** Small pictures are logos and signatures, not documents. */
     static final long MIN_PHOTO_BYTES = 50 * 1024;
+
+    /** A photo sent on its own (a driver's phone, shrunk by the mail app) only has to be this big. */
+    static final long MIN_LONE_PHOTO_BYTES = 15 * 1024;
 
     /**
      * The email's document: the PDF with the most text (others are often
@@ -227,9 +235,11 @@ public class TruckingIntakeService {
             return withText.isPresent() ? withText : pdfs.stream().max(bySize);
         }
 
+        long minimum = attachments.size() == 1 ? MIN_LONE_PHOTO_BYTES : MIN_PHOTO_BYTES;
+
         return attachments.stream()
                 .filter(attachment -> DocumentImages.isImage(attachment.getFileName(), attachment.getContentType()))
-                .filter(attachment -> attachment.getSizeBytes() != null && attachment.getSizeBytes() >= MIN_PHOTO_BYTES)
+                .filter(attachment -> attachment.getSizeBytes() != null && attachment.getSizeBytes() >= minimum)
                 .max(bySize);
     }
 

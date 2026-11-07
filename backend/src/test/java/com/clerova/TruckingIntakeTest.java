@@ -483,6 +483,7 @@ class TruckingIntakeTest {
                 stop("DELIVERY", "Desert Foods DC, Phoenix, AZ", "Nov 5, 7:00 AM")));
         read.detentionFreeHours = "2";
         read.detentionRatePerHour = "50.00";
+        read.tonuAmount = "150.00";
         read.detentionCondition = "Tell the broker within 30 minutes of arrival";
         read.detentionQuote = "Detention $50/hr after 2 hrs free. Carrier must notify broker within 30 min of arrival.";
         read.latePaperworkFine = "100";

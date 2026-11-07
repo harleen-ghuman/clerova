@@ -16,6 +16,7 @@ final class RateConChecks {
     static final String UNREADABLE = "UNREADABLE";
     static final String RATE_MISMATCH = "RATE_MISMATCH";
     static final String NO_DETENTION = "NO_DETENTION";
+    static final String NO_TONU = "NO_TONU";
     static final String DETENTION_CONDITION = "DETENTION_CONDITION";
     static final String PAPERWORK_FINE = "PAPERWORK_FINE";
     static final String QUICK_PAY_FEE = "QUICK_PAY_FEE";
@@ -76,6 +77,14 @@ final class RateConChecks {
                     "Detention pay has a condition",
                     "To get paid for detention: " + read.detentionCondition.strip(),
                     read.detentionQuote));
+        }
+
+        if (load.getRateCents() != null && Money.cents(read.tonuAmount) == null) {
+            flags.add(flag(NO_TONU, FlagLevel.NOTE,
+                    "No TONU pay on this rate con",
+                    "If the load is cancelled after your truck is sent, there's nothing to bill. "
+                            + "Ask the broker to add TONU (truck ordered, not used) before you sign.",
+                    null));
         }
 
         Long fine = Money.cents(read.latePaperworkFine);
