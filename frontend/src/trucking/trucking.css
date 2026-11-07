@@ -2051,3 +2051,96 @@ label.rq-button.is-disabled {
 .tk-panel .tk-kv + .tk-packet-send {
   margin-top: 14px;
 }
+
+/* A load typed in by hand */
+.tk-new-load {
+  margin-top: 14px;
+  display: grid;
+  gap: 14px;
+}
+
+.tk-new-load h2 {
+  margin: 0;
+}
+
+.tk-new-load .tk-sub {
+  margin: -8px 0 0;
+}
+
+.tk-new-load-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.tk-new-load label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tk-new-load label > input,
+.tk-new-load label > select {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.tk-new-stop label > input,
+.tk-new-stop label > select {
+  margin-top: 0;
+}
+
+.tk-optional {
+  font-weight: 400;
+  color: var(--muted, #5d6470);
+}
+
+.tk-new-stops {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.tk-new-stops legend {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.tk-new-stop {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.tk-new-stops > .tk-link {
+  justify-self: start;
+}
+
+.tk-new-terms summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent, #2b4acb);
+  margin-bottom: 12px;
+}
+
+@media (max-width: 640px) {
+  .tk-new-load-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tk-new-stop {
+    grid-template-columns: minmax(0, 1fr);
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border, #e4e7ec);
+  }
+
+  .tk-new-stop > .tk-link {
+    justify-self: start;
+  }
+}

@@ -41,10 +41,10 @@ public class TruckingIntakeService {
     public static final String NOT_A_RATE_CON_REASON =
             "Not a rate con. Clerova reads rate cons for now; other trucking emails come next.";
     public static final String SCANNED_REASON =
-            "Clerova couldn't read the attached file. Check it yourself, or upload it to the load.";
+            "Clerova couldn't read the attached file. Use Make a new load to type it in, or file it under its load.";
     public static final String LOCKED_REASON =
             "The attached PDF is locked with a password, so Clerova can't read it. "
-                    + "Open it, save or print it as a new PDF without the password, and send that.";
+                    + "Save or print it as a new PDF without the password and send that, or use Make a new load to type it in.";
     public static final String REVISED_REASON = "A new copy of this load's rate con. The load was updated.";
 
     /** FMCSA results are reused for a day. */
@@ -748,6 +748,12 @@ public class TruckingIntakeService {
     /** Makes the load from a rate con, or updates it for a new copy. Run in a transaction. */
     public SavedLoad saveLoad(UUID organizationId, String fileName, RateConResult read,
                               String mcNumber, BrokerCheck check) {
+        return saveLoad(organizationId, fileName, read, mcNumber, check, false);
+    }
+
+    /** byHand: typed in by the dispatcher, so only the broker is checked (there's no rate con to check). */
+    SavedLoad saveLoad(UUID organizationId, String fileName, RateConResult read,
+                       String mcNumber, BrokerCheck check, boolean byHand) {
         Broker broker = broker(organizationId, read, mcNumber, check);
         String loadNumber = clean(read.loadNumber, 100);
 
@@ -807,7 +813,9 @@ public class TruckingIntakeService {
             load.replaceStops(newStops);
         }
 
-        List<LoadFlag> flags = RateConChecks.flags(read, load, mcNumber, check);
+        List<LoadFlag> flags = byHand
+                ? RateConChecks.brokerFlags(load, mcNumber, check)
+                : RateConChecks.flags(read, load, mcNumber, check);
 
         // A flag someone already checked stays checked on a new copy of the rate con
         for (LoadFlag flag : flags) {
@@ -830,6 +838,156 @@ public class TruckingIntakeService {
         }
 
         return new SavedLoad(saved, existing.isEmpty());
+    }
+
+    public record ManualStop(String kind, String place, String appointment) {
+    }
+
+    /** A load typed in by hand: booked by phone, text or a portal, or from an email Clerova couldn't read. */
+    public record ManualLoad(String loadNumber, String brokerName, String brokerEmail, String brokerMc, String rate,
+                             String equipment, List<ManualStop> stops, String detentionFreeHours,
+                             String detentionRatePerHour, String tonu, String paymentTerms, String invoiceEmail,
+                             UUID fromEmailId) {
+    }
+
+    static final int MAX_MANUAL_STOPS = 10;
+
+    /**
+     * Makes a load from what the dispatcher typed. It counts toward the plan
+     * like a rate con, and only the broker is checked. A rate con that comes
+     * in later for the same broker and load number updates it.
+     */
+    public UUID createByHand(UUID organizationId, ManualLoad request) {
+        if (organizationRepository.findById(organizationId).orElseThrow().getIndustry() != Industry.TRUCKING) {
+            throw new com.clerova.exception.NotFoundException("Not found");
+        }
+
+        RateConResult read = manualRead(request);
+        String mcNumber = mcNumber(request.brokerMc());
+
+        if (hasText(request.brokerMc()) && mcNumber == null) {
+            throw invalidLoad("The MC number should be digits, like 845210.");
+        }
+
+        InboundMessage message = request.fromEmailId() == null
+                ? null
+                : requireTruckingMessage(organizationId, request.fromEmailId());
+
+        if (message != null && message.getStatus() == InboundMessageStatus.PROCESSED && message.getLoadId() != null) {
+            throw new com.clerova.exception.ConflictException("This email's rate con already made a load.");
+        }
+
+        if (message != null && message.getStatus() != InboundMessageStatus.IGNORED
+                && message.getStatus() != InboundMessageStatus.ATTACHED) {
+            throw new com.clerova.exception.ConflictException("Clerova is still reading this email. Try again in a minute.");
+        }
+
+        aiUsageService.requireQuota(organizationId);
+        String loadNumber = clean(read.loadNumber, 100);
+
+        if (loadNumber != null) {
+            Optional<Broker> known = mcNumber != null
+                    ? brokerRepository.findFirstByOrganizationIdAndMcNumber(organizationId, mcNumber)
+                    : brokerWithoutMc(organizationId, clean(read.brokerName, 255));
+            boolean taken = known.flatMap(broker -> loadRepository
+                            .findFirstByOrganizationIdAndBrokerAndLoadNumber(organizationId, broker, loadNumber)
+                            .or(() -> sameLoadOtherBrokerRecord(organizationId, broker, loadNumber)))
+                    .isPresent();
+
+            if (taken) {
+                throw new com.clerova.exception.ConflictException(
+                        "Load " + loadNumber + " from this broker is already on Clerova. Open it from the Loads board.");
+            }
+        }
+
+        BrokerCheck check = brokerCheck(organizationId, mcNumber);
+        SavedLoad saved = transactionTemplate.execute(status -> saveLoad(organizationId, null, read, mcNumber, check, true));
+        return saved.load().getId();
+    }
+
+    private static RateConResult manualRead(ManualLoad request) {
+        if (!hasText(request.brokerName())) {
+            throw invalidLoad("Add the broker's name.");
+        }
+
+        List<ManualStop> stops = request.stops() == null ? List.of() : request.stops().stream()
+                .filter(stop -> stop != null && hasText(stop.place()))
+                .toList();
+
+        if (stops.size() > MAX_MANUAL_STOPS) {
+            throw invalidLoad("A load can have up to " + MAX_MANUAL_STOPS + " stops.");
+        }
+
+        if (stops.stream().noneMatch(stop -> "PICKUP".equalsIgnoreCase(stop.kind()))
+                || stops.stream().noneMatch(stop -> !"PICKUP".equalsIgnoreCase(stop.kind()))) {
+            throw invalidLoad("Add where the load picks up and where it delivers.");
+        }
+
+        if (stops.stream().anyMatch(stop -> stop.place().strip().length() > 500
+                || (stop.appointment() != null && stop.appointment().strip().length() > 200))) {
+            throw invalidLoad("A stop's address or time is too long.");
+        }
+
+        requireAmount(request.rate(), "The rate should be an amount, like 2150.");
+        requireAmount(request.detentionRatePerHour(), "Detention pay should be an amount an hour, like 50.");
+        requireAmount(request.tonu(), "TONU should be an amount, like 150.");
+
+        if (hasText(request.detentionFreeHours()) && Money.minutesFromHours(request.detentionFreeHours()) == null) {
+            throw invalidLoad("Free time should be hours, like 2.");
+        }
+
+        for (String email : new String[] {request.brokerEmail(), request.invoiceEmail()}) {
+            if (hasText(email) && !InvoiceService.isEmail(email.strip())) {
+                throw invalidLoad("Check the email address: " + email.strip());
+            }
+        }
+
+        if (tooLong(request.loadNumber(), 100) || tooLong(request.brokerName(), 255) || tooLong(request.equipment(), 100)
+                || tooLong(request.paymentTerms(), 500)) {
+            throw invalidLoad("One of the fields is too long. Shorten it and try again.");
+        }
+
+        RateConResult read = new RateConResult();
+        read.isRateConfirmation = true;
+        read.documentKind = "RATE_CON";
+        read.loadNumber = request.loadNumber();
+        read.brokerName = request.brokerName();
+        read.brokerEmail = request.brokerEmail();
+        read.lineHaulRate = request.rate();
+        read.equipment = request.equipment();
+        read.detentionFreeHours = request.detentionFreeHours();
+        read.detentionRatePerHour = request.detentionRatePerHour();
+        read.tonuAmount = request.tonu();
+        read.paymentTerms = request.paymentTerms();
+        read.invoiceEmail = request.invoiceEmail();
+
+        for (ManualStop stop : stops) {
+            RateConResult.Stop copy = new RateConResult.Stop();
+            copy.kind = "PICKUP".equalsIgnoreCase(stop.kind()) ? "PICKUP" : "DELIVERY";
+            copy.place = stop.place();
+            copy.appointment = stop.appointment();
+            read.stops.add(copy);
+        }
+
+        return read;
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private static void requireAmount(String value, String message) {
+        if (hasText(value) && Money.cents(value) == null) {
+            throw invalidLoad(message);
+        }
+    }
+
+    private static boolean tooLong(String value, int max) {
+        return value != null && value.strip().length() > max;
+    }
+
+    private static com.clerova.exception.ApiException invalidLoad(String message) {
+        return new com.clerova.exception.ApiException(org.springframework.http.HttpStatus.BAD_REQUEST, "INVALID_LOAD", message);
     }
 
     private Optional<BrokerCheck> cachedCheck(UUID organizationId, String mcNumber) {

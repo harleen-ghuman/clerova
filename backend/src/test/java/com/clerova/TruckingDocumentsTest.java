@@ -608,6 +608,111 @@ class TruckingDocumentsTest {
         return out.toByteArray();
     }
 
+    @Test
+    void aLoadBookedByPhoneIsTypedInByHand() throws Exception {
+        String body = """
+                {"loadNumber":"TX-4471","brokerName":"Crestline Freight","brokerEmail":"dana@crestline.example",
+                 "brokerMc":"MC 845210","rate":"2,150","equipment":"53' Dry Van",
+                 "stops":[{"kind":"PICKUP","place":"Fresno, CA","appointment":"Nov 10, 8:00 AM"},
+                          {"kind":"DELIVERY","place":"Phoenix, AZ","appointment":""}],
+                 "detentionFreeHours":"2","detentionRatePerHour":"50"}""";
+        JsonNode load = json(mockMvc.perform(post("/api/loads").with(user).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()));
+
+        assertThat(load.get("status").asText()).isEqualTo("BOOKED");
+        assertThat(load.get("loadNumber").asText()).isEqualTo("TX-4471");
+        assertThat(load.get("rateCents").asLong()).isEqualTo(215000L);
+        assertThat(load.get("stops").size()).isEqualTo(2);
+        assertThat(load.get("broker").get("mcNumber").asText()).isEqualTo("845210");
+        // Only the broker is checked, and FMCSA knows this one: nothing to check before pickup
+        assertThat(load.get("flags").size()).isZero();
+
+        // The same load can't be typed in twice
+        mockMvc.perform(post("/api/loads").with(user).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith("Load TX-4471 from this broker is already on Clerova")));
+
+        // What's needed: the broker, a pickup and a delivery; amounts must be amounts
+        mockMvc.perform(post("/api/loads").with(user).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"brokerName\":\"Crestline\",\"stops\":[{\"kind\":\"PICKUP\",\"place\":\"Fresno\"}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Add where the load picks up and where it delivers."));
+        mockMvc.perform(post("/api/loads").with(user).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"stops\":[{\"kind\":\"PICKUP\",\"place\":\"A\"},{\"kind\":\"DELIVERY\",\"place\":\"B\"}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Add the broker's name."));
+        mockMvc.perform(post("/api/loads").with(user).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"brokerName\":\"Crestline\",\"rate\":\"call me\",\"stops\":[{\"kind\":\"PICKUP\",\"place\":\"A\"},{\"kind\":\"DELIVERY\",\"place\":\"B\"}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("The rate should be an amount, like 2150."));
+
+        // No load number, no MC: still a load, with a note to get the broker's MC
+        JsonNode bare = json(mockMvc.perform(post("/api/loads").with(user).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"brokerName\":\"Valley Brokerage\",\"stops\":[{\"kind\":\"PICKUP\",\"place\":\"Visalia, CA\"},{\"kind\":\"DELIVERY\",\"place\":\"Reno, NV\"}]}"))
+                .andExpect(status().isOk()));
+        List<String> codes = new ArrayList<>();
+        bare.get("flags").forEach(flag -> codes.add(flag.get("code").asText()));
+        assertThat(codes).containsExactly("MC_MISSING");
+
+        // Without a rate the invoice starts at $0, and a $0 invoice can't go out
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/carrier").with(user)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"legalName\":\"Sierra Run Transport LLC\",\"mcNumber\":\"845001\",\"address\":\"410 W Main St\\nVisalia, CA 93291\","
+                                + "\"email\":\"billing@sierrarun.example\",\"invoicePrefix\":\"SR-\",\"nextInvoiceNumber\":1001,\"usesFactoring\":false}"))
+                .andExpect(status().isOk());
+        JsonNode invoice = json(mockMvc.perform(post("/api/loads/{id}/invoice", bare.get("id").asText()).with(user))
+                .andExpect(status().isOk()));
+        mockMvc.perform(post("/api/invoices/{id}/mark-sent", invoice.get("id").asText()).with(user))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith("The invoice total is $0")));
+
+        // Another kind of workspace can't make trucking loads
+        mockMvc.perform(post("/api/loads").with(onboardNewUser(mockMvc)).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void aLockedRateConSaysSoAndTheLoadIsMadeByHandFromTheEmail() throws Exception {
+        byte[] locked;
+
+        try (PDDocument document = new PDDocument()) {
+            document.addPage(new org.apache.pdfbox.pdmodel.PDPage());
+            org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy policy =
+                    new org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy(
+                            "owner", "1234", new org.apache.pdfbox.pdmodel.encryption.AccessPermission());
+            policy.setEncryptionKeyLength(256);
+            document.protect(policy);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            document.save(out);
+            locked = out.toByteArray();
+        }
+
+        deliver("me@gmail.com", "<locked@x>", "Fwd: Signed Rate Con", "", "signed_RateCon.pdf",
+                Base64.getEncoder().encodeToString(locked));
+        processor.processDue();
+        JsonNode email = json(mockMvc.perform(get("/api/inbox").with(user))).get(0);
+        assertThat(email.get("status").asText()).isEqualTo("IGNORED");
+        assertThat(email.get("statusReason").asText()).isEqualTo(TruckingIntakeService.LOCKED_REASON);
+
+        JsonNode load = json(mockMvc.perform(post("/api/loads").with(user).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"loadNumber\":\"9Y-ZDH-T9\",\"brokerName\":\"Flock Freight\",\"rate\":\"2400\","
+                                + "\"stops\":[{\"kind\":\"PICKUP\",\"place\":\"Stockton, CA\"},{\"kind\":\"DELIVERY\",\"place\":\"Tracy, CA\"}],"
+                                + "\"fromEmailId\":\"" + email.get("id").asText() + "\"}"))
+                .andExpect(status().isOk()));
+
+        assertThat(load.get("documents").size()).isEqualTo(1);
+        assertThat(load.get("documents").get(0).get("name").asText()).isEqualTo("signed_RateCon.pdf");
+        email = json(mockMvc.perform(get("/api/inbox").with(user))).get(0);
+        assertThat(email.get("status").asText()).isEqualTo("ATTACHED");
+        assertThat(email.get("loadId").asText()).isEqualTo(load.get("id").asText());
+
+        // Another workspace can't make a load from this email
+        mockMvc.perform(post("/api/loads").with(onboardNewUser(mockMvc)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"brokerName\":\"X\",\"stops\":[{\"kind\":\"PICKUP\",\"place\":\"A\"},{\"kind\":\"DELIVERY\",\"place\":\"B\"}],"
+                                + "\"fromEmailId\":\"" + email.get("id").asText() + "\"}"))
+                .andExpect(status().isNotFound());
+    }
+
     private static byte[] photo() throws Exception {
         java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(400, 300, java.awt.image.BufferedImage.TYPE_INT_RGB);
         ByteArrayOutputStream out = new ByteArrayOutputStream();

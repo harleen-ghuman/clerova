@@ -331,6 +331,8 @@ public class InvoiceService {
             throw invalid("Write a short message to go with the invoice.");
         }
 
+        requireAmount(require(organizationId, invoiceId));
+
         if (!emailProperties.isSendingEnabled()) {
             throw new ApiException(HttpStatus.CONFLICT, "EMAIL_SENDING_DISABLED",
                     "Sending email isn't set up yet. Download the packet and send it from your own email.");
@@ -463,6 +465,7 @@ public class InvoiceService {
         Load load = loadRepository.findById(invoice.getLoadId()).orElseThrow();
 
         if (invoice.getStatus() == InvoiceStatus.DRAFT) {
+            requireAmount(invoice);
             markSent(invoice, load, Invoice.SentVia.PORTAL, null);
         } else if (invoice.getStatus() != InvoiceStatus.SENT) {
             throw new ConflictException("This invoice is already " + invoice.getStatus().name().toLowerCase(Locale.ROOT) + ".");
@@ -997,6 +1000,13 @@ public class InvoiceService {
     private Invoice require(UUID organizationId, UUID invoiceId) {
         return invoiceRepository.findByIdAndOrganizationId(invoiceId, organizationId)
                 .orElseThrow(() -> new NotFoundException("Invoice not found"));
+    }
+
+    /** A load typed in without a rate starts with a $0 line haul; it can't go out like that. */
+    private static void requireAmount(Invoice invoice) {
+        if (invoice.getStatus() == InvoiceStatus.DRAFT && invoice.getTotalCents() <= 0) {
+            throw invalid("The invoice total is $0. Add the line haul amount, save the lines, then send it.");
+        }
     }
 
     private static void requireDraft(Invoice invoice) {
