@@ -63,6 +63,17 @@ public class LoadController {
         return loadService.list(currentUserService.requireOrganizationId());
     }
 
+    /** A load typed in by hand; with fromEmailId, that email is filed under it. */
+    @PostMapping("/api/loads")
+    public LoadResponses.LoadDetail create(@RequestBody TruckingIntakeService.ManualLoad request) {
+        UUID organizationId = currentUserService.requireOrganizationId();
+        UUID loadId = intakeService.createByHand(organizationId, request);
+
+        return request.fromEmailId() != null
+                ? loadService.fileEmail(organizationId, loadId, request.fromEmailId())
+                : loadService.get(organizationId, loadId);
+    }
+
     @GetMapping("/api/loads/{id}")
     public LoadResponses.LoadDetail get(@PathVariable UUID id) {
         return loadService.get(currentUserService.requireOrganizationId(), id);

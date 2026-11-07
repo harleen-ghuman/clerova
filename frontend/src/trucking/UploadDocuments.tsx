@@ -4,6 +4,7 @@ import { errorMessage } from "../api/client";
 import type { LoadSummary, UploadedDocument } from "../types/Load";
 import { ACCEPTED_FILES, openDocument, uploadProblem } from "./documents";
 import { LoadPicker } from "./LoadPicker";
+import { NewLoadForm } from "./NewLoadForm";
 import { kindLabel, loadLabel } from "./format";
 
 interface UploadDocumentsProps {
@@ -26,6 +27,7 @@ export function UploadDocuments({ loads, refreshKey, onOpenLoad, onChanged }: Up
   const [busyId, setBusyId] = useState<string | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     let current = true;
@@ -132,7 +134,7 @@ export function UploadDocuments({ loads, refreshKey, onOpenLoad, onChanged }: Up
           <h2>Upload documents</h2>
           <p className="tk-sub">
             A BOL, POD or receipt from a driver's phone or a broker portal. Clerova reads it and files it under its
-            load. A rate con makes a new load.
+            load. A rate con makes a new load. Booked by phone or text, with no rate con? Add the load by hand.
           </p>
         </div>
         <div className="tk-actions">
@@ -148,8 +150,24 @@ export function UploadDocuments({ loads, refreshKey, onOpenLoad, onChanged }: Up
           <label htmlFor={inputId} className={`rq-button rq-button-small rq-button-primary ${progress ? "is-disabled" : ""}`}>
             {progress ?? "Upload documents"}
           </label>
+          {!adding && (
+            <button type="button" className="rq-button rq-button-small" onClick={() => setAdding(true)}>
+              Add a load by hand
+            </button>
+          )}
         </div>
       </div>
+
+      {adding && (
+        <NewLoadForm
+          onCancel={() => setAdding(false)}
+          onCreated={(load) => {
+            setAdding(false);
+            onChanged();
+            onOpenLoad(load.id);
+          }}
+        />
+      )}
 
       {error && (
         <p className="action-error" role="alert">

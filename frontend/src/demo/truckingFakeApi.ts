@@ -51,7 +51,7 @@ interface DemoLoad {
   status: LoadStatus;
   brokerId: string;
   equipment: string;
-  rateCents: number;
+  rateCents: number | null;
   agreedRateCents: number | null;
   detentionFreeMinutes: number | null;
   detentionRateCents: number | null;
@@ -62,7 +62,7 @@ interface DemoLoad {
   quickPayPercent: number | null;
   invoiceEmail: string | null;
   paperworkRule: string | null;
-  rateConFile: string;
+  rateConFile: string | null;
   stops: LoadStop[];
   flags: LoadFlag[];
   statusNote: string | null;
@@ -218,7 +218,7 @@ function baseLoad(
     tonuCents: 15000,
     paymentTerms: "Net 30",
     quickPayPercent: 3,
-    invoiceEmail: `billing@${brokerInfo.email!.split("@")[1]}`,
+    invoiceEmail: brokerInfo.email ? `billing@${brokerInfo.email.split("@")[1]}` : null,
     paperworkRule: "Signed BOL/POD within 24 hours of delivery",
     rateConFile: `RC_${loadNumber}.pdf`,
     stops,
@@ -329,8 +329,8 @@ function seed(): State {
     sendTo: "BROKER",
     billTo: null,
     remitTo: null,
-    lines: [{ description: `Line haul, load ${load.loadNumber}`, amountCents: load.rateCents }],
-    totalCents: load.rateCents,
+    lines: [{ description: `Line haul, load ${load.loadNumber}`, amountCents: load.rateCents ?? 0 }],
+    totalCents: load.rateCents ?? 0,
     quickPay: false,
     quickPayFeeCents: null,
     sentVia: "EMAIL",
@@ -534,6 +534,70 @@ function invalid(message: string): never {
   throw new ApiRequestError(message, 400);
 }
 
+/** Dollars typed by hand ("2,150" or "$2150.50") to cents; null when blank, a 400 when not an amount. */
+function typedCents(value: unknown, message: string): number | null {
+  const typed = text(value).replace(/[$,\s]/g, "");
+  if (!typed) return null;
+  const amount = Number(typed);
+  if (!Number.isFinite(amount) || amount <= 0) invalid(message);
+  return Math.round(amount * 100);
+}
+
+/** POST /api/loads, as the server: broker + pickup + delivery, counted, broker checked only. */
+function createByHand(body: Record<string, unknown>) {
+  const brokerName = text(body.brokerName);
+  if (!brokerName) invalid("Add the broker's name.");
+  const stops = (Array.isArray(body.stops) ? body.stops : [])
+    .map((item) => item as Record<string, unknown>)
+    .filter((item) => text(item.place));
+  if (!stops.some((item) => item.kind === "PICKUP") || !stops.some((item) => item.kind !== "PICKUP")) {
+    invalid("Add where the load picks up and where it delivers.");
+  }
+  const rateCents = typedCents(body.rate, "The rate should be an amount, like 2150.");
+  const mc = text(body.brokerMc).replace(/\D/g, "") || null;
+  if (text(body.brokerMc) && !mc) invalid("The MC number should be digits, like 845210.");
+
+  const emailId = text(body.fromEmailId) || null;
+  const email = emailId ? state.inbox.find((item) => item.id === emailId) : undefined;
+  if (emailId && !email) throw new ApiRequestError("Email not found", 404);
+
+  let brokerInfo = state.brokers.find((item) => (mc && item.mcNumber === mc) || item.name.toLowerCase() === brokerName.toLowerCase());
+  const loadNumber = text(body.loadNumber) || null;
+  if (brokerInfo && loadNumber && state.loads.some((item) => item.brokerId === brokerInfo!.id && item.loadNumber === loadNumber)) {
+    conflict(`Load ${loadNumber} from this broker is already on Clerova. Open it from the Loads board.`);
+  }
+  if (!brokerInfo) {
+    brokerInfo = { ...broker(brokerName, mc, text(body.brokerEmail) || "", ""), email: text(body.brokerEmail) || null, phone: null };
+    state.brokers.push(brokerInfo);
+  }
+
+  const load = baseLoad(brokerInfo, loadNumber ?? "", "BOOKED", rateCents ?? 0, stops.map((item) =>
+    stop(item.kind === "PICKUP" ? "PICKUP" : "DELIVERY", text(item.place), text(item.appointment))), 0);
+  load.loadNumber = loadNumber;
+  load.rateCents = rateCents;
+  load.rateConFile = null;
+  load.equipment = text(body.equipment) || "";
+  load.detentionFreeMinutes = text(body.detentionFreeHours) ? Math.round(Number(text(body.detentionFreeHours)) * 60) || null : null;
+  load.detentionRateCents = typedCents(body.detentionRatePerHour, "Detention pay should be an amount an hour, like 50.");
+  load.detentionMaxCents = null;
+  load.tonuCents = typedCents(body.tonu, "TONU should be an amount, like 150.");
+  load.paymentTerms = text(body.paymentTerms) || null;
+  load.quickPayPercent = null;
+  load.invoiceEmail = text(body.invoiceEmail) || null;
+  load.paperworkRule = null;
+  load.flags = brokerInfo.mcNumber ? [] : [flag("MC_MISSING", "FIX", "No MC number for the broker",
+    "Clerova can't check this broker with FMCSA. Ask for their MC number before you sign.", null)];
+  state.loads.unshift(load);
+
+  if (email) {
+    email.status = "ATTACHED";
+    email.statusReason = "Filed under this load by you.";
+    email.loadId = load.id;
+  }
+
+  return detail(load);
+}
+
 function findLoad(loadId: string): DemoLoad {
   const load = state.loads.find((candidate) => candidate.id === loadId);
   if (!load) throw new ApiRequestError("Load not found", 404);
@@ -569,7 +633,7 @@ function startingLines(load: DemoLoad): InvoiceLine[] {
   const lines: InvoiceLine[] = [];
 
   if (load.status !== "CANCELLED") {
-    lines.push({ description: `Line haul, load ${load.loadNumber}`, amountCents: load.rateCents });
+    lines.push({ description: load.loadNumber ? `Line haul, load ${load.loadNumber}` : "Line haul", amountCents: load.rateCents ?? 0 });
   }
 
   for (const charge of load.charges) {
@@ -770,7 +834,7 @@ function samplePaper(load: DemoLoad | undefined, kind: DocumentKind | null, name
       writer.line(item.place ?? "");
     });
     writer.space();
-    writer.row("TOTAL CARRIER PAY", money(load.rateCents), { bold: true });
+    writer.row("TOTAL CARRIER PAY", money(load.rateCents ?? 0), { bold: true });
     writer.space();
     writer.line("TERMS AND CONDITIONS", { bold: true });
     writer.line("1. Detention: $50.00/hr after 2 hours free, max $200.00 per stop.");
@@ -947,8 +1011,8 @@ export async function simulateRateCon(): Promise<string> {
     stop("DELIVERY", "Pacific Grocers DC, 2001 E Dominguez St, Long Beach, CA 90810", "Tomorrow 13:00 APPT"),
   ], 0);
   load.equipment = "Reefer";
-  load.flags = [flag("TONU_MISSING", "NOTE", "No TONU on this rate con",
-    "If the load is cancelled after you dispatch, there's nothing to bill. Ask the broker to add TONU pay.", null)];
+  load.flags = [flag("NO_TONU", "NOTE", "No TONU pay on this rate con",
+    "If the load is cancelled after your truck is sent, there's nothing to bill. Ask the broker to add TONU (truck ordered, not used) before you sign.", null)];
   load.tonuCents = null;
   load.conversation = [incoming("Dana Ruiz <dana@crestline.example>", `Rate Confirmation ${number}`,
     `Hi,\n\nNew load ${number} Bakersfield to Long Beach, $1,980. Please sign and return.\n\nDana`, 0, [`RC_${number}.pdf`])];
@@ -1050,6 +1114,7 @@ function handle(route: string, body: Record<string, unknown>, form: FormData | n
   if (route === "GET /api/loads") {
     return state.loads.map(summary).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
+  if (route === "POST /api/loads") return createByHand(body);
   if ((match = route.match(/^GET \/api\/loads\/([^/]+)$/))) return detail(findLoad(match[1]));
   if ((match = route.match(/^PATCH \/api\/loads\/([^/]+)$/))) {
     const load = findLoad(match[1]);
@@ -1371,6 +1436,9 @@ function handle(route: string, body: Record<string, unknown>, form: FormData | n
     const invoice = state.invoices.find((candidate) => candidate.id === match![1]);
     if (!invoice) throw new ApiRequestError("Invoice not found", 404);
     const load = findLoad(invoice.loadId);
+    if ((match[2] === "send" || match[2] === "mark-sent") && invoice.status === "DRAFT" && invoice.totalCents <= 0) {
+      invalid("The invoice total is $0. Add the line haul amount, save the lines, then send it.");
+    }
 
     switch (match[2]) {
       case "send": {

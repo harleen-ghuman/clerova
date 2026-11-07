@@ -124,8 +124,14 @@ public final class DocumentImages {
                 float height = document.getPage(page).getMediaBox().getHeight();
                 // Points are 1/72 inch; keep the long side under MAX_SIDE
                 float dpi = Math.min(DPI, MAX_SIDE * 72f / Math.max(1, Math.max(width, height)));
-                BufferedImage image = renderer.renderImageWithDPI(page, dpi, ImageType.RGB);
-                pages.add(dataUrl("image/jpeg", jpeg(image)));
+
+                try {
+                    BufferedImage image = renderer.renderImageWithDPI(page, dpi, ImageType.RGB);
+                    pages.add(dataUrl("image/jpeg", jpeg(image)));
+                } catch (Exception e) {
+                    // One bad page doesn't lose the others
+                    log.warn("Could not draw page {}: {}", page + 1, e.toString());
+                }
             }
         }
 

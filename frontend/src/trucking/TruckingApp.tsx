@@ -423,7 +423,11 @@ export function TruckingApp({
               error={loadsError}
               onOpenLoad={openLoad}
               refreshKey={refreshTick}
-              onChanged={() => void loadLoads()}
+              onChanged={() => {
+                // A new load (uploaded or typed in) also moves the loads count in the side panel
+                void loadLoads();
+                void loadOrganization();
+              }}
               onRetry={() => void loadLoads()}
               search={loadSearch}
               onSearch={setLoadSearch}
@@ -453,6 +457,10 @@ export function TruckingApp({
               onOpenLoad={openLoad}
               loads={loads}
               onFileEmail={(messageId, loadId) => fileEmail(loadId, messageId).then(() => loadLoads())}
+              onLoadCreated={() => {
+                void loadLoads();
+                void loadOrganization();
+              }}
               sendingEnabled={emailSettings?.sendingEnabled ?? false}
             />
           </div>

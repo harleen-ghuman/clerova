@@ -48,6 +48,28 @@ export function getBrokers(): Promise<BrokerSummary[]> {
   return apiRequest("/api/brokers");
 }
 
+export interface NewLoad {
+  loadNumber: string | null;
+  brokerName: string;
+  brokerEmail: string | null;
+  brokerMc: string | null;
+  rate: string | null;
+  equipment: string | null;
+  stops: { kind: "PICKUP" | "DELIVERY"; place: string; appointment: string | null }[];
+  detentionFreeHours: string | null;
+  detentionRatePerHour: string | null;
+  tonu: string | null;
+  paymentTerms: string | null;
+  invoiceEmail: string | null;
+  /** The Inbox email it comes from; it's filed under the new load. */
+  fromEmailId: string | null;
+}
+
+/** A load typed in by hand. Counts toward the plan like a rate con. */
+export function createLoad(load: NewLoad): Promise<LoadDetail> {
+  return apiRequest("/api/loads", { method: "POST", body: load });
+}
+
 /** Files an email from the Inbox under a load. */
 export function fileEmail(loadId: string, messageId: string): Promise<LoadDetail> {
   return apiRequest(`/api/loads/${loadId}/emails/${messageId}`, { method: "POST" });

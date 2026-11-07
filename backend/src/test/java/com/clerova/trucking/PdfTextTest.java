@@ -28,4 +28,32 @@ class PdfTextTest {
         assertThat(PdfText.isPdf("scan", "application/pdf")).isTrue();
         assertThat(PdfText.isPdf("photo.jpg", "image/jpeg")).isFalse();
     }
+
+    @Test
+    void aPasswordLockedPdfIsToldApartFromAnUnreadableOne() throws Exception {
+        byte[] open;
+        byte[] locked;
+
+        try (org.apache.pdfbox.pdmodel.PDDocument document = new org.apache.pdfbox.pdmodel.PDDocument()) {
+            document.addPage(new org.apache.pdfbox.pdmodel.PDPage());
+            java.io.ByteArrayOutputStream plain = new java.io.ByteArrayOutputStream();
+            document.save(plain);
+            open = plain.toByteArray();
+
+            org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy policy =
+                    new org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy(
+                            "owner", "1234", new org.apache.pdfbox.pdmodel.encryption.AccessPermission());
+            policy.setEncryptionKeyLength(256);
+            document.protect(policy);
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            document.save(out);
+            locked = out.toByteArray();
+        }
+
+        assertThat(PdfText.isLocked(locked)).isTrue();
+        assertThat(PdfText.isLocked(open)).isFalse();
+        assertThat(PdfText.isLocked("not a pdf".getBytes(StandardCharsets.UTF_8))).isFalse();
+        assertThat(DocumentImages.dataUrls(locked, "signed_RateCon.pdf", "application/pdf")).isEmpty();
+        assertThat(DocumentImages.dataUrls(open, "blank.pdf", "application/pdf")).hasSize(1);
+    }
 }

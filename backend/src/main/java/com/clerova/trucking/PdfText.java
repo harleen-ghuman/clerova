@@ -29,6 +29,21 @@ public final class PdfText {
      * The PDF's text, or null when it can't be read (damaged, locked with a
      * password). A scanned page has no text and gives an empty string.
      */
+    /** A PDF that needs a password to open (some e-sign and portal downloads are locked). */
+    public static boolean isLocked(byte[] content) {
+        if (content == null || content.length == 0) {
+            return false;
+        }
+
+        try (PDDocument ignored = Loader.loadPDF(content)) {
+            return false;
+        } catch (org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException e) {
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public static String read(byte[] content) {
         if (content == null || content.length == 0) {
             return null;

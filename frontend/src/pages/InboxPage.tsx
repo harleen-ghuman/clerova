@@ -8,6 +8,7 @@ import type { LoadSummary } from "../types/Load";
 import { LoadPicker } from "../trucking/LoadPicker";
 import { loadLabel } from "../trucking/format";
 import { InboxReply } from "../trucking/InboxReply";
+import { NewLoadForm } from "../trucking/NewLoadForm";
 
 interface InboxPageProps {
   /** Changes when the app refreshes, so new emails show up. */
@@ -16,6 +17,8 @@ interface InboxPageProps {
   onOpenEmailSetup: () => void;
   /** A trucking workspace: emails become loads. */
   onOpenLoad?: (loadId: string) => void;
+  /** A load was typed in from an email (trucking). */
+  onLoadCreated?: () => void;
   /** A trucking workspace's loads, to file an email under one by hand. */
   loads?: LoadSummary[];
   onFileEmail?: (messageId: string, loadId: string) => Promise<unknown>;
@@ -75,6 +78,7 @@ export function InboxPage({
   refreshKey,
   onOpenWorkItem,
   onOpenLoad,
+  onLoadCreated,
   onOpenEmailSetup,
   loads = [],
   onFileEmail,
@@ -91,6 +95,7 @@ export function InboxPage({
   const [showSetAside, setShowSetAside] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [filingId, setFilingId] = useState<string | null>(null);
+  const [creatingId, setCreatingId] = useState<string | null>(null);
   const [initialRefreshKey] = useState(refreshKey);
 
   useEffect(() => {
@@ -371,10 +376,28 @@ export function InboxPage({
                       className="secondary-action-button"
                       onClick={() => {
                         setFilingId(message.id);
+                        setCreatingId(null);
                         setItemError(null);
                       }}
                     >
                       {message.loadId ? "Move to another load" : "File under a load"}
+                    </button>
+                  )}
+
+                {onOpenLoad &&
+                  creatingId !== message.id &&
+                  !isSetAside(message) &&
+                  (message.status === "IGNORED" || message.status === "ATTACHED") && (
+                    <button
+                      type="button"
+                      className="secondary-action-button"
+                      onClick={() => {
+                        setCreatingId(message.id);
+                        setFilingId(null);
+                        setItemError(null);
+                      }}
+                    >
+                      Make a new load
                     </button>
                   )}
 
@@ -410,6 +433,18 @@ export function InboxPage({
                 )}
                 </div>
               </div>
+
+              {onOpenLoad && creatingId === message.id && (
+                <NewLoadForm
+                  fromEmail={message}
+                  onCancel={() => setCreatingId(null)}
+                  onCreated={(load) => {
+                    setCreatingId(null);
+                    onLoadCreated?.();
+                    onOpenLoad(load.id);
+                  }}
+                />
+              )}
 
               {replyingId === message.id && (
                 <InboxReply
