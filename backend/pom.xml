@@ -74,6 +74,17 @@
             <artifactId>pdfbox</artifactId>
             <version>3.0.8</version>
         </dependency>
+        <!-- Scans and faxes often store pages as JBIG2 or JPEG 2000; without these PDFBox draws them blank -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>jbig2-imageio</artifactId>
+            <version>3.0.4</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.jai-imageio</groupId>
+            <artifactId>jai-imageio-jpeg2000</artifactId>
+            <version>1.4.0</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>

@@ -42,6 +42,9 @@ public class TruckingIntakeService {
             "Not a rate con. Clerova reads rate cons for now; other trucking emails come next.";
     public static final String SCANNED_REASON =
             "Clerova couldn't read the attached file. Check it yourself, or upload it to the load.";
+    public static final String LOCKED_REASON =
+            "The attached PDF is locked with a password, so Clerova can't read it. "
+                    + "Open it, save or print it as a new PDF without the password, and send that.";
     public static final String REVISED_REASON = "A new copy of this load's rate con. The load was updated.";
 
     /** FMCSA results are reused for a day. */
@@ -132,7 +135,8 @@ public class TruckingIntakeService {
                 // Nothing to read (the file wasn't kept); a BOL or POD on a known load is still filed under it
                 return threadLoad.or(() -> matchLoad(message))
                         .map(Result::attached)
-                        .orElse(new Result(InboundMessageStatus.IGNORED, SCANNED_REASON, null));
+                        .orElse(new Result(InboundMessageStatus.IGNORED,
+                                isLockedPdf(file) ? LOCKED_REASON : SCANNED_REASON, null));
             }
 
             aiUsageService.requireQuota(organizationId);
@@ -241,6 +245,20 @@ public class TruckingIntakeService {
                 .filter(attachment -> DocumentImages.isImage(attachment.getFileName(), attachment.getContentType()))
                 .filter(attachment -> attachment.getSizeBytes() != null && attachment.getSizeBytes() >= minimum)
                 .max(bySize);
+    }
+
+    /** Whether the kept file is a PDF that needs a password. */
+    boolean isLockedPdf(InboundAttachment file) {
+        if (file.getStoragePath() == null || !fileStorage.isEnabled()
+                || !PdfText.isPdf(file.getFileName(), file.getContentType())) {
+            return false;
+        }
+
+        try {
+            return PdfText.isLocked(fileStorage.get(file.getStoragePath()));
+        } catch (FileStorageException e) {
+            return false;
+        }
     }
 
     /** The kept file as pictures for the AI; empty when it wasn't kept or can't be read. */
