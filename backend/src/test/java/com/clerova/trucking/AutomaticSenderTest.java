@@ -13,6 +13,10 @@ class AutomaticSenderTest {
         assertThat(TruckingIntakeService.isAutomaticSender("shipment-tracking@amazon.com")).isTrue();
         assertThat(TruckingIntakeService.isAutomaticSender("no-reply@accounts.google.com")).isTrue();
         assertThat(TruckingIntakeService.isAutomaticSender("noreply.alerts@bank.example")).isTrue();
+        assertThat(TruckingIntakeService.isAutomaticSender("googlecommunityteam-noreply@google.com")).isTrue();
+        assertThat(TruckingIntakeService.isAutomaticSender("statements.do-not-reply@bank.example")).isTrue();
+        assertThat(TruckingIntakeService.isAutomaticSender("replyto.dana@crestline.example")).isFalse();
+        assertThat(TruckingIntakeService.isAutomaticSender("noreen@crestline.example")).isFalse();
     }
 
     @Test

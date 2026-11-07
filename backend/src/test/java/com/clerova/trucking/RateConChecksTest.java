@@ -45,7 +45,7 @@ class RateConChecksTest {
     @Test
     void aCleanRateConHasNoFlags() {
         Load load = load(215000L, null, 120, 5000L);
-        RateConResult read = new RateConResult();
+        RateConResult read = withTonu();
 
         assertThat(RateConChecks.flags(read, load, "845210",
                 new BrokerCheck(FmcsaStatus.ACTIVE, "Crestline Freight LLC", null))).isEmpty();
@@ -59,7 +59,9 @@ class RateConChecksTest {
         read.paymentTerms = "Net 45";
 
         List<String> codes = RateConChecks.flags(read, load, null, null).stream().map(LoadFlag::getCode).toList();
-        assertThat(codes).containsExactlyInAnyOrder("NO_DETENTION", "QUICK_PAY_FEE", "MC_MISSING");
+        assertThat(codes).containsExactlyInAnyOrder("NO_DETENTION", "NO_TONU", "QUICK_PAY_FEE", "MC_MISSING");
+        assertThat(RateConChecks.flags(read, load, null, null).stream().filter(flag -> flag.getCode().equals("NO_TONU"))
+                .findFirst().orElseThrow().getTitle()).isEqualTo("No TONU pay on this rate con");
 
         LoadFlag quickPay = RateConChecks.flags(read, load, null, null).stream()
                 .filter(flag -> flag.getCode().equals("QUICK_PAY_FEE")).findFirst().orElseThrow();
@@ -72,10 +74,10 @@ class RateConChecksTest {
         Load load = new Load();
         load.setDetentionFreeMinutes(120);
 
-        assertThat(RateConChecks.flags(new RateConResult(), load, "1", new BrokerCheck(FmcsaStatus.NOT_FOUND, null, null))
+        assertThat(RateConChecks.flags(withTonu(), load, "1", new BrokerCheck(FmcsaStatus.NOT_FOUND, null, null))
                 .stream().map(LoadFlag::getCode).toList())
                 .containsExactlyInAnyOrder("UNREADABLE", "BROKER_NOT_FOUND");
-        assertThat(RateConChecks.flags(new RateConResult(), load(100000L, null, 120, null), "2",
+        assertThat(RateConChecks.flags(withTonu(), load(100000L, null, 120, null), "2",
                 new BrokerCheck(FmcsaStatus.NOT_AUTHORIZED, "A CARRIER ONLY", null))
                 .getFirst().getDetail()).contains("A CARRIER ONLY");
     }
@@ -83,7 +85,7 @@ class RateConChecksTest {
     @Test
     void anMcBelongingToSomeoneElseIsNotCalledAFakeBroker() {
         // The rate con's carrier MC was taken for the broker's: FMCSA names the carrier
-        LoadFlag flag = RateConChecks.flags(new RateConResult(), load(50000L, null, 120, 3500L), "1667020",
+        LoadFlag flag = RateConChecks.flags(withTonu(), load(50000L, null, 120, 3500L), "1667020",
                         new BrokerCheck(FmcsaStatus.NOT_AUTHORIZED, "AUGUST QUEST LLC", null))
                 .stream().filter(f -> f.getCode().startsWith("BROKER")).findFirst().orElseThrow();
         assertThat(flag.getCode()).isEqualTo("BROKER_NAME_MISMATCH");
@@ -91,7 +93,7 @@ class RateConChecksTest {
         assertThat(flag.getDetail()).contains("AUGUST QUEST LLC").contains("Ask the broker for their MC");
 
         // Same company without broker authority is still the warning
-        assertThat(RateConChecks.flags(new RateConResult(), load(50000L, null, 120, 3500L), "845210",
+        assertThat(RateConChecks.flags(withTonu(), load(50000L, null, 120, 3500L), "845210",
                         new BrokerCheck(FmcsaStatus.NOT_AUTHORIZED, "CRESTLINE FREIGHT LLC", null))
                 .stream().map(LoadFlag::getCode).toList()).contains("BROKER_NOT_AUTHORIZED");
     }
@@ -135,5 +137,12 @@ class RateConChecksTest {
         stop.setPlace("Fresno, CA");
         load.replaceStops(List.of(stop));
         return load;
+    }
+
+    /** A rate con with TONU pay, so only the check under test shows. */
+    private static RateConResult withTonu() {
+        RateConResult read = new RateConResult();
+        read.tonuAmount = "150";
+        return read;
     }
 }

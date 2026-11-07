@@ -719,12 +719,13 @@ public class LoadService {
                 documents, charges, invoiceService.forLoad(load), stopEmails);
     }
 
-    /** PDFs and photos big enough to be a document (not a logo). */
+    /** PDFs, photos read as a document, and photos big enough to be one (not a logo). */
     static boolean isDocument(InboundAttachment attachment) {
         return PdfText.isPdf(attachment.getFileName(), attachment.getContentType())
                 || (DocumentImages.isImage(attachment.getFileName(), attachment.getContentType())
-                && attachment.getSizeBytes() != null
-                && attachment.getSizeBytes() >= TruckingIntakeService.MIN_PHOTO_BYTES);
+                && (attachment.getDocumentKind() != null
+                || (attachment.getSizeBytes() != null
+                && attachment.getSizeBytes() >= TruckingIntakeService.MIN_PHOTO_BYTES)));
     }
 
     public static final String FILED_BY_HAND_REASON = "Filed under this load by you.";

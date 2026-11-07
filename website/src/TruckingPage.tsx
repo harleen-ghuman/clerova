@@ -291,7 +291,7 @@ export function TruckingPage() {
             ))}
           </div>
           <p className="pricing-footnote">
-            You enter your trucks when you start, and Clerova picks the plan that costs less. Change your trucks
+            You enter your trucks when you start, and Clerova puts you on the plan for that many trucks. Change your trucks
             anytime in Settings. Founding prices are for our first 20 customers and stay the same for as long as
             you stay. Running a dispatch service or 50 trucks or more? Email hello@clerova-ai.com for a price.
           </p>
