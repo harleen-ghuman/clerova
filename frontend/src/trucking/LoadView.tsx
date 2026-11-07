@@ -76,7 +76,9 @@ function nextStep(load: LoadDetail): { text: string; to?: LoadStatus; label?: st
       return {
         text: load.invoice
           ? "Delivered. Finish the invoice and send it."
-          : "Delivered. Add the signed BOL or POD in the Documents tab, then create the invoice.",
+          : load.documents.some((document) => document.kind === "POD" || document.kind === "BOL")
+            ? "Delivered, and the signed paperwork is in Documents. Create the invoice."
+            : "Delivered. Add the signed BOL or POD in the Documents tab, then create the invoice.",
       };
     case "INVOICED":
       return { text: "Invoiced. Mark it paid on the invoice when the money arrives." };
@@ -85,6 +87,17 @@ function nextStep(load: LoadDetail): { text: string; to?: LoadStatus; label?: st
     case "CANCELLED":
       return { text: "This load was cancelled." };
   }
+}
+
+/** A draft made while the truck was on the way may not fit once the load has moved on. */
+function draftIsOld(load: LoadDetail): boolean {
+  if (!load.draft || load.status === "BOOKED" || load.status === "IN_TRANSIT") {
+    return false;
+  }
+
+  const last = load.stops[load.stops.length - 1];
+  const done = last?.leftAt ?? last?.arrivedAt;
+  return load.status === "CANCELLED" || (done != null && Date.parse(load.draft.createdAt) <= Date.parse(done));
 }
 
 /** "Net 31" spelled out, so it's clear when the money comes. */
@@ -497,6 +510,12 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
             <section className="tk-panel tk-draft" aria-label="Drafted reply">
               <h2>Reply to approve</h2>
               {load.draft.summary && <p className="tk-sub">{load.draft.summary}</p>}
+              {draftIsOld(load) && (
+                <p className="tk-callout">
+                  This was drafted before the load was {load.status === "CANCELLED" ? "cancelled" : "delivered"}. Check it still fits, or
+                  dismiss it.
+                </p>
+              )}
               <label htmlFor="draft-reply">
                 To <Email value={load.draft.toEmail} />. Edit it if you like. Your company name is added at the end.
               </label>

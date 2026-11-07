@@ -778,6 +778,19 @@ class TruckingInvoiceTest {
         moveTo(loadId, "PAID").andExpect(status().isConflict());
     }
 
+    @Test
+    void aDeliveredLoadWithAnInvoiceCantMoveBack() throws Exception {
+        saveCarrier(false);
+        String loadId = load("88213");
+        resolveChecks(loadId);
+        moveTo(loadId, "IN_TRANSIT").andExpect(status().isOk());
+        moveTo(loadId, "DELIVERED").andExpect(status().isOk());
+        mockMvc.perform(post("/api/loads/{id}/invoice", loadId).with(user)).andExpect(status().isOk());
+
+        moveTo(loadId, "IN_TRANSIT").andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("This load has an invoice. Void it first to move the load back."));
+    }
+
     private org.springframework.test.web.servlet.ResultActions moveTo(String loadId, String to) throws Exception {
         return mockMvc.perform(patch("/api/loads/{id}", loadId).with(user).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\":\"" + to + "\"}"));

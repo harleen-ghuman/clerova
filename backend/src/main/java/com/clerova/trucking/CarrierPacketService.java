@@ -183,6 +183,11 @@ public class CarrierPacketService {
                     "Add your documents first, like your W-9, MC authority and insurance certificate.");
         }
 
+        if (documents.stream().mapToLong(CarrierDocument::getSizeBytes).sum() > InvoiceService.MAX_PACKET_SOURCE_BYTES) {
+            throw new ApiException(HttpStatus.CONFLICT, "PACKET_TOO_BIG",
+                    "Your documents add up to more than 40 MB, too much for one packet. Remove old or large files first.");
+        }
+
         CarrierProfile carrier = carrierRepository.findById(organizationId).orElseGet(() -> CarrierService.blank(organizationId));
         Organization organization = organizationRepository.findById(organizationId).orElseThrow();
         String company = carrier.getLegalName() != null ? carrier.getLegalName() : organization.getName();
@@ -242,6 +247,7 @@ public class CarrierPacketService {
 
         try {
             emailSender.send(email);
+            invoiceService.noteOtherSend(organizationId);
         } catch (EmailSendException e) {
             log.warn("Couldn't send the carrier packet for {}: {}", organizationId, e.getMessage());
             throw new ApiException(HttpStatus.BAD_GATEWAY, "EMAIL_NOT_SENT",

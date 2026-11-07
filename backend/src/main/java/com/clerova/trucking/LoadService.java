@@ -176,6 +176,12 @@ public class LoadService {
             throw new ApiException(HttpStatus.CONFLICT, "STATUS_STEP",
                     "This load has an invoice. Void it first to reopen the load.");
         }
+
+        if (load.getStatus() == LoadStatus.DELIVERED && to == LoadStatus.IN_TRANSIT
+                && invoiceService.hasInvoice(load.getId())) {
+            throw new ApiException(HttpStatus.CONFLICT, "STATUS_STEP",
+                    "This load has an invoice. Void it first to move the load back.");
+        }
     }
 
     /** Every rate con check has to be done (sorted or noted) before the truck rolls. */
@@ -300,6 +306,8 @@ public class LoadService {
             record.setSentAt(Instant.now());
             record.setProviderMessageId(sent.providerId());
             loadReplyRepository.save(record);
+        } else {
+            invoiceService.noteOtherSend(organizationId);
         }
 
         inboundMessageRepository.markReplied(message.getId(), Instant.now());
