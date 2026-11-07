@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { showLoadTab } from "./loadTabs";
 import { errorMessage } from "../api/client";
 import {
   createInvoice,
@@ -385,8 +386,11 @@ export function InvoicePanel({ load, sendingEnabled, onChanged, onOpenSettings }
         </ol>
         {missing.length > 0 && (
           <p className="tk-callout">
-            No {missing.length > 1 ? `${missing.slice(0, -1).join(", ")} or ${missing[missing.length - 1]}` : missing[0]} on this load yet. Add {missing.length === 1 ? "it" : "them"} under Documents
-            {draft ? " before you send the invoice." : "."}
+            No {missing.length > 1 ? `${missing.slice(0, -1).join(", ")} or ${missing[missing.length - 1]}` : missing[0]} on this load yet. Add {missing.length === 1 ? "it" : "them"} in the Documents tab
+            {draft ? " before you send the invoice." : "."}{" "}
+            <button type="button" className="tk-link" onClick={() => showLoadTab("documents")}>
+              Open Documents
+            </button>
           </p>
         )}
         <div className="tk-actions">

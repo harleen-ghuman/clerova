@@ -31,12 +31,31 @@ public class LoadController {
     public record MessageRequest(String to, String subject, String body, UUID chargeId, UUID stopId) {
     }
 
+    public record InboxReplyRequest(String to, String body) {
+    }
+
     private final LoadService loadService;
     private final CurrentUserService currentUserService;
+    private final TruckingIntakeService intakeService;
 
-    public LoadController(LoadService loadService, CurrentUserService currentUserService) {
+    public LoadController(LoadService loadService, CurrentUserService currentUserService, TruckingIntakeService intakeService) {
         this.loadService = loadService;
         this.currentUserService = currentUserService;
+        this.intakeService = intakeService;
+    }
+
+    /** An AI draft to reply to any email in a carrier's Inbox (10 per email). */
+    @PostMapping("/api/inbox/{id}/draft-reply")
+    public TruckingIntakeService.InboxDraft draftInboxReply(@PathVariable UUID id) {
+        return intakeService.draftInboxReply(currentUserService.requireOrganizationId(), id);
+    }
+
+    /** Sends the dispatcher's reply to an Inbox email, in the same thread. */
+    @PostMapping("/api/inbox/{id}/reply")
+    public com.clerova.dto.InboundMessageResponse replyToEmail(@PathVariable UUID id, @RequestBody InboxReplyRequest request) {
+        UUID organizationId = currentUserService.requireOrganizationId();
+        return loadService.replyToEmail(organizationId, intakeService.requireTruckingMessage(organizationId, id),
+                request.to(), request.body());
     }
 
     @GetMapping("/api/loads")

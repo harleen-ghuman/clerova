@@ -4,27 +4,12 @@ import { errorMessage } from "../api/client";
 import { ConfirmInline } from "../components/ConfirmInline";
 import type { DocumentKind, LoadDetail, LoadDocument } from "../types/Load";
 import { DOCUMENT_KINDS, kindLabel, when } from "./format";
-import { ACCEPTED_FILES, openDocument, uploadProblem } from "./documents";
+import { ACCEPTED_FILES, distinctDocuments, openDocument, uploadProblem } from "./documents";
 
 /** The load's paperwork: files from its emails and uploads, ready for the invoice. */
-/** The same file emailed twice (same name, size and kind) is listed once. */
-function distinct(documents: LoadDocument[]): LoadDocument[] {
-  const seen = new Set<string>();
-
-  return documents.filter((document) => {
-    const key = `${document.name}|${document.sizeBytes}|${document.kind}`;
-
-    if (document.source === "UPLOAD" || !seen.has(key)) {
-      seen.add(key);
-      return true;
-    }
-
-    return false;
-  });
-}
 
 export function DocumentsSection({ load, onChanged }: { load: LoadDetail; onChanged: () => void }) {
-  const documents = distinct(load.documents);
+  const documents = distinctDocuments(load.documents);
   const inputId = useId();
   const [busy, setBusy] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);

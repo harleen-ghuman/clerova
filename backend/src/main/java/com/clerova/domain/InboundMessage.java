@@ -87,6 +87,14 @@ public class InboundMessage {
     @Column(nullable = false)
     private Instant updatedAt;
 
+    /** AI reply drafts asked for from the Inbox; changed only by InboundMessageRepository. */
+    @Column(insertable = false, updatable = false)
+    private int replyDraftsUsed;
+
+    /** When the carrier last replied from the Inbox; set only by InboundMessageRepository. */
+    @Column(insertable = false, updatable = false)
+    private Instant repliedAt;
+
     @Version
     @Column(nullable = false)
     private Long version;
@@ -300,5 +308,13 @@ public class InboundMessage {
 
     public void setLoadId(UUID loadId) {
         this.loadId = loadId;
+    }
+
+    public int getReplyDraftsUsed() {
+        return replyDraftsUsed;
+    }
+
+    public Instant getRepliedAt() {
+        return repliedAt;
     }
 }

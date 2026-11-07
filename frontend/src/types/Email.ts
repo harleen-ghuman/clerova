@@ -30,6 +30,9 @@ export interface InboundMessage {
   loadId?: string | null;
   attachments: string[];
   files?: AttachmentFile[];
+  /** Trucking: when the carrier last replied from the Inbox, and AI drafts left for this email. */
+  repliedAt?: string | null;
+  replyDraftsLeft?: number;
 }
 
 export interface EmailSettings {

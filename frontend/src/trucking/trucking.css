@@ -1842,3 +1842,212 @@ label.rq-button.is-disabled {
 .tk-msg-head .tk-pill {
   margin-right: 4px;
 }
+
+/* Load page tabs: Overview, Documents, Emails */
+.tk-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 20px;
+  border-bottom: 1px solid var(--border-faint);
+  overflow-x: auto;
+  scroll-margin-top: 16px;
+}
+
+.tk-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: -1px;
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tk-tab:hover {
+  color: var(--text-primary, #16181d);
+}
+
+.tk-tab.active {
+  border-bottom-color: var(--brand);
+  color: var(--brand);
+}
+
+.tk-tab-count {
+  min-width: 20px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--border-faint);
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.tk-tab.active .tk-tab-count {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.tk-tabpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* A section the dispatcher was sent to: a short highlight so the eye finds it */
+.tk-flash {
+  scroll-margin-top: 16px;
+  animation: tk-flash 2.4s ease-out;
+}
+
+@keyframes tk-flash {
+  0%,
+  35% {
+    box-shadow: 0 0 0 3px var(--brand);
+    background: var(--brand-soft);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-flash {
+    animation: none;
+    box-shadow: 0 0 0 3px var(--brand);
+  }
+}
+
+@media (max-width: 900px) {
+  .tk-tabs {
+    margin-bottom: 16px;
+  }
+
+  .tk-tab {
+    padding: 10px 12px;
+  }
+}
+
+/* Invoices page: Documents and Packet beside each sent invoice */
+.tk-row-invoice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tk-row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .tk-row-invoice {
+    flex-basis: 100%;
+  }
+
+  .tk-row-actions {
+    flex-basis: 100%;
+  }
+}
+
+/* Carrier packet in Settings */
+.carrier-docs .tk-doc {
+  flex-wrap: wrap;
+}
+
+.carrier-doc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.carrier-doc-meta select,
+.carrier-doc-meta input[type="date"],
+.carrier-upload select,
+.carrier-upload input[type="date"] {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #d5d9e0);
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+}
+
+.carrier-upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.carrier-upload label {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.carrier-upload .carrier-upload-file {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  color: inherit;
+}
+
+.carrier-upload .carrier-upload-file:focus-within {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* Sending the packet to a broker */
+.tk-packet-send {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  max-width: 480px;
+}
+
+.tk-packet-send label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tk-packet-send input {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--border, #d5d9e0);
+  border-radius: 8px;
+  font: inherit;
+}
+
+/* Inbox: the reply box under an email */
+.inbox-reply {
+  margin-top: 12px;
+}
+
+.inbox-reply input {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--border, #d5d9e0);
+  border-radius: 8px;
+  font: inherit;
+}
+
+/* A button row after a details list in a panel */
+.tk-panel .tk-kv + .tk-actions,
+.tk-panel .tk-kv + .tk-packet-send {
+  margin-top: 14px;
+}

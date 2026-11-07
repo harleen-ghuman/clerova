@@ -28,3 +28,19 @@ export function uploadProblem(file: File): string | null {
 
   return file.size === 0 ? "That file is empty." : null;
 }
+
+/** The same file emailed twice (same name, size and kind) is listed once. */
+export function distinctDocuments(documents: LoadDocument[]): LoadDocument[] {
+  const seen = new Set<string>();
+
+  return documents.filter((document) => {
+    const key = `${document.name}|${document.sizeBytes}|${document.kind}`;
+
+    if (document.source === "UPLOAD" || !seen.has(key)) {
+      seen.add(key);
+      return true;
+    }
+
+    return false;
+  });
+}

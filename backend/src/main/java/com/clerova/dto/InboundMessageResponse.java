@@ -21,8 +21,14 @@ public record InboundMessageResponse(
         /** The load it's filed under, in a trucking workspace. */
         UUID loadId,
         List<String> attachments,
-        List<AttachmentFile> files
+        List<AttachmentFile> files,
+        /** When the carrier last replied from the Inbox, and AI drafts left for this email. */
+        Instant repliedAt,
+        Integer replyDraftsLeft
 ) {
+
+    /** AI reply drafts per email in the Inbox. */
+    public static final int MAX_REPLY_DRAFTS = 10;
 
     private static final int PREVIEW_LENGTH = 240;
 
@@ -47,7 +53,9 @@ public record InboundMessageResponse(
                         .toList(),
                 message.getAttachments().stream()
                         .map(AttachmentFile::from)
-                        .toList()
+                        .toList(),
+                message.getRepliedAt(),
+                Math.max(0, MAX_REPLY_DRAFTS - message.getReplyDraftsUsed())
         );
     }
 }

@@ -27,6 +27,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -126,7 +127,8 @@ public class LoadService {
     public LoadResponses.LoadDetail update(UUID organizationId, UUID loadId, LoadStatus status, String statusNote) {
         Load load = require(organizationId, loadId);
 
-        if (status != null) {
+        if (status != null && status != load.getStatus()) {
+            requireStep(load, status);
             load.setStatus(status);
         }
 
@@ -142,6 +144,49 @@ public class LoadService {
         }
 
         return detail(loadRepository.save(load));
+    }
+
+    /**
+     * The moves a dispatcher can make by hand: one step forward or back along
+     * Booked, In transit, Delivered; cancel before delivery; reopen a
+     * cancelled load. Invoiced and Paid follow the invoice, not this.
+     */
+    static final Map<LoadStatus, Set<LoadStatus>> STEPS = Map.of(
+            LoadStatus.BOOKED, Set.of(LoadStatus.IN_TRANSIT, LoadStatus.CANCELLED),
+            LoadStatus.IN_TRANSIT, Set.of(LoadStatus.BOOKED, LoadStatus.DELIVERED, LoadStatus.CANCELLED),
+            LoadStatus.DELIVERED, Set.of(LoadStatus.IN_TRANSIT),
+            LoadStatus.CANCELLED, Set.of(LoadStatus.BOOKED),
+            LoadStatus.INVOICED, Set.of(),
+            LoadStatus.PAID, Set.of());
+
+    private void requireStep(Load load, LoadStatus to) {
+        if (!STEPS.getOrDefault(load.getStatus(), Set.of()).contains(to)) {
+            throw new ApiException(HttpStatus.CONFLICT, "STATUS_STEP",
+                    load.getStatus() == LoadStatus.INVOICED || load.getStatus() == LoadStatus.PAID
+                            ? "This load is invoiced. Void the invoice first to change it."
+                            : "A load goes Booked, In transit, Delivered, one step at a time.");
+        }
+
+        if (load.getStatus() == LoadStatus.BOOKED && to == LoadStatus.IN_TRANSIT) {
+            requireChecksDone(load);
+        }
+
+        if (load.getStatus() == LoadStatus.CANCELLED && to == LoadStatus.BOOKED
+                && invoiceService.hasInvoice(load.getId())) {
+            throw new ApiException(HttpStatus.CONFLICT, "STATUS_STEP",
+                    "This load has an invoice. Void it first to reopen the load.");
+        }
+    }
+
+    /** Every rate con check has to be done (sorted or noted) before the truck rolls. */
+    static void requireChecksDone(Load load) {
+        long open = load.getFlags().stream().filter(flag -> flag.getResolvedAt() == null).count();
+
+        if (open > 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "CHECKS_OPEN",
+                    "Go through the rate con check first: " + open + (open == 1 ? " item is" : " items are")
+                            + " still open. Mark each one done, then the load can move to In transit.");
+        }
     }
 
     /** Sends the drafted reply, as edited, to the broker. */
@@ -206,6 +251,61 @@ public class LoadService {
     private record Sent(OutgoingEmail email, String providerId) {
     }
 
+    /**
+     * Replies to any email in a carrier's Inbox, from the workspace's Clerova
+     * address, in the same thread. An email on a load gets the load's reply
+     * address and shows under the load's Emails; others come back to the Inbox.
+     */
+    @Transactional
+    public com.clerova.dto.InboundMessageResponse replyToEmail(UUID organizationId, InboundMessage message,
+                                                              String to, String body) {
+        String address = to == null || to.isBlank() ? message.getFromEmail() : to.strip();
+
+        if (!InvoiceService.isEmail(address)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_EMAIL", "Enter the email address to reply to.");
+        }
+
+        String text = body == null ? "" : body.strip();
+
+        if (text.isEmpty()) {
+            throw new ConflictException("The reply is empty. Add a message before sending.");
+        }
+
+        if (text.length() > MAX_REPLY) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "REPLY_TOO_LONG", "The reply is too long.");
+        }
+
+        if (!emailProperties.isSendingEnabled()) {
+            throw new ApiException(HttpStatus.CONFLICT, "EMAIL_SENDING_DISABLED",
+                    "Sending email isn't set up yet. Copy the reply and send it from your own email.");
+        }
+
+        invoiceService.requireEmailAllowance(organizationId);
+        String original = message.getSubject() == null ? "" : message.getSubject().strip();
+        String subject = clip((original.toLowerCase(java.util.Locale.ROOT).startsWith("re:") ? original : "Re: " + original)
+                .replaceAll("[\\r\\n]+", " "), 200);
+        Load load = message.getLoadId() == null ? null
+                : loadRepository.findByIdAndOrganizationId(message.getLoadId(), organizationId).orElse(null);
+        Sent sent = sendToBroker(organizationId, load, address, subject, text, message);
+
+        if (load != null) {
+            LoadReply record = new LoadReply();
+            record.setLoadId(load.getId());
+            record.setToEmail(address);
+            record.setSubject(subject);
+            record.setKind(ReplyKind.OTHER);
+            record.setSummary(clip(subject, 500));
+            record.setBody(sent.email().textBody());
+            record.setStatus(ReplyStatus.SENT);
+            record.setSentAt(Instant.now());
+            record.setProviderMessageId(sent.providerId());
+            loadReplyRepository.save(record);
+        }
+
+        inboundMessageRepository.markReplied(message.getId(), Instant.now());
+        return com.clerova.dto.InboundMessageResponse.from(inboundMessageRepository.findById(message.getId()).orElseThrow());
+    }
+
     /** Sends an email about a load from the workspace's Clerova address; replies come back to the load. */
     private Sent sendToBroker(UUID organizationId, Load load, String to, String subject, String text,
                               InboundMessage answered) {
@@ -219,7 +319,7 @@ public class LoadService {
         OutgoingEmail email = new OutgoingEmail(
                 "\"" + organization.getName().replaceAll("[\"\\r\\n<>]", "").trim() + " via Clerova\" <"
                         + emailProperties.forwardingAddress(token) + ">",
-                emailProperties.loadReplyAddress(token, load.getId()),
+                load != null ? emailProperties.loadReplyAddress(token, load.getId()) : emailProperties.forwardingAddress(token),
                 to,
                 subject,
                 ReplyService.withSignOff(text, organization.getName()),
@@ -230,7 +330,7 @@ public class LoadService {
         try {
             return new Sent(email, emailSender.send(email));
         } catch (EmailSendException e) {
-            log.warn("Couldn't send an email on load {}: {}", load.getId(), e.getMessage());
+            log.warn("Couldn't send an email on load {}: {}", load == null ? "(none)" : load.getId(), e.getMessage());
             throw new ApiException(HttpStatus.BAD_GATEWAY, "EMAIL_NOT_SENT",
                     "The email couldn't be sent. Please try again in a minute.");
         }
@@ -267,6 +367,17 @@ public class LoadService {
 
         if (leftAt != null && java.time.Duration.between(arrivedAt, leftAt).toHours() > 72) {
             throw invalidTimes("That's more than 3 days at one stop. Check the dates.");
+        }
+
+        // No skipped steps: the load is picked up (in transit) before a later stop gets times
+        if (arrivedAt != null && stop != load.getStops().getFirst() && load.getStatus() == LoadStatus.BOOKED) {
+            throw new ApiException(HttpStatus.CONFLICT, "STATUS_STEP",
+                    "Mark the load picked up first, or log the pickup times.");
+        }
+
+        // Leaving the pickup puts the load in transit, so the rate con check comes first
+        if (leftAt != null && load.getStatus() == LoadStatus.BOOKED) {
+            requireChecksDone(load);
         }
 
         stop.setArrivedAt(arrivedAt);

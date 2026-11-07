@@ -1,13 +1,17 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { dismissReply, getLoad, resolveFlag, sendReply, updateLoad } from "../api/loads";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { dismissReply, getLoad, resolveFlag, sendLoadMessage, sendReply, updateLoad } from "../api/loads";
 import { errorMessage } from "../api/client";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { ConfirmInline } from "../components/ConfirmInline";
 import { FileList } from "../components/FileList";
 import { ChargesPanel } from "./ChargesPanel";
 import { DocumentsSection } from "./DocumentsSection";
+import { distinctDocuments } from "./documents";
+import { flashSection, onLoadTab, showLoadTab, type LoadTab, type OpenLoadOptions } from "./loadTabs";
 import { InvoicePanel } from "./InvoicePanel";
 import { StopsPanel } from "./StopsPanel";
+import { MessageComposer } from "./MessageComposer";
+import { SendCarrierPacket } from "./SendCarrierPacket";
 import { Email } from "./Email";
 import type { LoadDetail, LoadStatus } from "../types/Load";
 import { STATUS_LABELS, city, detention, kindLabel, money, when } from "./format";
@@ -19,7 +23,15 @@ interface LoadViewProps {
   /** Something changed; refresh the lists. */
   onChanged: () => void;
   onOpenSettings: () => void;
+  /** Open on a tab, or at the rate con check. */
+  openWith?: OpenLoadOptions | null;
 }
+
+const TABS: { id: LoadTab; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "documents", label: "Documents" },
+  { id: "emails", label: "Emails" },
+];
 
 /** Broker emails can be long (quoted history, signatures): show the start first. */
 const LONG_EMAIL = 900;
@@ -49,7 +61,7 @@ function nextStep(load: LoadDetail): { text: string; to?: LoadStatus; label?: st
     case "BOOKED":
       return open.length > 0
         ? {
-            text: `Check the ${open.length === 1 ? "item" : `${open.length} items`} below before you sign the rate con.`,
+            text: `Go through the rate con check first: ${open.length === 1 ? "1 item is" : `${open.length} items are`} still open. Mark each one done, then sign the rate con and mark the load picked up.`,
             to: "IN_TRANSIT",
             label: "Mark picked up",
           }
@@ -64,7 +76,7 @@ function nextStep(load: LoadDetail): { text: string; to?: LoadStatus; label?: st
       return {
         text: load.invoice
           ? "Delivered. Finish the invoice and send it."
-          : "Delivered. Add the signed BOL or POD under Documents, then create the invoice.",
+          : "Delivered. Add the signed BOL or POD in the Documents tab, then create the invoice.",
       };
     case "INVOICED":
       return { text: "Invoiced. Mark it paid on the invoice when the money arrives." };
@@ -73,6 +85,12 @@ function nextStep(load: LoadDetail): { text: string; to?: LoadStatus; label?: st
     case "CANCELLED":
       return { text: "This load was cancelled." };
   }
+}
+
+/** "Net 31" spelled out, so it's clear when the money comes. */
+function paymentText(terms: string): string {
+  const days = terms.match(/\bnet\s*-?\s*(\d{1,3})\b/i)?.[1];
+  return days && !/days? after/i.test(terms) ? `${terms}: paid ${days} days after the invoice` : terms;
 }
 
 /** Emails newest first, like an inbox. */
@@ -86,13 +104,20 @@ function filedDocument(load: LoadDetail, file: { id: string }) {
   return load.documents.find((document) => document.source === "EMAIL" && document.id === file.id);
 }
 
-export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSettings }: LoadViewProps) {
+export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSettings, openWith }: LoadViewProps) {
   const [load, setLoad] = useState<LoadDetail | null>(null);
+  const [tab, setTab] = useState<LoadTab>(openWith?.tab ?? "overview");
+  const checksShown = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [draft, setDraft] = useState("");
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmBack, setConfirmBack] = useState(false);
+  const [emailingUpdate, setEmailingUpdate] = useState(false);
+  const [updateSent, setUpdateSent] = useState<string | null>(null);
+  const [showDoneChecks, setShowDoneChecks] = useState(false);
+  const [sendingPacket, setSendingPacket] = useState(false);
 
   useEffect(() => {
     let current = true;
@@ -116,6 +141,24 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
       current = false;
     };
   }, [loadId]);
+
+  // Panels can ask for a tab ("See Emails", "Open Documents"); the page then starts at the top
+  useEffect(
+    () =>
+      onLoadTab((next) => {
+        setTab(next);
+        window.requestAnimationFrame(() => document.getElementById("load-tabs")?.scrollIntoView({ block: "start" }));
+      }),
+    []
+  );
+
+  // Opened from "to fix" or "to check": go straight to the rate con check, highlighted
+  useEffect(() => {
+    if (load && openWith?.checks && !checksShown.current) {
+      checksShown.current = true;
+      window.requestAnimationFrame(() => flashSection("load-checks"));
+    }
+  }, [load, openWith]);
 
   async function run(key: string, action: () => Promise<LoadDetail>, fallback: string): Promise<boolean> {
     setBusy(key);
@@ -180,6 +223,29 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
   const origin = load.stops.find((stop) => stop.kind === "PICKUP")?.place ?? load.stops[0]?.place ?? null;
   const destination = [...load.stops].reverse().find((stop) => stop.kind === "DELIVERY")?.place ?? null;
   const noteChanged = note.trim() !== (load.statusNote ?? "");
+  const documentCount = distinctDocuments(load.documents).length;
+  const openFlags = load.flags.filter((flag) => !flag.resolvedAt).length;
+  // One step back, or reopening a cancelled load, when something changed (the server checks the same rules)
+  const back: { to: LoadStatus; label: string; question: string } | null =
+    load.status === "IN_TRANSIT"
+      ? { to: "BOOKED", label: "Move back to Booked", question: "Move this load back to Booked? Use this if it wasn't picked up after all." }
+      : load.status === "DELIVERED" && !load.invoice
+        ? { to: "IN_TRANSIT", label: "Move back to In transit", question: "Move this load back to In transit? Use this if it wasn't delivered after all." }
+        : load.status === "CANCELLED" && !load.invoice
+          ? { to: "BOOKED", label: "Reopen load", question: "Reopen this load? It goes back to Booked." }
+          : null;
+
+  // Arrow keys move between tabs, as screen reader users expect
+  function moveTab(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") {
+      return;
+    }
+
+    const index = TABS.findIndex((item) => item.id === tab);
+    const next = TABS[(index + (event.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length].id;
+    setTab(next);
+    window.requestAnimationFrame(() => document.getElementById(`load-tab-${next}`)?.focus());
+  }
 
   return (
     <div className="tk-page">
@@ -205,22 +271,125 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
 
       {error && <p className="action-error" role="alert">{error}</p>}
 
-      <div className="tk-detail">
+      <div className="tk-tabs" role="tablist" aria-label="This load" id="load-tabs" onKeyDown={moveTab}>
+        {TABS.map((item) => {
+          const count = item.id === "documents" ? documentCount : item.id === "emails" ? load.conversation.length : null;
+
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              id={`load-tab-${item.id}`}
+              aria-selected={tab === item.id}
+              aria-controls={`load-panel-${item.id}`}
+              tabIndex={tab === item.id ? 0 : -1}
+              className={`tk-tab ${tab === item.id ? "active" : ""}`}
+              onClick={() => setTab(item.id)}
+            >
+              {item.label}
+              {count !== null && <span className="tk-tab-count">{count}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === "documents" && (
+        <div role="tabpanel" id="load-panel-documents" aria-labelledby="load-tab-documents" className="tk-tabpanel">
+          <DocumentsSection
+          load={load}
+          onChanged={() => void run("documents", () => getLoad(loadId), "Couldn't refresh this load.")}
+          />
+        </div>
+      )}
+
+      {tab === "emails" && (
+        <div role="tabpanel" id="load-panel-emails" aria-labelledby="load-tab-emails" className="tk-tabpanel">
+          <section className="tk-panel" aria-label="Emails" id="load-emails">
+            <h2>Emails</h2>
+            <div className="tk-thread">
+              {load.conversation.length === 0 && <p className="tk-none">No emails on this load yet.</p>}
+              {newestFirst(load.conversation).map((entry) => (
+                <article key={entry.id} className={`tk-msg ${entry.incoming ? "" : "out"}`}>
+                  <div className="tk-msg-head">
+                    <span>
+                      {entry.incoming ? (
+                        entry.from
+                      ) : (
+                        <>
+                          <span className="tk-pill tk-pill-info">Sent</span> by you to {entry.to}
+                        </>
+                      )}
+                    </span>
+                    <span>{when(entry.at)}</span>
+                  </div>
+                  {entry.subject && <strong className="tk-msg-subject">{entry.subject}</strong>}
+                  {entry.body && <EmailBody text={entry.body.trim()} />}
+                  {/* Files already listed under Documents are named here, not shown twice */}
+                  {entry.files.some((file) => filedDocument(load, file)) && (
+                    <p className="tk-msg-filed">
+                      {entry.files
+                        .map((file) => filedDocument(load, file))
+                        .filter((document) => document !== undefined)
+                        .map((document) => `${kindLabel(document.kind)}: ${document.name}`)
+                        .join(", ")}{" "}
+                      · in the{" "}
+                      <button type="button" className="tk-link" onClick={() => showLoadTab("documents")}>
+                        Documents tab
+                      </button>
+                    </p>
+                  )}
+                  {entry.files.some((file) => !filedDocument(load, file)) && (
+                    <FileList
+                      files={entry.files.filter((file) => !filedDocument(load, file)).map((file) => ({
+                        id: file.id,
+                        fileName: file.name,
+                        contentType: file.contentType,
+                        sizeBytes: file.sizeBytes,
+                        available: file.stored,
+                      }))}
+                    />
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {tab === "overview" && (
+      <div className="tk-detail" role="tabpanel" id="load-panel-overview" aria-labelledby="load-tab-overview">
         <div className="tk-stack">
           <section className="tk-panel tk-next" aria-label="Next step">
-            <p>{step.text}</p>
+            <p>
+              {step.text}
+              {openFlags > 0 && (
+                <>
+                  {" "}
+                  <button type="button" className="tk-link" onClick={() => flashSection("load-checks")}>
+                    Show {openFlags === 1 ? "it" : "them"}
+                  </button>
+                </>
+              )}
+            </p>
             <div className="tk-actions">
               {step.to && (
                 <button
                   type="button"
                   className="rq-button rq-button-small rq-button-primary"
-                  disabled={busy !== null}
+                  disabled={busy !== null || (load.status === "BOOKED" && openFlags > 0)}
+                  title={load.status === "BOOKED" && openFlags > 0 ? "Finish the rate con check first" : undefined}
                   onClick={() => void run("status", () => updateLoad(loadId, { status: step.to }), "Couldn't update the load.")}
                 >
                   {step.label}
                 </button>
               )}
-              {(load.status === "BOOKED" || load.status === "IN_TRANSIT") && !confirmCancel && (
+              {back && !confirmBack && !confirmCancel && (
+                <button type="button" className="rq-button rq-button-small rq-button-quiet" onClick={() => setConfirmBack(true)}>
+                  {back.label}
+                </button>
+              )}
+              {(load.status === "BOOKED" || load.status === "IN_TRANSIT") && !confirmCancel && !confirmBack && (
                 <button type="button" className="rq-button rq-button-small rq-button-quiet" onClick={() => setConfirmCancel(true)}>
                   Cancel load
                 </button>
@@ -239,6 +408,20 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
                 onKeep={() => setConfirmCancel(false)}
               />
             )}
+            {confirmBack && back && (
+              <ConfirmInline
+                message={back.question}
+                confirmLabel={back.label}
+                keepLabel="Keep it"
+                tone="primary"
+                busy={busy !== null}
+                onConfirm={() => {
+                  setConfirmBack(false);
+                  void run("status", () => updateLoad(loadId, { status: back.to }), "Couldn't change the status.");
+                }}
+                onKeep={() => setConfirmBack(false)}
+              />
+            )}
 
             <form className="tk-note-form" onSubmit={saveNote}>
               <label className="visually-hidden" htmlFor="load-note">
@@ -255,8 +438,59 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
               <button type="submit" className="rq-button rq-button-small" disabled={busy !== null || !noteChanged}>
                 {busy === "note" ? "Saving..." : "Save update"}
               </button>
+              {!["PAID", "CANCELLED"].includes(load.status) && !emailingUpdate && (
+                <button
+                  type="button"
+                  className="rq-button rq-button-small"
+                  disabled={busy !== null}
+                  onClick={() => {
+                    setEmailingUpdate(true);
+                    setUpdateSent(null);
+                  }}
+                >
+                  Email the broker
+                </button>
+              )}
             </form>
-            <p className="tk-hint">Drafted replies to the broker use this update, and nothing else about where the truck is.</p>
+            {emailingUpdate && (
+              <MessageComposer
+                draft={{
+                  title: "Tell the broker what's happening",
+                  to: load.broker?.email ?? "",
+                  subject: `${load.loadNumber ? `Load ${load.loadNumber}` : "Load"}: update`,
+                  body: `Hi,\n\nAn update on ${load.loadNumber ? `load ${load.loadNumber}` : "this load"}: ${note.trim() || "[what happened, like: the truck broke down near Barstow. New ETA tomorrow 10 AM.]"}\n\nThanks,`,
+                }}
+                sendingEnabled={sendingEnabled}
+                busy={busy === "update-email"}
+                onSend={(message) =>
+                  void (async () => {
+                    // Save the update too, so drafted replies know about it
+                    if (noteChanged) {
+                      await run("note", () => updateLoad(loadId, { statusNote: note }), "Couldn't save the update.");
+                    }
+
+                    const sent = await run("update-email", () => sendLoadMessage(loadId, message), "Couldn't send the email.");
+
+                    if (sent) {
+                      setEmailingUpdate(false);
+                      setUpdateSent(message.to);
+                    }
+                  })()
+                }
+                onCancel={() => setEmailingUpdate(false)}
+              />
+            )}
+            {updateSent && (
+              <p className="request-success tk-sent-note" role="status">
+                Sent to {updateSent}. The broker's reply will show in this load's Emails tab.{" "}
+                <button type="button" className="tk-link" onClick={() => showLoadTab("emails")}>
+                  See Emails
+                </button>
+              </p>
+            )}
+            <p className="tk-hint">
+              Something happened, like a breakdown or a delay? Write it here, then Email the broker. Drafted replies use this update too.
+            </p>
           </section>
 
           {load.draft && (
@@ -337,7 +571,7 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
                 <>
                   <dt>Payment</dt>
                   <dd>
-                    {load.paymentTerms}
+                    {paymentText(load.paymentTerms)}
                     {load.quickPayPercent !== null && <div className="tk-sub">Quick pay: {load.quickPayPercent}% fee</div>}
                   </dd>
                 </>
@@ -366,9 +600,22 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
           </section>
 
           {load.flags.length > 0 && (
-            <section className="tk-panel" aria-label="Rate con check">
-              <h2>Rate con check</h2>
-              {load.flags.map((flag) => (
+            <section className="tk-panel" aria-label="Rate con check" id="load-checks">
+              <h2>
+                Rate con check
+                <span className={`tk-pill tk-pill-${openFlags > 0 ? "note" : "good"}`}>
+                  {openFlags > 0 ? `${openFlags} open` : "All done"}
+                </span>
+              </h2>
+              {openFlags === 0 && !showDoneChecks && (
+                <p className="tk-sub">
+                  {load.flags.length === 1 ? "The one item was checked." : `All ${load.flags.length} items were checked.`}{" "}
+                  <button type="button" className="tk-link" onClick={() => setShowDoneChecks(true)}>
+                    Show them
+                  </button>
+                </p>
+              )}
+              {load.flags.filter((flag) => !flag.resolvedAt || showDoneChecks).map((flag) => (
                 <div key={flag.id} className={`tk-flag ${flag.resolvedAt ? "done" : ""}`}>
                   <span className={`tk-pill tk-pill-${flag.resolvedAt ? "good" : flag.level === "FIX" ? "fix" : "note"}`}>
                     {flag.resolvedAt ? "Done" : flag.level === "FIX" ? "Fix" : "Note"}
@@ -392,6 +639,16 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
                   )}
                 </div>
               ))}
+              {openFlags > 0 && load.flags.length > openFlags && (
+                <button type="button" className="tk-link tk-link-small" onClick={() => setShowDoneChecks((shown) => !shown)}>
+                  {showDoneChecks ? "Hide the done items" : `Show ${load.flags.length - openFlags} done`}
+                </button>
+              )}
+              {openFlags === 0 && showDoneChecks && (
+                <button type="button" className="tk-link tk-link-small" onClick={() => setShowDoneChecks(false)}>
+                  Hide them
+                </button>
+              )}
             </section>
           )}
 
@@ -428,6 +685,15 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
                   </>
                 )}
               </dl>
+              {sendingPacket ? (
+                <SendCarrierPacket to={load.broker.email ?? ""} sendingEnabled={sendingEnabled} onDone={() => setSendingPacket(false)} />
+              ) : (
+                <div className="tk-actions">
+                  <button type="button" className="rq-button rq-button-small" onClick={() => setSendingPacket(true)}>
+                    Send carrier packet
+                  </button>
+                </div>
+              )}
             </section>
           )}
         </div>
@@ -439,61 +705,8 @@ export function LoadView({ loadId, sendingEnabled, onBack, onChanged, onOpenSett
           </div>
         )}
 
-        {/* Full width under both columns: files and emails need the room */}
-        <div className="tk-stack tk-wide">
-          <DocumentsSection
-            load={load}
-            onChanged={() => void run("documents", () => getLoad(loadId), "Couldn't refresh this load.")}
-          />
-
-          <section className="tk-panel" aria-label="Emails" id="load-emails">
-            <h2>Emails</h2>
-            <div className="tk-thread">
-              {load.conversation.length === 0 && <p className="tk-none">No emails on this load yet.</p>}
-              {newestFirst(load.conversation).map((entry) => (
-                <article key={entry.id} className={`tk-msg ${entry.incoming ? "" : "out"}`}>
-                  <div className="tk-msg-head">
-                    <span>
-                      {entry.incoming ? (
-                        entry.from
-                      ) : (
-                        <>
-                          <span className="tk-pill tk-pill-info">Sent</span> by you to {entry.to}
-                        </>
-                      )}
-                    </span>
-                    <span>{when(entry.at)}</span>
-                  </div>
-                  {entry.subject && <strong className="tk-msg-subject">{entry.subject}</strong>}
-                  {entry.body && <EmailBody text={entry.body.trim()} />}
-                  {/* Files already listed under Documents are named here, not shown twice */}
-                  {entry.files.some((file) => filedDocument(load, file)) && (
-                    <p className="tk-msg-filed">
-                      {entry.files
-                        .map((file) => filedDocument(load, file))
-                        .filter((document) => document !== undefined)
-                        .map((document) => `${kindLabel(document.kind)}: ${document.name}`)
-                        .join(", ")}{" "}
-                      · in Documents above
-                    </p>
-                  )}
-                  {entry.files.some((file) => !filedDocument(load, file)) && (
-                    <FileList
-                      files={entry.files.filter((file) => !filedDocument(load, file)).map((file) => ({
-                        id: file.id,
-                        fileName: file.name,
-                        contentType: file.contentType,
-                        sizeBytes: file.sizeBytes,
-                        available: file.stored,
-                      }))}
-                    />
-                  )}
-                </article>
-              ))}
-            </div>
-          </section>
-        </div>
       </div>
+      )}
     </div>
   );
 }

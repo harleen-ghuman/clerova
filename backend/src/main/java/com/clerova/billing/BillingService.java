@@ -484,27 +484,31 @@ public class BillingService {
 
     // ------------------------------------------------------------- trucking
 
-    /** From this many trucks, Fleet ($20 a truck, $199 at least) costs less than Starter. */
+    /** Starter is $25 a truck up to 8 trucks; Fleet is $199 for 9 to 20, then $12 a truck. */
     public static final int FLEET_FROM_TRUCKS = 9;
-    public static final int MAX_TRUCKS = 500;
 
-    /** Fair use: about this many loads a truck a month. */
-    public static final int LOADS_PER_TRUCK = 60;
+    /** Self-serve plans go up to 49 trucks; 50 or more is a custom plan by email. */
+    public static final int MAX_TRUCKS = 49;
+
+    /** Rate cons (loads) Clerova reads a month, per truck, pooled across the fleet. */
+    public static final int LOADS_PER_TRUCK = 20;
 
     /** The cheaper trucking plan for this many trucks. */
     public static Plan truckingPlan(int trucks) {
         return trucks >= FLEET_FROM_TRUCKS ? Plan.FLEET : Plan.STARTER;
     }
 
-    /** Loads a month for this many trucks; Starter's price covers 4 trucks, so at least that. */
+    /** Loads a month for this many trucks: 20 a truck, shared by the whole fleet. */
     public static int loadsAllowance(int trucks) {
-        return Math.max(trucks, 4) * LOADS_PER_TRUCK;
+        return Math.max(trucks, 1) * LOADS_PER_TRUCK;
     }
 
     private static int requireTrucks(Integer trucks) {
         if (trucks == null || trucks < 1 || trucks > MAX_TRUCKS) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_TRUCKS",
-                    "Enter how many trucks you run, from 1 to " + MAX_TRUCKS + ".");
+                    trucks != null && trucks > MAX_TRUCKS
+                            ? "For 50 or more trucks, email hello@clerova-ai.com and we'll set up your plan."
+                            : "Enter how many trucks you run, from 1 to " + MAX_TRUCKS + ".");
         }
 
         return trucks;
@@ -526,6 +530,7 @@ public class BillingService {
         if (!properties.isEnabled() || organization.getStripeSubscriptionId() == null
                 || requiresSubscription(organization)) {
             organization.setTrucks(quantity);
+            organization.setAiMonthlyLimit(loadsAllowance(quantity));
             organizationRepository.save(organization);
             return;
         }

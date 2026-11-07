@@ -1,4 +1,5 @@
 import type { Invoice, LoadSummary } from "../types/Load";
+import type { OpenLoadOptions } from "./loadTabs";
 import { dueText, isOverdue } from "./billing";
 import { lane, money } from "./format";
 
@@ -8,7 +9,7 @@ interface TodayViewProps {
   loading: boolean;
   error: string | null;
   forwardingAddress: string | null;
-  onOpenLoad: (id: string) => void;
+  onOpenLoad: (id: string, options?: OpenLoadOptions) => void;
   onOpenEmailSetup: () => void;
   onRetry?: () => void;
 }
@@ -121,7 +122,7 @@ export function TodayView({
               <Row
                 key={load.id}
                 load={load}
-                onOpen={onOpenLoad}
+                onOpen={(id) => onOpenLoad(id, { checks: true })}
                 sub={`${load.brokerName ?? "Broker"} · ${money(load.rateCents)}`}
                 pill={
                   load.fixFlags > 0

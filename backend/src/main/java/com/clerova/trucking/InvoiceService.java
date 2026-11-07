@@ -772,6 +772,12 @@ public class InvoiceService {
 
     /** True once the load's invoice went out: its charges are then fixed. */
     @Transactional(readOnly = true)
+    /** A draft, sent or paid invoice (not a voided one) on the load. */
+    public boolean hasInvoice(UUID loadId) {
+        return invoiceRepository.findByLoadIdOrderByCreatedAtDesc(loadId).stream()
+                .anyMatch(invoice -> invoice.getStatus() != InvoiceStatus.VOID);
+    }
+
     public boolean invoiceSent(UUID loadId) {
         return invoiceRepository.findByLoadIdOrderByCreatedAtDesc(loadId).stream()
                 .anyMatch(invoice -> invoice.getStatus() == InvoiceStatus.SENT || invoice.getStatus() == InvoiceStatus.PAID);
@@ -986,7 +992,7 @@ public class InvoiceService {
         return String.join(", ", words.subList(0, words.size() - 1)) + " and " + words.getLast();
     }
 
-    private static String fileSafe(String value) {
+    static String fileSafe(String value) {
         return value.replaceAll("[^A-Za-z0-9 ._-]", "-");
     }
 

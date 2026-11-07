@@ -4,7 +4,9 @@ import { ApiRequestError, errorMessage } from "../api/client";
 import { getBillingOffer, startCheckout, type BillingInterval } from "../api/billing";
 import type { Organization } from "../types/Account";
 import {
+  CONTACT_EMAIL,
   MAX_TRUCKS,
+  dollars,
   truckingPlanSummary,
   truckingPrice,
 } from "../utils/truckingPlans";
@@ -32,6 +34,7 @@ export function TruckingPlanPage({ organization, notice, onSignOut }: TruckingPl
   const count = Number(trucks);
   const valid = Number.isInteger(count) && count >= 1 && count <= MAX_TRUCKS;
   const price = valid ? truckingPrice(count, interval, founding) : null;
+  const bigFleet = Number.isInteger(count) && count > MAX_TRUCKS;
   const regular = valid ? truckingPrice(count, interval, false) : null;
 
   useEffect(() => {
@@ -60,7 +63,11 @@ export function TruckingPlanPage({ organization, notice, onSignOut }: TruckingPl
 
   async function start() {
     if (!valid) {
-      setError(`Enter how many trucks you run, from 1 to ${MAX_TRUCKS}.`);
+      setError(
+        bigFleet
+          ? `For 50 or more trucks, email ${CONTACT_EMAIL} and we'll set up your plan.`
+          : `Enter how many trucks you run, from 1 to ${MAX_TRUCKS}.`
+      );
       return;
     }
 
@@ -114,7 +121,7 @@ export function TruckingPlanPage({ organization, notice, onSignOut }: TruckingPl
             onChange={(event) => setTrucks(event.target.value.replace(/\D/g, ""))}
             disabled={submitting}
           />
-          <button type="button" aria-label="One truck more" onClick={() => step(1)} disabled={submitting || (valid && count >= MAX_TRUCKS)}>
+          <button type="button" aria-label="One truck more" onClick={() => step(1)} disabled={submitting || (valid && count >= MAX_TRUCKS) || bigFleet}>
             +
           </button>
         </div>
@@ -150,19 +157,30 @@ export function TruckingPlanPage({ organization, notice, onSignOut }: TruckingPl
             <>
               <h2>{price.plan === "FLEET" ? "Fleet" : "Starter"}</h2>
               <p className="plan-price">
-                <strong>${price.amount.toLocaleString()}</strong> / {price.per}
-                {founding && <s>${regular.amount.toLocaleString()}</s>}
+                <strong>{dollars(price.amount)}</strong> / {price.per}
+                {founding && <s>{dollars(regular.amount)}</s>}
               </p>
               <p className="plan-requests">
                 {truckingPlanSummary(price.plan, founding)}.
               </p>
             </>
+          ) : bigFleet ? (
+            <>
+              <h2>50 trucks or more</h2>
+              <p className="plan-requests">
+                We set up larger fleets by hand, with a price for your fleet. Email{" "}
+                <a href={`mailto:${CONTACT_EMAIL}?subject=Clerova%20for%20${count}%20trucks`}>{CONTACT_EMAIL}</a> and we'll
+                reply within one business day.
+              </p>
+            </>
           ) : (
             <p className="plan-requests">Enter how many trucks you run to see your price.</p>
           )}
-          <button type="button" className="primary-button" onClick={() => void start()} disabled={submitting || !valid}>
-            {submitting ? "Opening checkout..." : firstTime ? "Start free trial" : "Continue"}
-          </button>
+          {!bigFleet && (
+            <button type="button" className="primary-button" onClick={() => void start()} disabled={submitting || !valid}>
+              {submitting ? "Opening checkout..." : firstTime ? "Start free trial" : "Continue"}
+            </button>
+          )}
         </article>
 
         {error && <p className="action-error">{error}</p>}

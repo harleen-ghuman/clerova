@@ -85,6 +85,30 @@ public interface InboundMessageRepository
             """)
     int claim(@Param("id") UUID id, @Param("now") Instant now);
 
+    /** Takes one of the email's reply drafts; 0 when they're used up. */
+    @Modifying
+    @Transactional
+    @Query("""
+            update InboundMessage m
+            set m.replyDraftsUsed = m.replyDraftsUsed + 1
+            where m.id = :id and m.replyDraftsUsed < :max
+            """)
+    int useReplyDraft(@Param("id") UUID id, @Param("max") int max);
+
+    /** Gives a draft back when the AI couldn't write one. */
+    @Modifying
+    @Transactional
+    @Query("""
+            update InboundMessage m
+            set m.replyDraftsUsed = m.replyDraftsUsed - 1
+            where m.id = :id and m.replyDraftsUsed > 0
+            """)
+    int refundReplyDraft(@Param("id") UUID id);
+
+    @Modifying
+    @Query("update InboundMessage m set m.repliedAt = :at where m.id = :id")
+    int markReplied(@Param("id") UUID id, @Param("at") Instant at);
+
     /** Messages left in PROCESSING by a crashed worker. */
     @Modifying
     @Query("""

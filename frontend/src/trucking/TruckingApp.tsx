@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { OpenLoadOptions } from "./loadTabs";
 
 import { fileEmail, getInvoices, getLoads } from "../api/loads";
 import { getEmailSettings } from "../api/email";
@@ -82,6 +83,8 @@ export function TruckingApp({
   const [invoicesError, setInvoicesError] = useState<string | null>(null);
   const [focusCarrier, setFocusCarrier] = useState(false);
   const [focusBilling, setFocusBilling] = useState(0);
+  // How the open load was opened: on a tab, or at its rate con check
+  const [openWith, setOpenWith] = useState<OpenLoadOptions | null>(null);
   const [loadSearch, setLoadSearch] = useState("");
   const [billingError, setBillingError] = useState<string | null>(null);
 
@@ -254,7 +257,8 @@ export function TruckingApp({
     show(view);
   }
 
-  function openLoad(id: string) {
+  function openLoad(id: string, options?: OpenLoadOptions) {
+    setOpenWith(options ?? null);
     show("loads", id);
   }
 
@@ -330,7 +334,7 @@ export function TruckingApp({
         }}
         items={items}
         usageText={
-          billing && limit > 0
+          limit > 0
             ? `${used} of ${limit.toLocaleString()} loads this month`
             : loadsThisMonthText(loads)
         }
@@ -403,6 +407,7 @@ export function TruckingApp({
             <LoadView
               key={selectedId}
               loadId={selectedId}
+              openWith={openWith}
               sendingEnabled={emailSettings?.sendingEnabled ?? false}
               onBack={closeLoad}
               onChanged={() => void loadLoads()}
@@ -448,6 +453,7 @@ export function TruckingApp({
               onOpenLoad={openLoad}
               loads={loads}
               onFileEmail={(messageId, loadId) => fileEmail(loadId, messageId).then(() => loadLoads())}
+              sendingEnabled={emailSettings?.sendingEnabled ?? false}
             />
           </div>
         )}
@@ -490,6 +496,7 @@ export function TruckingApp({
               propertyManagement={false}
               focusCompanyInfo={focusCarrier}
               focusBilling={focusBilling}
+              emailSendingEnabled={emailSettings?.sendingEnabled ?? false}
             />
           </div>
         )}

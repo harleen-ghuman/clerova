@@ -63,7 +63,7 @@ class TruckingBillingTest {
 
         checkout(user, "{\"plan\":\"STARTER\",\"interval\":\"month\",\"trucks\":0}")
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Enter how many trucks you run, from 1 to 500."));
+                .andExpect(jsonPath("$.message").value("Enter how many trucks you run, from 1 to 49."));
         // Not quietly rounded down to 2
         checkout(user, "{\"plan\":\"STARTER\",\"interval\":\"month\",\"trucks\":2.5}")
                 .andExpect(status().isBadRequest());
@@ -106,7 +106,7 @@ class TruckingBillingTest {
         mockMvc.perform(get("/api/me").with(user))
                 .andExpect(jsonPath("$.organization.plan").value("STARTER"))
                 .andExpect(jsonPath("$.organization.trucks").value(6))
-                .andExpect(jsonPath("$.organization.aiMonthlyLimit").value(360))
+                .andExpect(jsonPath("$.organization.aiMonthlyLimit").value(120))
                 .andExpect(jsonPath("$.organization.foundingCustomer").value(true))
                 .andExpect(jsonPath("$.organization.subscriptionRequired").value(false));
 
@@ -129,13 +129,14 @@ class TruckingBillingTest {
         mockMvc.perform(get("/api/me").with(user))
                 .andExpect(jsonPath("$.organization.plan").value("FLEET"))
                 .andExpect(jsonPath("$.organization.trucks").value(10))
-                .andExpect(jsonPath("$.organization.aiMonthlyLimit").value(600));
+                .andExpect(jsonPath("$.organization.aiMonthlyLimit").value(200));
 
         // Growth is for property managers
         mockMvc.perform(post("/api/billing/upgrade").with(user)).andExpect(status().isConflict());
 
         mockMvc.perform(post("/api/billing/trucks").with(user).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"trucks\":501}")).andExpect(status().isBadRequest());
+                .content("{\"trucks\":50}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("For 50 or more trucks, email hello@clerova-ai.com and we'll set up your plan."));
     }
 
     @Test
@@ -144,7 +145,9 @@ class TruckingBillingTest {
 
         mockMvc.perform(post("/api/billing/trucks").with(user).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"trucks\":3}")).andExpect(status().isOk());
-        mockMvc.perform(get("/api/me").with(user)).andExpect(jsonPath("$.organization.trucks").value(3));
+        mockMvc.perform(get("/api/me").with(user))
+                .andExpect(jsonPath("$.organization.trucks").value(3))
+                .andExpect(jsonPath("$.organization.aiMonthlyLimit").value(60));
         verify(stripe, never()).post(startsWith("/v1/subscriptions/"), anyMap());
     }
 

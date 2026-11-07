@@ -499,6 +499,74 @@ class TruckingDocumentsTest {
         return read;
     }
 
+    @Test
+    void theCarrierPacketKeepsTheCarriersOwnPaperworkAndMakesOnePdf() throws Exception {
+        // Empty to start: nothing to download yet
+        assertThat(json(mockMvc.perform(get("/api/carrier/documents").with(user)))).isEmpty();
+        mockMvc.perform(get("/api/carrier/packet").with(user)).andExpect(status().isConflict());
+
+        // A W-9, then the authority letter and an insurance certificate that has expired
+        mockMvc.perform(multipart("/api/carrier/documents").file(new MockMultipartFile("file", "w9.pdf", "application/pdf", scannedPdfBytes()))
+                        .param("kind", "W9").with(user))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.kindLabel").value("W-9"));
+        mockMvc.perform(multipart("/api/carrier/documents").file(new MockMultipartFile("file", "authority.png", "image/png", photo()))
+                        .param("kind", "AUTHORITY").with(user))
+                .andExpect(status().isCreated());
+        String insurance = json(mockMvc.perform(multipart("/api/carrier/documents")
+                        .file(new MockMultipartFile("file", "coi.pdf", "application/pdf", scannedPdfBytes()))
+                        .param("kind", "INSURANCE").param("expiresOn", "2020-01-31").with(user))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.expired").value(true))).get("id").asText();
+
+        // Listed in packet order: authority, insurance, W-9
+        JsonNode list = json(mockMvc.perform(get("/api/carrier/documents").with(user)));
+        assertThat(list).hasSize(3);
+        assertThat(list.get(0).get("kind").asText()).isEqualTo("AUTHORITY");
+        assertThat(list.get(1).get("kind").asText()).isEqualTo("INSURANCE");
+        assertThat(list.get(2).get("kind").asText()).isEqualTo("W9");
+
+        // A new expiry date, then the packet: a cover page and every document, one PDF
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/carrier/documents/{id}", insurance)
+                        .with(user).contentType(MediaType.APPLICATION_JSON).content("{\"expiresOn\":\"2099-12-31\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.expired").value(false));
+        byte[] packet = mockMvc.perform(get("/api/carrier/packet").with(user))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("Content-Disposition", org.hamcrest.Matchers.containsString("attachment")))
+                .andReturn().getResponse().getContentAsByteArray();
+
+        try (PDDocument pdf = org.apache.pdfbox.Loader.loadPDF(packet)) {
+            assertThat(pdf.getNumberOfPages()).isEqualTo(4);
+            String cover = new org.apache.pdfbox.text.PDFTextStripper() {{ setStartPage(1); setEndPage(1); }}.getText(pdf);
+            assertThat(cover).contains("Carrier packet", "Sierra Run Transport", "MC authority letter",
+                    "Certificate of insurance (valid until Dec 31, 2099)", "W-9");
+        }
+
+        // Emailed to a broker as one PDF, from the Clerova address
+        mockMvc.perform(post("/api/carrier/packet/send").with(user).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"to\":\"setup@crestline.example\"}")).andExpect(status().isOk());
+        ArgumentCaptor<com.clerova.email.OutgoingEmail> sent = ArgumentCaptor.forClass(com.clerova.email.OutgoingEmail.class);
+        verify(emailSender).send(sent.capture());
+        assertThat(sent.getValue().to()).isEqualTo("setup@crestline.example");
+        assertThat(sent.getValue().subject()).startsWith("Carrier packet - Sierra Run Transport");
+        assertThat(sent.getValue().attachments()).hasSize(1);
+        assertThat(sent.getValue().attachments().getFirst().contentType()).isEqualTo("application/pdf");
+        mockMvc.perform(post("/api/carrier/packet/send").with(user).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"to\":\"not an email\"}")).andExpect(status().isBadRequest());
+
+        // Other kinds of workspaces can't use it
+        RequestPostProcessor manager = com.clerova.WorkItemWorkflowTest.onboardNewUser(mockMvc);
+        mockMvc.perform(get("/api/carrier/documents").with(manager)).andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/carrier/documents/{id}/file", insurance).with(manager)).andExpect(status().isNotFound());
+
+        // Removed
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/carrier/documents/{id}", insurance).with(user))
+                .andExpect(status().isNoContent());
+        assertThat(json(mockMvc.perform(get("/api/carrier/documents").with(user)))).hasSize(2);
+    }
+
     private MockMultipartHttpServletRequestBuilder upload(String name, String type, byte[] content) {
         return multipart("/api/load-documents").file(new MockMultipartFile("file", name, type, content));
     }

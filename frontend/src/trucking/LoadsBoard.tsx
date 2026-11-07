@@ -1,4 +1,5 @@
 import type { LoadStatus, LoadSummary } from "../types/Load";
+import type { OpenLoadOptions } from "./loadTabs";
 import { lane, money } from "./format";
 import { matchesSearch } from "./search";
 import { UploadDocuments } from "./UploadDocuments";
@@ -7,7 +8,7 @@ interface LoadsBoardProps {
   loads: LoadSummary[];
   loading: boolean;
   error: string | null;
-  onOpenLoad: (id: string) => void;
+  onOpenLoad: (id: string, options?: OpenLoadOptions) => void;
   refreshKey: number;
   /** An upload filed a document or made a load. */
   onChanged: () => void;
@@ -106,7 +107,13 @@ export function LoadsBoard({ loads: allLoads, loading, error, onOpenLoad, refres
                 </h2>
                 {items.length === 0 && <p className="tk-none" style={{ textAlign: "center" }}>None</p>}
                 {items.map((load) => (
-                  <button key={load.id} type="button" className="tk-card" onClick={() => onOpenLoad(load.id)}>
+                  <button
+                    key={load.id}
+                    type="button"
+                    className="tk-card"
+                    // "1 to fix" opens the load at its rate con check, unless a reply is waiting first
+                    onClick={() => onOpenLoad(load.id, load.openFlags > 0 && load.draftReplies === 0 ? { checks: true } : undefined)}
+                  >
                     <span className="tk-card-top">
                       <span>{load.loadNumber ? `#${load.loadNumber}` : "No load number"}</span>
                       <span>{money(load.rateCents)}</span>
@@ -115,6 +122,8 @@ export function LoadsBoard({ loads: allLoads, loading, error, onOpenLoad, refres
                     <span className="tk-sub">
                       {load.brokerName ?? "Broker unknown"}
                       {load.status === "CANCELLED" ? " · Cancelled" : ""}
+                      {load.status === "INVOICED" ? " · Invoiced" : ""}
+                      {load.status === "PAID" ? " · Paid" : ""}
                     </span>
                     {(load.openFlags > 0 || load.draftReplies > 0) && (
                       <span className="tk-tags">

@@ -1,4 +1,5 @@
 import { useId, useState, type FormEvent } from "react";
+import { showLoadTab } from "./loadTabs";
 import { addCharge, deleteCharge, sendLoadMessage, updateCharge } from "../api/loads";
 import { ConfirmInline } from "../components/ConfirmInline";
 import type { ChargeKind, ChargeStatus, LoadCharge, LoadDetail } from "../types/Load";
@@ -276,11 +277,11 @@ export function ChargesPanel({ load, sendingEnabled, busy, run }: ChargesPanelPr
                 <p className="tk-charge-sent">
                   Claim emailed to {charge.claimEmail.toEmail}
                   {charge.claimEmail.sentAt ? ` · ${when(charge.claimEmail.sentAt)}` : ""}.{" "}
-                  The broker's reply will show under Emails on this load.{" "}
+                  The broker's reply will show in this load's Emails tab.{" "}
                   <button
                     type="button"
                     className="tk-link"
-                    onClick={() => document.getElementById("load-emails")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                    onClick={() => showLoadTab("emails")}
                   >
                     See Emails
                   </button>
