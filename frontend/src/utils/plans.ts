@@ -25,6 +25,6 @@ export function planPrice(
 }
 
 export function planName(plan: string): string {
-  // Fleet is the trucking plan for 9 or more trucks (see truckingPlans.ts)
+  // Fleet is the trucking plan for 8 or more trucks (see truckingPlans.ts)
   return plan === "FLEET" ? "Fleet" : (PLANS.find((item) => item.plan === plan)?.name ?? "Free trial");
 }

@@ -33,7 +33,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Trucking plans: priced by truck, Starter up to 8 trucks and Fleet from 9. */
+/** Trucking plans: priced by truck, Starter up to 7 trucks and Fleet from 8. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {

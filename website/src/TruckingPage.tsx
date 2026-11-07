@@ -69,7 +69,7 @@ const faqs = [
 const truckPlans = [
   {
     name: "Starter",
-    note: "For 1 to 8 trucks",
+    note: "For 1 to 7 trucks",
     price: "$25",
     unit: "/ truck a month",
     founding: "Founding carriers: $17.50 a truck, for as long as you stay",
@@ -77,7 +77,7 @@ const truckPlans = [
   },
   {
     name: "Fleet",
-    note: "For 9 to 49 trucks",
+    note: "For 8 to 49 trucks",
     price: "$199",
     unit: "/ month for up to 20 trucks",
     founding: "Then $12 a truck. Founding carriers: $139, then $8.40 a truck, for as long as you stay",
@@ -291,7 +291,7 @@ export function TruckingPage() {
             ))}
           </div>
           <p className="pricing-footnote">
-            You enter your trucks when you start, and Clerova puts you on the plan for that many trucks. Change your trucks
+            You enter your trucks when you start, and Clerova puts you on the plan that costs less. Change your trucks
             anytime in Settings. Founding prices are for our first 20 customers and stay the same for as long as
             you stay. Running a dispatch service or 50 trucks or more? Email hello@clerova-ai.com for a price.
           </p>
