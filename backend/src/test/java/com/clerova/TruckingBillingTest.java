@@ -129,7 +129,8 @@ class TruckingBillingTest {
         mockMvc.perform(get("/api/me").with(user))
                 .andExpect(jsonPath("$.organization.plan").value("FLEET"))
                 .andExpect(jsonPath("$.organization.trucks").value(10))
-                .andExpect(jsonPath("$.organization.aiMonthlyLimit").value(200));
+                // Fleet's $199 covers 20 trucks, so 10 trucks get 20 x 20 loads
+                .andExpect(jsonPath("$.organization.aiMonthlyLimit").value(400));
 
         // Growth is for property managers
         mockMvc.perform(post("/api/billing/upgrade").with(user)).andExpect(status().isConflict());
