@@ -420,11 +420,40 @@ public class InvoiceService {
     /** Stops a workspace from sending more than {@link #MAX_EMAILS_PER_HOUR} emails about loads in an hour. */
     @Transactional(readOnly = true)
     public void requireEmailAllowance(UUID organizationId) {
-        if (replyRepository.countSentSince(organizationId, Instant.now().minus(java.time.Duration.ofHours(1)))
+        Instant hourAgo = Instant.now().minus(java.time.Duration.ofHours(1));
+
+        if (replyRepository.countSentSince(organizationId, hourAgo) + otherSendsSince(organizationId, hourAgo)
                 >= MAX_EMAILS_PER_HOUR) {
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "EMAIL_LIMIT",
                     "You've sent " + MAX_EMAILS_PER_HOUR + " emails in the last hour. Please wait a little, then try again.");
         }
+    }
+
+    /**
+     * Emails that aren't kept as a load's reply (Inbox replies off a load,
+     * carrier packets) still count toward the hourly cap. Kept in memory: a
+     * restart forgets them, which only ever lets a few more through.
+     */
+    private final java.util.concurrent.ConcurrentHashMap<UUID, java.util.Deque<Instant>> otherSends =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Call after sending an email that isn't saved as a load reply. */
+    public void noteOtherSend(UUID organizationId) {
+        otherSends.computeIfAbsent(organizationId, id -> new java.util.concurrent.ConcurrentLinkedDeque<>()).add(Instant.now());
+    }
+
+    private long otherSendsSince(UUID organizationId, Instant since) {
+        java.util.Deque<Instant> sends = otherSends.get(organizationId);
+
+        if (sends == null) {
+            return 0;
+        }
+
+        while (!sends.isEmpty() && sends.peekFirst().isBefore(since)) {
+            sends.pollFirst();
+        }
+
+        return sends.size();
     }
 
     /** The dispatcher uploaded the packet to the factor's website (or sent it some other way). */

@@ -73,6 +73,9 @@ class TruckingDocumentsTest {
     @Autowired
     private InboundEmailProcessor processor;
 
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
     @MockitoBean
     private TruckingAiService truckingAiService;
 
@@ -565,6 +568,13 @@ class TruckingDocumentsTest {
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/carrier/documents/{id}", insurance).with(user))
                 .andExpect(status().isNoContent());
         assertThat(json(mockMvc.perform(get("/api/carrier/documents").with(user)))).hasSize(2);
+
+        // Too many megabytes for one packet: refused before anything is read
+        for (JsonNode kept : json(mockMvc.perform(get("/api/carrier/documents").with(user)))) {
+            jdbcTemplate.update("update carrier_documents set size_bytes = 25000000 where id = ?", UUID.fromString(kept.get("id").asText()));
+        }
+        mockMvc.perform(get("/api/carrier/packet").with(user)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith("Your documents add up to more than 40 MB")));
     }
 
     private MockMultipartHttpServletRequestBuilder upload(String name, String type, byte[] content) {

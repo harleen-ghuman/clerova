@@ -179,7 +179,10 @@ export function StopsPanel({ load, sendingEnabled, busy, run }: StopsPanelProps)
             ? Math.max(0, ((stop.leftAt ? new Date(stop.leftAt).getTime() : now) - new Date(stop.arrivedAt).getTime()) / 60_000)
             : 0;
           const freeLeft = detention ? (new Date(detention.freeEndsAt).getTime() - now) / 60_000 : 0;
-          const previousLeft = index === 0 || load.stops[index - 1].leftAt !== null || load.stops[index - 1].arrivedAt === null;
+          // Later stops wait until the load is picked up; the server refuses them while booked.
+          const previousLeft =
+            index === 0 ||
+            (load.status !== "BOOKED" && (load.stops[index - 1].leftAt !== null || load.stops[index - 1].arrivedAt === null));
 
           return (
             <li key={stop.id} className={`tk-stop tk-stop-${stop.kind === "PICKUP" ? "pickup" : "delivery"}`}>

@@ -1073,6 +1073,9 @@ function handle(route: string, body: Record<string, unknown>, form: FormData | n
       if (load.status === "CANCELLED" && state.invoices.some((invoice) => invoice.loadId === load.id && invoice.status !== "VOID")) {
         conflict("This load has an invoice. Void it first to reopen the load.");
       }
+      if (load.status === "DELIVERED" && state.invoices.some((invoice) => invoice.loadId === load.id && invoice.status !== "VOID")) {
+        conflict("This load has an invoice. Void it first to move the load back.");
+      }
       load.status = to;
     }
     if (typeof body.statusNote === "string") load.statusNote = text(body.statusNote) || null;
