@@ -563,14 +563,19 @@ public class InvoiceService {
         Map<UUID, Load> loads = loadRepository.findForOrganization(organizationId).stream()
                 .collect(Collectors.toMap(Load::getId, Function.identity()));
         StringBuilder csv = new StringBuilder();
+        // Canadian carriers bill in CAD and USD: a Currency column, and totals per currency
+        boolean byCurrency = organizationRepository.findById(organizationId).map(org -> org.isCanadian()).orElse(false);
         List<String> header = new ArrayList<>(List.of("Invoice", "Invoice date", "Load", "Broker", "From", "To", "Sent to", "Status"));
+
+        if (byCurrency) {
+            header.add("Currency");
+        }
+
         header.addAll(List.of(EXPORT_COLUMNS));
         header.addAll(List.of("Total", "Quick pay fee", "Due date", "Paid date", "Amount paid", "Line details"));
         row(csv, header.toArray(String[]::new));
-        long[] columnTotals = new long[EXPORT_COLUMNS.length];
-        long total = 0;
-        long fees = 0;
-        long paid = 0;
+        // Per currency: each export column, then total, fees and paid
+        Map<String, long[]> sums = new java.util.TreeMap<>();
 
         List<Invoice> invoices = invoiceRepository.findByOrganizationIdOrderByCreatedAtDesc(organizationId).reversed();
 
@@ -610,10 +615,16 @@ public class InvoiceService {
                     stops.size() < 2 ? "" : town(stops.getLast().getPlace()),
                     invoice.getSendTo() == Invoice.SendTo.FACTOR ? "Factor" : "Broker",
                     invoice.getStatus() == InvoiceStatus.PAID ? "Paid" : "Waiting on payment"));
+            String currency = load == null ? "USD" : load.getCurrency();
+            long[] sum = sums.computeIfAbsent(byCurrency ? currency : "", key -> new long[EXPORT_COLUMNS.length + 3]);
+
+            if (byCurrency) {
+                cells.add(currency);
+            }
 
             for (int i = 0; i < columns.length; i++) {
                 cells.add(used[i] ? amount(columns[i]) : "");
-                columnTotals[i] += columns[i];
+                sum[i] += columns[i];
             }
 
             cells.addAll(List.of(
@@ -624,19 +635,32 @@ public class InvoiceService {
                     invoice.getPaidCents() == null ? "" : amount(invoice.getPaidCents()),
                     lines));
             row(csv, cells.toArray(String[]::new));
-            total += invoice.getTotalCents();
-            fees += invoice.getQuickPayFeeCents() == null ? 0 : invoice.getQuickPayFeeCents();
-            paid += invoice.getPaidCents() == null ? 0 : invoice.getPaidCents();
+            int at = EXPORT_COLUMNS.length;
+            sum[at] += invoice.getTotalCents();
+            sum[at + 1] += invoice.getQuickPayFeeCents() == null ? 0 : invoice.getQuickPayFeeCents();
+            sum[at + 2] += invoice.getPaidCents() == null ? 0 : invoice.getPaidCents();
         }
 
-        List<String> totals = new ArrayList<>(List.of("Total", "", "", "", "", "", "", ""));
-
-        for (long column : columnTotals) {
-            totals.add(amount(column));
+        if (sums.isEmpty()) {
+            sums.put(byCurrency ? "CAD" : "", new long[EXPORT_COLUMNS.length + 3]);
         }
 
-        totals.addAll(List.of(amount(total), amount(fees), "", "", amount(paid), ""));
-        row(csv, totals.toArray(String[]::new));
+        for (Map.Entry<String, long[]> entry : sums.entrySet()) {
+            long[] sum = entry.getValue();
+            int at = EXPORT_COLUMNS.length;
+            List<String> totals = new ArrayList<>(List.of(byCurrency ? "Total " + entry.getKey() : "Total", "", "", "", "", "", "", ""));
+
+            if (byCurrency) {
+                totals.add(entry.getKey());
+            }
+
+            for (int i = 0; i < at; i++) {
+                totals.add(amount(sum[i]));
+            }
+
+            totals.addAll(List.of(amount(sum[at]), amount(sum[at + 1]), "", "", amount(sum[at + 2]), ""));
+            row(csv, totals.toArray(String[]::new));
+        }
         return new FileDownload("Clerova invoices " + period + ".csv",
                 ("﻿" + csv).getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
@@ -856,7 +880,14 @@ public class InvoiceService {
                 load.getLoadNumber(), references == null || references.isBlank() ? null : references, stops,
                 invoice.getLines().stream().map(line -> new InvoiceLine(line.getDescription(), line.getAmountCents())).toList(),
                 invoice.getTotalCents(), invoice.getQuickPayFeeCents(),
-                load.getQuickPayPercent() == null ? null : load.getQuickPayPercent().stripTrailingZeros().toPlainString());
+                load.getQuickPayPercent() == null ? null : load.getQuickPayPercent().stripTrailingZeros().toPlainString(),
+                showCurrency(invoice.getOrganizationId(), load) ? load.getCurrency() : null);
+    }
+
+    /** US carriers billing in USD see "$" as always; anyone else sees which currency. */
+    private boolean showCurrency(UUID organizationId, Load load) {
+        return !"USD".equals(load.getCurrency())
+                || organizationRepository.findById(organizationId).map(org -> org.isCanadian()).orElse(false);
     }
 
     /** A document of the load that can go in a packet. */
@@ -994,7 +1025,8 @@ public class InvoiceService {
                 load == null || load.getBroker() == null ? null : load.getBroker().getName(),
                 stops.isEmpty() ? null : stops.getFirst().getPlace(),
                 stops.size() < 2 ? null : stops.getLast().getPlace(),
-                packet, missing, suggested, carrier != null && carrier.isUsesFactoring());
+                packet, missing, suggested, carrier != null && carrier.isUsesFactoring(),
+                load == null ? "USD" : load.getCurrency());
     }
 
     private Invoice require(UUID organizationId, UUID invoiceId) {

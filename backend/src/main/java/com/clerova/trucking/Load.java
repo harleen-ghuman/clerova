@@ -47,6 +47,10 @@ public class Load {
     /** The most detention pays per stop, if the rate con caps it. */
     private Long detentionMaxCents;
 
+    /** USD or CAD, from the rate con; the invoice is in this currency too. */
+    @Column(nullable = false, length = 3)
+    private String currency = "USD";
+
     /** The quick pay fee, like 2.5 (percent), if the broker offers quick pay. */
     @Column(precision = 5, scale = 2)
     private java.math.BigDecimal quickPayPercent;
@@ -144,6 +148,8 @@ public class Load {
     public void setTonuCents(Long tonuCents) { this.tonuCents = tonuCents; }
     public Long getDetentionMaxCents() { return detentionMaxCents; }
     public void setDetentionMaxCents(Long detentionMaxCents) { this.detentionMaxCents = detentionMaxCents; }
+    public String getCurrency() { return currency; }
+    public void setCurrency(String currency) { this.currency = currency; }
     public java.math.BigDecimal getQuickPayPercent() { return quickPayPercent; }
     public void setQuickPayPercent(java.math.BigDecimal quickPayPercent) { this.quickPayPercent = quickPayPercent; }
     public String getInvoiceEmail() { return invoiceEmail; }

@@ -3,6 +3,7 @@ const PLAN_KEY = "clerova.chosenPlan";
 const EMAIL_KEY = "clerova.prefillEmail";
 const SIGNING_UP_KEY = "clerova.signingUp";
 const INDUSTRY_KEY = "clerova.industry";
+const COUNTRY_KEY = "clerova.country";
 
 /**
  * Remembers where a visitor came from (utm_source or ref in the URL, e.g.
@@ -32,6 +33,11 @@ export function captureReferralSource() {
       localStorage.setItem(INDUSTRY_KEY, industry === "trucking" ? "TRUCKING" : "PROPERTY_MANAGEMENT");
     }
 
+    // A Canadian sign-up link (like the QR code for Canadian carriers)
+    if (params.get("country")?.toUpperCase() === "CA") {
+      localStorage.setItem(COUNTRY_KEY, "CA");
+    }
+
     const email = params.get("email");
 
     if (email) {
@@ -59,7 +65,7 @@ function stripWebsiteParams() {
     const url = new URL(window.location.href);
     let changed = false;
 
-    for (const name of ["email", "plan", "utm_source", "ref", "industry"]) {
+    for (const name of ["email", "plan", "utm_source", "ref", "industry", "country"]) {
       if (url.searchParams.has(name)) {
         url.searchParams.delete(name);
         changed = true;
@@ -170,10 +176,49 @@ export function getChosenIndustry(): "PROPERTY_MANAGEMENT" | "TRUCKING" | null {
   }
 }
 
+/** Canada's time zones, from the device: no location prompt needed. */
+const CANADIAN_ZONES = new Set([
+  "America/Edmonton", "America/Calgary", "America/Vancouver", "America/Toronto", "America/Winnipeg",
+  "America/Regina", "America/Swift_Current", "America/Halifax", "America/Moncton", "America/Glace_Bay",
+  "America/Goose_Bay", "America/St_Johns", "America/Whitehorse", "America/Dawson", "America/Yellowknife",
+  "America/Inuvik", "America/Cambridge_Bay", "America/Iqaluit", "America/Rankin_Inlet", "America/Resolute",
+  "America/Dawson_Creek", "America/Fort_Nelson", "America/Creston", "America/Atikokan", "America/Blanc-Sablon",
+  "America/Montreal", "America/Thunder_Bay", "America/Nipigon", "America/Rainy_River", "America/Pangnirtung",
+]);
+
+/**
+ * Whether this looks like a Canadian carrier: a Canadian sign-up link, or a
+ * phone or computer set to a Canadian time zone or English/French (Canada).
+ * Only a starting guess: the sign-up box can still be changed.
+ */
+export function looksCanadian(): boolean {
+  try {
+    if (localStorage.getItem(COUNTRY_KEY) === "CA") {
+      return true;
+    }
+  } catch {
+    // Storage blocked: go by the device
+  }
+
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    if (zone && CANADIAN_ZONES.has(zone)) {
+      return true;
+    }
+  } catch {
+    // No time zone
+  }
+
+  const languages = typeof navigator === "undefined" ? [] : navigator.languages ?? [navigator.language];
+  return languages.some((language) => /-CA$/i.test(language ?? ""));
+}
+
 /** Once the workspace is made, so the next person on this browser starts fresh. */
 export function forgetChosenIndustry(): void {
   try {
     localStorage.removeItem(INDUSTRY_KEY);
+    localStorage.removeItem(COUNTRY_KEY);
   } catch {
     // Nothing saved
   }

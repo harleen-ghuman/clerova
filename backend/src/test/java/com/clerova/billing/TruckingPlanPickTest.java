@@ -26,4 +26,13 @@ class TruckingPlanPickTest {
         assertThat(BillingService.loadsAllowance(20)).isEqualTo(400);
         assertThat(BillingService.loadsAllowance(25)).isEqualTo(500);
     }
+
+    /** Canadian carriers pay the same numbers in CAD, on their own Stripe prices. */
+    @Test
+    void canadianCarriersUseTheCadPrices() {
+        assertThat(BillingService.lookupKey(Plan.STARTER, "month", false, true, true)).isEqualTo("trucking_starter_monthly_cad");
+        assertThat(BillingService.lookupKey(Plan.FLEET, "year", true, true, true)).isEqualTo("founding_trucking_fleet_yearly_cad");
+        assertThat(BillingService.lookupKey(Plan.FLEET, "month", false, true, false)).isEqualTo("trucking_fleet_monthly");
+        assertThat(BillingService.lookupKey(Plan.GROWTH, "month", false, false, true)).isEqualTo("growth_monthly");
+    }
 }

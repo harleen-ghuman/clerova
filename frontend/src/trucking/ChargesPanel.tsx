@@ -54,11 +54,11 @@ function detentionClaim(load: LoadDetail, charge: LoadCharge): MessageDraft {
     lines.push(`Free time: ${duration(detention.freeMinutes)}`);
     lines.push(
       `Detention: ${duration(detention.billableMinutes)}` +
-        (load.detentionRateCents !== null ? ` at ${money(load.detentionRateCents)}/hour` : "")
+        (load.detentionRateCents !== null ? ` at ${money(load.detentionRateCents, load.currency)}/hour` : "")
     );
   }
 
-  lines.push(`Amount: ${money(charge.amountCents)}`);
+  lines.push(`Amount: ${money(charge.amountCents, load.currency)}`);
   const where = stop ? ` at ${placeName(stop.place)}` : "";
 
   return {
@@ -181,7 +181,7 @@ export function ChargesPanel({ load, sendingEnabled, busy, run }: ChargesPanelPr
       </h2>
       <p className="tk-sub">
         Detention, lumpers, layovers and TONU. Approved ones go on the invoice
-        {approved.length > 0 ? `: ${money(approved.reduce((sum, charge) => sum + charge.amountCents, 0))} so far.` : "."}
+        {approved.length > 0 ? `: ${money(approved.reduce((sum, charge) => sum + charge.amountCents, 0), load.currency)} so far.` : "."}
       </p>
 
       {load.charges.length > 0 && (
@@ -191,7 +191,7 @@ export function ChargesPanel({ load, sendingEnabled, busy, run }: ChargesPanelPr
               <div className="tk-charge-main">
                 <span className="tk-charge-title">
                   {charge.label}
-                  <span className="tk-money">{money(charge.amountCents)}</span>
+                  <span className="tk-money">{money(charge.amountCents, load.currency)}</span>
                 </span>
                 {charge.description && <span className="tk-sub">{charge.description}</span>}
               </div>
@@ -236,9 +236,9 @@ export function ChargesPanel({ load, sendingEnabled, busy, run }: ChargesPanelPr
                                 : {
                                     title: `Claim the ${charge.label.toLowerCase()}`,
                                     to: load.broker?.email ?? "",
-                                    subject: `${load.loadNumber ? `Load ${load.loadNumber}` : "Load"}: ${charge.label.toLowerCase()} ${money(charge.amountCents)}`,
+                                    subject: `${load.loadNumber ? `Load ${load.loadNumber}` : "Load"}: ${charge.label.toLowerCase()} ${money(charge.amountCents, load.currency)}`,
                                     body:
-                                      `Hi,\n\nPlease approve ${charge.label.toLowerCase()} of ${money(charge.amountCents)} for ` +
+                                      `Hi,\n\nPlease approve ${charge.label.toLowerCase()} of ${money(charge.amountCents, load.currency)} for ` +
                                       `${load.loadNumber ? `load ${load.loadNumber}` : "this load"}` +
                                       `${charge.description ? ` (${charge.description})` : ""}. We'll add it to the invoice.\n\nThanks,`,
                                   },

@@ -21,7 +21,10 @@ public record OnboardingRequest(
         String referralSource,
 
         @Size(max = 255, message = "Name must be 255 characters or fewer.")
-        String fullName
+        String fullName,
+
+        /** CA for a Canadian carrier (billed in CAD); anything else is US. Trucking only. */
+        String country
 
 ) {
 }

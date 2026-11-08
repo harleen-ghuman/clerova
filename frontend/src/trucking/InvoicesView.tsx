@@ -4,7 +4,7 @@ import { errorMessage } from "../api/client";
 import { createInvoice } from "../api/loads";
 import type { Invoice, LoadSummary } from "../types/Load";
 import { downloadFile, dueText, isOverdue } from "./billing";
-import { lane, money } from "./format";
+import { lane, money, moneyByCurrency } from "./format";
 
 interface InvoicesViewProps {
   loads: LoadSummary[];
@@ -41,7 +41,9 @@ export function InvoicesView({ loads, invoices, loading, error, onOpenLoad, onRe
   const waiting = invoices.filter((invoice) => invoice.status === "SENT");
   const overdue = waiting.filter(isOverdue);
   const paid = invoices.filter((invoice) => invoice.status === "PAID");
-  const owed = waiting.reduce((sum, invoice) => sum + invoice.totalCents - (invoice.quickPayFeeCents ?? 0), 0);
+  const owed = moneyByCurrency(
+    waiting.map((invoice) => ({ cents: invoice.totalCents - (invoice.quickPayFeeCents ?? 0), currency: invoice.currency }))
+  );
 
   const chips: { key: Filter; label: string; count: number }[] = [
     { key: "todo", label: "To send", count: toInvoice.length + drafts.length },
@@ -116,12 +118,12 @@ export function InvoicesView({ loads, invoices, loading, error, onOpenLoad, onRe
       <div className="tk-summary">
         <div>
           <span className="tk-eyebrow">Owed to you</span>
-          <strong className="tk-money">{money(owed) || "$0"}</strong>
+          <strong className="tk-money">{owed}</strong>
         </div>
         <div>
           <span className="tk-eyebrow">Overdue</span>
           <strong className={`tk-money ${overdue.length > 0 ? "tk-overdue" : ""}`}>
-            {money(overdue.reduce((sum, invoice) => sum + invoice.totalCents, 0)) || "$0"}
+            {moneyByCurrency(overdue.map((invoice) => ({ cents: invoice.totalCents, currency: invoice.currency })))}
           </strong>
         </div>
       </div>
@@ -152,7 +154,7 @@ export function InvoicesView({ loads, invoices, loading, error, onOpenLoad, onRe
                     <span className="tk-lane">{lane(load.origin, load.destination)}</span>
                     <span className="tk-sub" style={{ display: "block" }}>
                       {load.loadNumber ? `#${load.loadNumber} · ` : ""}
-                      {load.brokerName ?? "Broker"} · {money(load.rateCents)} · delivered, no invoice yet
+                      {load.brokerName ?? "Broker"} · {money(load.rateCents, load.currency)} · delivered, no invoice yet
                     </span>
                   </span>
                 </button>
@@ -185,14 +187,14 @@ export function InvoicesView({ loads, invoices, loading, error, onOpenLoad, onRe
                   </span>
                   <span className="tk-sub" style={{ display: "block" }}>
                     {invoice.loadNumber ? `#${invoice.loadNumber} · ` : ""}
-                    {invoice.brokerName ?? "Broker"} · {money(invoice.totalCents)}
+                    {invoice.brokerName ?? "Broker"} · {money(invoice.totalCents, invoice.currency)}
                     {invoice.status === "SENT" &&
                       (invoice.dueDate
                         ? ` · due ${dueText(invoice.dueDate)}`
                         : invoice.sendTo === "FACTOR"
                           ? " · with the factoring company"
                           : "")}
-                    {invoice.status === "PAID" && invoice.paidCents !== null && ` · paid ${money(invoice.paidCents)}`}
+                    {invoice.status === "PAID" && invoice.paidCents !== null && ` · paid ${money(invoice.paidCents, invoice.currency)}`}
                   </span>
                 </span>
                 <span

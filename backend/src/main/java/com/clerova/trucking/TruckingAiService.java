@@ -79,7 +79,7 @@ public class TruckingAiService {
                             .model(ChatModel.GPT_5_2)
                             .instructions("""
                                 You read freight broker rate confirmations ("rate cons") for a
-                                small US trucking company (the carrier). A rate con is the
+                                small trucking company (the carrier) in the US or Canada. A rate con is the
                                 broker's contract for one load: the broker, the load number,
                                 pickup and delivery stops, the rate, and terms like detention,
                                 TONU, paperwork and payment.
@@ -111,6 +111,10 @@ public class TruckingAiService {
                                   carrierMcNumber, never brokerMcNumber. If the broker's MC
                                   isn't printed, leave brokerMcNumber empty.
                                   brokerEmail and brokerPhone: the broker's contact.
+                                - currency: USD or CAD, the currency the rate is paid in. CAD
+                                  when the rate con says CAD, C$, CA$ or CDN$, or "Canadian
+                                  funds". USD when it says USD, US$ or "US funds". Empty when
+                                  it only shows "$" and doesn't say which.
                                 - loadNumber: the broker's load or order number.
                                 - equipment: like "Dry van 53'" or "Reefer".
                                 - lineHaulRate: the total the carrier is paid for the load
@@ -120,7 +124,9 @@ public class TruckingAiService {
                                   email text above the document (not in the document). Empty
                                   if the email gives none.
                                 - stops: every pickup and delivery in order. kind is PICKUP
-                                  or DELIVERY. place is the facility name and address.
+                                  or DELIVERY. place is the facility name and address, with
+                                  the state or province and the ZIP or postal code as written
+                                  (like "Calgary, AB T2C 4M5").
                                   appointment is the date and time or window as written.
                                 - detentionFreeHours and detentionRatePerHour: free time
                                   before detention pay starts, and the pay per hour after it.

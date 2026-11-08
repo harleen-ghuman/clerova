@@ -3,6 +3,7 @@ import { errorMessage } from "../api/client";
 import { createLoad, type NewLoad } from "../api/loads";
 import type { InboundMessage } from "../types/Email";
 import type { LoadDetail } from "../types/Load";
+import { getHomeCurrency } from "./format";
 
 interface StopRow {
   kind: "PICKUP" | "DELIVERY";
@@ -45,6 +46,8 @@ export function NewLoadForm({
   const [brokerMc, setBrokerMc] = useState("");
   const [rate, setRate] = useState("");
   const [equipment, setEquipment] = useState("");
+  const canadian = getHomeCurrency() === "CAD";
+  const [currency, setCurrency] = useState<"CAD" | "USD">(canadian ? "CAD" : "USD");
   const [stops, setStops] = useState<StopRow[]>([
     { kind: "PICKUP", place: "", appointment: "" },
     { kind: "DELIVERY", place: "", appointment: "" },
@@ -90,6 +93,7 @@ export function NewLoadForm({
       paymentTerms: paymentTerms.trim() || null,
       invoiceEmail: invoiceEmail.trim() || null,
       fromEmailId: fromEmail?.id ?? null,
+      currency,
     };
 
     setBusy(true);
@@ -139,6 +143,15 @@ export function NewLoadForm({
           Rate <span className="tk-optional">(optional)</span>
           <input value={rate} onChange={(event) => setRate(event.target.value)} maxLength={20} inputMode="decimal" placeholder="2150" autoComplete="off" />
         </label>
+        {canadian && (
+          <label>
+            Paid in
+            <select value={currency} onChange={(event) => setCurrency(event.target.value as "CAD" | "USD")}>
+              <option value="CAD">CAD</option>
+              <option value="USD">USD</option>
+            </select>
+          </label>
+        )}
         <label>
           Equipment <span className="tk-optional">(optional)</span>
           <input value={equipment} onChange={(event) => setEquipment(event.target.value)} maxLength={100} placeholder="53' Dry Van" autoComplete="off" />

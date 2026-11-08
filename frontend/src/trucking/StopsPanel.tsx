@@ -60,7 +60,7 @@ function departureNotice(load: LoadDetail, stop: LoadStop, leftAt: string): Mess
 
 /** A heads-up once the free time is over and the truck is still there. */
 function detentionStarted(load: LoadDetail, stop: LoadStop): MessageDraft {
-  const rate = load.detentionRateCents !== null ? ` at ${money(load.detentionRateCents)}/hour` : "";
+  const rate = load.detentionRateCents !== null ? ` at ${money(load.detentionRateCents, load.currency)}/hour` : "";
 
   return {
     title: "Tell the broker detention started",
@@ -220,7 +220,7 @@ export function StopsPanel({ load, sendingEnabled, busy, run }: StopsPanelProps)
                   {stop.leftAt && detention && detention.billableMinutes > 0 && (
                     <span className="tk-stop-detention over">
                       Detention: {duration(detention.billableMinutes)} after the free time
-                      {detention.amountCents !== null && ` · ${money(detention.amountCents)}`}
+                      {detention.amountCents !== null && ` · ${money(detention.amountCents, load.currency)}`}
                     </span>
                   )}
 
@@ -324,8 +324,8 @@ export function StopsPanel({ load, sendingEnabled, busy, run }: StopsPanelProps)
         <p className="tk-hint">
           Tap Arrived and Left at each stop. Clerova works out detention from the rate con:{" "}
           {load.detentionFreeMinutes !== null ? duration(load.detentionFreeMinutes) : "2h (not stated)"} free
-          {load.detentionRateCents !== null ? `, then ${money(load.detentionRateCents)}/hour` : ""}
-          {load.detentionMaxCents !== null ? `, up to ${money(load.detentionMaxCents)}` : ""}.
+          {load.detentionRateCents !== null ? `, then ${money(load.detentionRateCents, load.currency)}/hour` : ""}
+          {load.detentionMaxCents !== null ? `, up to ${money(load.detentionMaxCents, load.currency)}` : ""}.
         </p>
       )}
     </section>

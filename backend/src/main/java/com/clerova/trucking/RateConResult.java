@@ -28,6 +28,8 @@ public class RateConResult {
     public String loadNumber;
     public String equipment;
 
+    /** USD or CAD, as the rate con states (CAD, C$, CDN$ or a Canadian broker's "$"); empty if unclear. */
+    public String currency;
     /** Total pay to the carrier for the load. */
     public String lineHaulRate;
     public String rateQuote;

@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 
 import { completeOnboarding, getMe } from "../api/account";
 import { ApiRequestError, errorMessage } from "../api/client";
-import { forgetChosenIndustry, getChosenIndustry, getReferralSource } from "../auth/referral";
+import { forgetChosenIndustry, getChosenIndustry, getReferralSource, looksCanadian } from "../auth/referral";
 import type { Industry, Me } from "../types/Account";
 import { TRUCKING_ENABLED } from "../config";
 
@@ -44,6 +44,8 @@ export function OnboardingPage({
   );
   const [companySize, setCompanySize] = useState("");
   const trucking = industry === "TRUCKING";
+  // Pre-ticked for a Canadian link, time zone or language; it can be changed
+  const [canadian, setCanadian] = useState(() => looksCanadian());
   const [referralSource, setReferralSource] = useState(
     trackedSource ?? ""
   );
@@ -63,6 +65,7 @@ export function OnboardingPage({
         industry,
         companySize,
         referralSource: referralSource || storedSource || "",
+        country: trucking && canadian ? "CA" : "US",
       });
 
       forgetChosenIndustry();
@@ -168,6 +171,18 @@ export function OnboardingPage({
               ))}
             </select>
           </label>
+
+          {trucking && (
+            <label className="settings-check">
+              <input
+                type="checkbox"
+                checked={canadian}
+                onChange={(event) => setCanadian(event.target.checked)}
+                disabled={submitting}
+              />
+              We're a Canadian carrier (billed in CAD)
+            </label>
+          )}
 
           {!trackedSource && (
             <label>

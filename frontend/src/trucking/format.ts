@@ -1,15 +1,51 @@
 import type { DocumentKind, LoadStatus, LoadSummary } from "../types/Load";
 
-export function money(cents: number | null | undefined): string {
+export type Currency = "USD" | "CAD";
+
+/** The carrier's own currency, shown as plain "$": CAD for Canadian carriers. Set once by the app. */
+let homeCurrency: Currency = "USD";
+
+export function setHomeCurrency(currency: Currency) {
+  homeCurrency = currency;
+}
+
+export function getHomeCurrency(): Currency {
+  return homeCurrency;
+}
+
+/** "$2,150" in the carrier's own currency; another currency says which, like "US$900" or "CA$900". */
+export function money(cents: number | null | undefined, currency?: string | null): string {
   if (cents === null || cents === undefined) {
     return "";
   }
 
-  return (cents / 100).toLocaleString("en-US", {
+  const code = currency === "CAD" || currency === "USD" ? currency : homeCurrency;
+
+  return (cents / 100).toLocaleString(homeCurrency === "CAD" ? "en-CA" : "en-US", {
     style: "currency",
-    currency: "USD",
+    currency: code,
     maximumFractionDigits: cents % 100 === 0 ? 0 : 2,
   });
+}
+
+/** Amounts in more than one currency, like "$2,150 + US$900"; "$0" when none. */
+export function moneyByCurrency(items: { cents: number; currency?: string | null }[]): string {
+  const sums = new Map<string, number>();
+
+  for (const item of items) {
+    const code = item.currency === "CAD" || item.currency === "USD" ? item.currency : homeCurrency;
+    sums.set(code, (sums.get(code) ?? 0) + item.cents);
+  }
+
+  if (sums.size === 0) {
+    return money(0);
+  }
+
+  // The carrier's own currency first
+  return [...sums.entries()]
+    .sort(([a], [b]) => (a === homeCurrency ? -1 : b === homeCurrency ? 1 : a.localeCompare(b)))
+    .map(([code, cents]) => money(cents, code))
+    .join(" + ");
 }
 
 /** "Sunridge Packing, 1200 S Elm Ave, Fresno, CA 93706" to "Fresno, CA". */

@@ -20,6 +20,8 @@ import { LoadView } from "./LoadView";
 import { BrokersView } from "./BrokersView";
 import { InvoicesView } from "./InvoicesView";
 import { isOverdue } from "./billing";
+import { setHomeCurrency } from "./format";
+import { setPlanCurrency } from "../utils/truckingPlans";
 import "./trucking.css";
 
 interface TruckingAppProps {
@@ -64,6 +66,10 @@ export function TruckingApp({
   onSignOut,
 }: TruckingAppProps) {
   const [organization, setOrganization] = useState(initialOrganization);
+  // Canadian carriers: amounts in CAD show as "$", USD as "US$"; plans in CA$
+  const homeCurrency = organization.country === "CA" ? "CAD" : "USD";
+  setHomeCurrency(homeCurrency);
+  setPlanCurrency(homeCurrency);
   const [restoredNav] = useState<NavState | null>(() => {
     const state = window.history.state as NavState | null;
     return state?.clerova && VIEWS.includes(state.view) ? state : null;

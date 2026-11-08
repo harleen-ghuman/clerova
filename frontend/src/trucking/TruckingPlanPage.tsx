@@ -9,6 +9,7 @@ import {
   dollars,
   truckingPlanSummary,
   truckingPrice,
+  setPlanCurrency,
 } from "../utils/truckingPlans";
 
 interface TruckingPlanPageProps {
@@ -21,6 +22,8 @@ const TRIAL_DAYS = 14;
 
 /** Shown until a carrier has a subscription. Priced by the number of trucks. */
 export function TruckingPlanPage({ organization, notice, onSignOut }: TruckingPlanPageProps) {
+  // Canadian carriers are billed in CAD
+  setPlanCurrency(organization.country === "CA" ? "CAD" : "USD");
   const id = useId();
   const [interval, setBillingInterval] = useState<BillingInterval>("month");
   const [trucks, setTrucks] = useState(String(organization.trucks ?? 3));

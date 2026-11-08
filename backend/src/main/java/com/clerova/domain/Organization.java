@@ -39,6 +39,10 @@ public class Organization {
     /** IANA time zone, like America/Chicago, for invoice dates; null means Pacific. */
     private String timeZone;
 
+    /** US or CA. Canadian carriers pay in CAD, and their brokers may have no FMCSA record. */
+    @Column(nullable = false, length = 2)
+    private String country = "US";
+
     private Instant trialEndsAt;
 
     @Column(nullable = false)
@@ -160,6 +164,18 @@ public class Organization {
 
     public void setTimeZone(String timeZone) {
         this.timeZone = timeZone;
+    }
+
+    public String getCountry() {
+        return country;
+    }
+
+    public void setCountry(String country) {
+        this.country = country;
+    }
+
+    public boolean isCanadian() {
+        return "CA".equals(country);
     }
 
     public Plan getPlan() {

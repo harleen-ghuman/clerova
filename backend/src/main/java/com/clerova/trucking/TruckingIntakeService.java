@@ -776,6 +776,9 @@ public class TruckingIntakeService {
         load.setBroker(broker);
         load.setLoadNumber(loadNumber);
         load.setEquipment(clean(read.equipment, 100));
+        var organization = organizationRepository.findById(organizationId).orElseThrow();
+        boolean canadian = organization.isCanadian();
+        load.setCurrency(currency(read.currency, load.getId() != null ? load.getCurrency() : (canadian ? "CAD" : "USD")));
         load.setRateCents(Money.cents(read.lineHaulRate));
         load.setAgreedRateCents(Money.cents(read.rateInEmail));
         load.setDetentionFreeMinutes(Money.minutesFromHours(read.detentionFreeHours));
@@ -814,8 +817,8 @@ public class TruckingIntakeService {
         }
 
         List<LoadFlag> flags = byHand
-                ? RateConChecks.brokerFlags(load, mcNumber, check)
-                : RateConChecks.flags(read, load, mcNumber, check);
+                ? RateConChecks.brokerFlags(load, mcNumber, check, canadian)
+                : RateConChecks.flags(read, load, mcNumber, check, canadian);
 
         // A flag someone already checked stays checked on a new copy of the rate con
         for (LoadFlag flag : flags) {
@@ -847,7 +850,7 @@ public class TruckingIntakeService {
     public record ManualLoad(String loadNumber, String brokerName, String brokerEmail, String brokerMc, String rate,
                              String equipment, List<ManualStop> stops, String detentionFreeHours,
                              String detentionRatePerHour, String tonu, String paymentTerms, String invoiceEmail,
-                             UUID fromEmailId) {
+                             UUID fromEmailId, String currency) {
     }
 
     static final int MAX_MANUAL_STOPS = 10;
@@ -960,6 +963,7 @@ public class TruckingIntakeService {
         read.tonuAmount = request.tonu();
         read.paymentTerms = request.paymentTerms();
         read.invoiceEmail = request.invoiceEmail();
+        read.currency = request.currency();
 
         for (ManualStop stop : stops) {
             RateConResult.Stop copy = new RateConResult.Stop();
@@ -988,6 +992,12 @@ public class TruckingIntakeService {
 
     private static com.clerova.exception.ApiException invalidLoad(String message) {
         return new com.clerova.exception.ApiException(org.springframework.http.HttpStatus.BAD_REQUEST, "INVALID_LOAD", message);
+    }
+
+    /** "CAD" or "USD" as read; anything else keeps the fallback (the load's, or the carrier's home currency). */
+    static String currency(String read, String fallback) {
+        String value = read == null ? "" : read.strip().toUpperCase(Locale.ROOT);
+        return value.equals("CAD") || value.equals("USD") ? value : fallback;
     }
 
     private Optional<BrokerCheck> cachedCheck(UUID organizationId, String mcNumber) {

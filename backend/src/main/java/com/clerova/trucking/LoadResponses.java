@@ -70,7 +70,9 @@ public final class LoadResponses {
             String loadNumber, String brokerName, String origin, String destination,
             /** Filled in for one invoice: what the packet holds and what it's missing. */
             List<PacketDocument> packet, List<String> missingPaperwork, String suggestedEmail,
-            boolean factoring
+            boolean factoring,
+            /** USD or CAD, the load's currency. */
+            String currency
     ) {
     }
 
@@ -83,7 +85,7 @@ public final class LoadResponses {
             UUID id, String loadNumber, LoadStatus status, String brokerName,
             String origin, String destination, String pickupAppointment, String deliveryAppointment,
             Long rateCents, int openFlags, int fixFlags, int draftReplies, String statusNote,
-            Instant createdAt, Instant updatedAt, String referenceNumbers
+            Instant createdAt, Instant updatedAt, String referenceNumbers, String currency
     ) {
     }
 
@@ -141,7 +143,7 @@ public final class LoadResponses {
             Long detentionMaxCents, java.math.BigDecimal quickPayPercent, String invoiceEmail,
             List<StopInfo> stops, List<FlagInfo> flags, String statusNote, ReplyInfo draft,
             List<ConversationEntry> conversation, List<DocumentInfo> documents,
-            List<ChargeInfo> charges, InvoiceInfo invoice, Instant createdAt, Instant updatedAt
+            List<ChargeInfo> charges, InvoiceInfo invoice, Instant createdAt, Instant updatedAt, String currency
     ) {
     }
 
@@ -165,7 +167,8 @@ public final class LoadResponses {
                 load.getStatusNote(),
                 load.getCreatedAt(),
                 load.getUpdatedAt(),
-                load.getReferenceNumbers()
+                load.getReferenceNumbers(),
+                load.getCurrency()
         );
     }
 
@@ -197,7 +200,7 @@ public final class LoadResponses {
                         f.getId(), f.getCode(), f.getLevel(), f.getTitle(), f.getDetail(), f.getSourceText(),
                         f.getResolvedAt())).toList(),
                 load.getStatusNote(), draft, conversation, documents, charges, invoice,
-                load.getCreatedAt(), load.getUpdatedAt()
+                load.getCreatedAt(), load.getUpdatedAt(), load.getCurrency()
         );
     }
 }
