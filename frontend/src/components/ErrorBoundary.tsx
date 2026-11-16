@@ -1,5 +1,7 @@
 import { Component, type ReactNode } from "react";
 
+import { reportProblem } from "../utils/reportProblem";
+
 interface ErrorBoundaryState {
   failed: boolean;
 }
@@ -14,6 +16,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBound
 
   componentDidCatch(error: unknown) {
     console.error("Clerova failed to render:", error);
+    reportProblem(error, "screen failed to render");
   }
 
   render() {

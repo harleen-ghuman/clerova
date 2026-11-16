@@ -1,8 +1,11 @@
 package com.clerova.email;
 
+import com.clerova.alerts.ProblemAlerts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -26,6 +29,20 @@ import java.util.Map;
 public class PostmarkEmailSender implements EmailSender {
 
     private static final Logger log = LoggerFactory.getLogger(PostmarkEmailSender.class);
+
+    private ProblemAlerts alerts;
+
+    /** Set by Spring after both exist, since alerts are themselves sent as email. */
+    @Autowired
+    void setAlerts(@Lazy ProblemAlerts alerts) {
+        this.alerts = alerts;
+    }
+
+    private void alert(String what, Throwable cause) {
+        if (alerts != null) {
+            alerts.report(ProblemAlerts.Kind.EMAIL_NOT_SENT, what, null, cause);
+        }
+    }
     private static final String UNAVAILABLE =
             "Couldn't reach the email service. Please try again in a minute.";
 
@@ -101,6 +118,7 @@ public class PostmarkEmailSender implements EmailSender {
         try {
             response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         } catch (IOException e) {
+            alert("Postmark could not be reached, so an email was not sent.", e);
             throw new EmailSendException(UNAVAILABLE, e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -120,6 +138,12 @@ public class PostmarkEmailSender implements EmailSender {
 
         if (response.statusCode() != 200 || errorCode != 0) {
             log.warn("Postmark rejected an email ({}): {}", errorCode, result.path("Message").asString(""));
+
+            // 300 and 406 are a bad or bounced recipient: the sender is told, nothing is broken
+            if (errorCode != 300 && errorCode != 406) {
+                alert("Postmark refused to send an email (code " + errorCode + "): "
+                        + result.path("Message").asString(""), null);
+            }
 
             // Messages are shown to the person sending the reply
             throw new EmailSendException(switch (errorCode) {

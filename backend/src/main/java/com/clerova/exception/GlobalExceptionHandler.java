@@ -1,6 +1,9 @@
 package com.clerova.exception;
 
+import com.clerova.alerts.ProblemAlerts;
 import com.clerova.dto.ApiError;
+import com.clerova.security.CurrentUserService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -16,6 +19,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -23,10 +27,39 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    private final ProblemAlerts alerts;
+    private final CurrentUserService currentUserService;
+
+    public GlobalExceptionHandler(ProblemAlerts alerts, CurrentUserService currentUserService) {
+        this.alerts = alerts;
+        this.currentUserService = currentUserService;
+    }
+
+    /** The workspace of whoever made the request, when there is one. */
+    private UUID workspace() {
+        try {
+            return currentUserService.findCurrentUser()
+                    .map(user -> user.getOrganization().getId())
+                    .orElse(null);
+        } catch (RuntimeException notSignedIn) {
+            return null;
+        }
+    }
+
+    private static String where(HttpServletRequest request) {
+        return request == null ? null : request.getMethod() + " " + request.getRequestURI();
+    }
+
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ApiError> handleApiException(
-            ApiException e
+            ApiException e,
+            HttpServletRequest request
     ) {
+        // Stripe not answering is ours to fix; the rest are ordinary refusals
+        if ("BILLING_ERROR".equals(e.getCode())) {
+            alerts.report(ProblemAlerts.Kind.BILLING, "Stripe didn't answer, so a customer couldn't use billing.",
+                    workspace(), where(request), e);
+        }
 
         ApiError error = new ApiError(
                 e.getCode(),
@@ -40,8 +73,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AiServiceException.class)
     public ResponseEntity<ApiError> handleAiServiceException(
-            AiServiceException exception
+            AiServiceException exception,
+            HttpServletRequest request
     ) {
+        log.warn("AI request failed on {}", where(request), exception);
+        alerts.report(ProblemAlerts.Kind.AI_DOWN, "The AI service failed for a customer in the app.",
+                workspace(), where(request), exception);
 
         ApiError error = new ApiError(
                 "AI_SERVICE_ERROR",
@@ -192,7 +229,7 @@ public class GlobalExceptionHandler {
 
     /** Anything unexpected: logged in full, shown in plain words. */
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiError> handleUnexpected(Exception e) throws Exception {
+    public ResponseEntity<ApiError> handleUnexpected(Exception e, HttpServletRequest request) throws Exception {
         if (e instanceof org.springframework.web.ErrorResponse errorResponse) {
             return ResponseEntity
                     .status(errorResponse.getStatusCode())
@@ -205,7 +242,10 @@ public class GlobalExceptionHandler {
             throw e;
         }
 
-        log.error("Unexpected error", e);
+        UUID workspace = workspace();
+        log.error("Unexpected error on {} (workspace {})", where(request), workspace, e);
+        alerts.report(ProblemAlerts.Kind.SERVER_ERROR, "A customer saw \"Something went wrong on our side\".",
+                workspace, where(request), e);
 
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)

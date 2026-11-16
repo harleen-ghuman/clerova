@@ -1,5 +1,6 @@
 package com.clerova.email;
 
+import com.clerova.alerts.ProblemAlerts;
 import com.clerova.billing.BillingService;
 import com.clerova.config.AiRateLimitInterceptor;
 import com.clerova.domain.InboundMessage;
@@ -96,6 +97,7 @@ public class InboundEmailProcessor {
     private final EmailProperties emailProperties;
     private final ReplyCopyService replyCopyService;
     private final TruckingIntakeService truckingIntakeService;
+    private final ProblemAlerts alerts;
 
     public InboundEmailProcessor(
             @Value("${app.email.processing.enabled}") boolean enabled,
@@ -107,8 +109,10 @@ public class InboundEmailProcessor {
             TransactionTemplate transactionTemplate,
             EmailProperties emailProperties,
             ReplyCopyService replyCopyService,
-            TruckingIntakeService truckingIntakeService
+            TruckingIntakeService truckingIntakeService,
+            ProblemAlerts alerts
     ) {
+        this.alerts = alerts;
         this.truckingIntakeService = truckingIntakeService;
         this.enabled = enabled;
         this.inboundMessageRepository = inboundMessageRepository;
@@ -190,7 +194,10 @@ public class InboundEmailProcessor {
             log.warn("AI processing failed for inbound email {} (attempt {})",
                     messageId, message.getAttempts(), e);
 
-            failOrRetry(message);
+            // Out of credits or down: worth knowing on the first failure, not the third
+            alerts.report(ProblemAlerts.Kind.AI_DOWN, "The AI service failed while reading an email.",
+                    message.getOrganizationId(), "Email: " + subjectOf(message), e);
+            failOrRetry(message, e);
 
         } catch (ApiException e) {
             if (AiUsageService.QUOTA_EXCEEDED.equals(e.getCode())) {
@@ -200,12 +207,14 @@ public class InboundEmailProcessor {
             } else {
                 // Plan or trial ended: needs a person to act
                 finish(message, InboundMessageStatus.FAILED, e.getMessage());
+                alerts.report(ProblemAlerts.Kind.EMAIL_FAILED, "An email was marked failed: " + e.getMessage(),
+                        message.getOrganizationId(), "Email: " + subjectOf(message), null);
             }
 
         } catch (RuntimeException e) {
             log.error("Unexpected error processing inbound email {}", messageId, e);
 
-            failOrRetry(message);
+            failOrRetry(message, e);
         }
     }
 
@@ -417,13 +426,21 @@ public class InboundEmailProcessor {
         return from.equals("forwarding-noreply@google.com");
     }
 
+    private static String subjectOf(InboundMessage message) {
+        String subject = message.getSubject();
+        return subject == null || subject.isBlank() ? "(no subject)" : subject;
+    }
+
     /**
      * The error itself is in the log; the Inbox gets a plain reason, since
      * provider errors can name keys and internals.
      */
-    private void failOrRetry(InboundMessage message) {
+    private void failOrRetry(InboundMessage message, RuntimeException cause) {
         if (message.getAttempts() >= MAX_ATTEMPTS) {
             finish(message, InboundMessageStatus.FAILED, FAILED_REASON);
+            alerts.report(ProblemAlerts.Kind.EMAIL_FAILED,
+                    "An email could not be read after " + MAX_ATTEMPTS + " tries. It shows as failed in the customer's Inbox.",
+                    message.getOrganizationId(), "Email: " + subjectOf(message), cause);
         } else {
             retryLater(message);
         }

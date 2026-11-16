@@ -30,6 +30,9 @@ public class InboundEmailWebhookController {
     private final PostmarkInboundParser parser;
     private final InboundEmailService inboundEmailService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.clerova.alerts.ProblemAlerts alerts;
+
     public InboundEmailWebhookController(
             EmailProperties emailProperties,
             PostmarkInboundParser parser,
@@ -50,6 +53,14 @@ public class InboundEmailWebhookController {
         }
 
         if (!isAuthorized(authorization)) {
+            // A wrong password in Postmark would stop every customer's email
+            if (alerts != null) {
+                alerts.report(com.clerova.alerts.ProblemAlerts.Kind.WEBHOOK_REFUSED,
+                        "An incoming email delivery was refused: wrong or missing webhook password. "
+                                + "If this is Postmark, no customer email is getting in.",
+                        null, "POST /api/inbound/postmark", null);
+            }
+
             return ResponseEntity.status(401).body(Map.of("status", "unauthorized"));
         }
 

@@ -21,6 +21,9 @@ public class BillingController {
     private final BillingService billingService;
     private final CurrentUserService currentUserService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.clerova.alerts.ProblemAlerts alerts;
+
     public BillingController(BillingService billingService, CurrentUserService currentUserService) {
         this.billingService = billingService;
         this.currentUserService = currentUserService;
@@ -97,7 +100,19 @@ public class BillingController {
             @RequestBody String payload,
             @RequestHeader(value = "Stripe-Signature", required = false) String signature
     ) {
-        billingService.handleWebhook(payload, signature);
+        try {
+            billingService.handleWebhook(payload, signature);
+        } catch (RuntimeException e) {
+            // Stripe retries, but a plan change may not have reached Clerova yet
+            if (alerts != null) {
+                alerts.report(com.clerova.alerts.ProblemAlerts.Kind.WEBHOOK_REFUSED,
+                        "A Stripe webhook failed, so a plan change may not show in Clerova yet.",
+                        null, "POST /api/stripe/webhook", e);
+            }
+
+            throw e;
+        }
+
         return Map.of("received", true);
     }
 
