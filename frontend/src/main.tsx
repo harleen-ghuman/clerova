@@ -5,6 +5,7 @@ import './App.css'
 import { Root } from './Root.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { captureReferralSource } from './auth/referral.ts'
+import { watchForProblems } from './utils/reportProblem.ts'
 
 const container = document.getElementById('root')!
 
@@ -18,6 +19,7 @@ if (/^\/demo(\/trucking)?$/.test(window.location.pathname)) {
   void import('./demo/start.tsx').then(({ startDemo }) => startDemo(container))
 } else {
   captureReferralSource()
+  watchForProblems()
 
   createRoot(container).render(
     <StrictMode>

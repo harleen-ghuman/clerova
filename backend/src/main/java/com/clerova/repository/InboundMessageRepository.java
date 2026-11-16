@@ -29,6 +29,10 @@ public interface InboundMessageRepository
 
     long countByOrganizationIdAndReceivedAtAfter(UUID organizationId, Instant after);
 
+    /** When the newest email in any workspace arrived; null if none ever has. */
+    @Query("select max(m.createdAt) from InboundMessage m")
+    Instant findLatestReceivedAt();
+
     long countByWorkItemIdAndReceivedAtAfter(UUID workItemId, Instant after);
 
     List<InboundMessage> findByWorkItemIdOrderByReceivedAtAsc(UUID workItemId);

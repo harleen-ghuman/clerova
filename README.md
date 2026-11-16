@@ -386,6 +386,7 @@ Never commit API keys or passwords. `.env.local` is git-ignored.
 | `POSTMARK_SERVER_TOKEN` | Enables sending replies |
 | `PORT` | Server port (default 8080) |
 | `SUPPORT_EMAIL` | Reply-to for account emails (default hello@clerova-ai.com) |
+| `ALERT_EMAIL` | Where Clerova emails its own team when something breaks (default hello@clerova-ai.com; blank turns it off) |
 | `STRIPE_SECRET_KEY` | Turns billing on (a plan is then required to use AI) |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret of the Stripe webhook endpoint |
 | `APP_URL` | Where Stripe sends users back, e.g. `https://app.clerova-ai.com` |
@@ -579,6 +580,27 @@ Data created before accounts existed belongs to the `Demo Property
 Management` organization.
 
 ---
+
+## Problem alerts
+
+When something breaks, Clerova emails `ALERT_EMAIL` and writes a
+`PROBLEM <KIND>` line to the server log with the workspace and where it
+happened:
+
+| Kind | When |
+| --- | --- |
+| `EMAIL_FAILED` | A customer's email failed after 3 tries |
+| `AI_DOWN` | The AI service failed (out of credits, a bad key, an outage) |
+| `EMAIL_NOT_SENT` | Postmark couldn't be reached or refused to send |
+| `BILLING` | Stripe didn't answer a customer's billing action |
+| `WEBHOOK_REFUSED` | A Postmark or Stripe webhook was refused or failed |
+| `SERVER_ERROR` | A customer saw "Something went wrong on our side" |
+| `SCREEN_ERROR` | A screen broke in a customer's browser (`POST /api/client-problems`) |
+| `NO_EMAIL` | No email reached Clerova in 24 hours (checked daily at 16:00 UTC) |
+
+The same kind is emailed at most once every 30 minutes and six times a day;
+the next email says how many were held back. Counts are kept in memory, so
+they reset on a deploy.
 
 ## Testing
 
