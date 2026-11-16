@@ -156,6 +156,11 @@ export function TruckingPage() {
 
   return (
     <div className="site">
+      <a className="offer-bar" href="#pricing">
+        <strong>Founding carriers:</strong> $17.50 a truck for as long as you stay. Only 20 spots.{" "}
+        <span aria-hidden="true">→</span>
+      </a>
+
       <header className="navbar">
         <a className="brand" href="/trucking">
           <span className="brand-mark" aria-hidden="true">C</span>
