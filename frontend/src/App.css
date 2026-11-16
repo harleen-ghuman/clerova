@@ -2511,6 +2511,16 @@ button.file-chip:focus-visible {
   font-size: 13px;
 }
 
+/* A very long sender name gives way to the title instead of pushing the page wide */
+.today-row span:not(.rq-urgent):not(.rq-new-reply):not(.rq-remind):not(.rq-dot) {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .today-week {
   margin-top: 32px;
 }

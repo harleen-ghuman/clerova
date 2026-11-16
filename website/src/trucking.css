@@ -87,4 +87,8 @@
   .load-row {
     grid-template-columns: 1fr;
   }
+
+  .load-pill {
+    justify-self: start;
+  }
 }

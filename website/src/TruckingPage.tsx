@@ -57,6 +57,14 @@ const faqs = [
     a: "Yes. Clerova reads the pages as pictures when a PDF is a scan, and it leaves a value blank rather than guess at something it can't read.",
   },
   {
+    q: "How does the free trial work?",
+    a: "Your first 14 days are free. We ask for a card when you start, but you won't be charged until the trial ends. Cancel anytime before then and you pay nothing.",
+  },
+  {
+    q: "How long does setup take?",
+    a: "About five minutes. Sign up, enter your trucks, and forward one rate con to your Clerova address. The load shows up within a minute.",
+  },
+  {
     q: "What about my drivers?",
     a: "Drivers can email photos of BOLs and PODs to your Clerova address, and Clerova files them under the right load. You can also upload them from your phone.",
   },
@@ -159,6 +167,7 @@ export function TruckingPage() {
           <a href="#features">What it does</a>
           <a href="#pricing">Pricing</a>
           <a href="#faq">FAQ</a>
+          <a href="#contact">Contact</a>
           <a href={TRUCKING_DEMO_URL}>Try the demo</a>
         </nav>
 
@@ -294,6 +303,30 @@ export function TruckingPage() {
             You enter your trucks when you start. Change your trucks anytime in Settings. Founding prices are for our first 20 customers and stay the same for as long as
             you stay. Running a dispatch service or 50 trucks or more? Email hello@clerova-ai.com for a price.
           </p>
+        </section>
+
+        <section className="section split founder" id="contact" aria-labelledby="founder-title">
+          <div>
+            <span className="kicker">Who's behind Clerova</span>
+            <h2 id="founder-title">Built in California's Central Valley</h2>
+          </div>
+          <div className="founder-note">
+            <p>
+              Hi, I'm Harleen Ghuman. I built Clerova for small carriers whose evenings disappear into rate cons,
+              broker emails and invoice packets.
+            </p>
+            <p>
+              I set up every founding carrier personally, online. I'll help you get forwarding working and go
+              through your first rate cons with you over a video call.
+            </p>
+            <p>Questions, a walkthrough, or help getting set up? Email me and I'll reply within one business day.</p>
+            <div className="founder-links">
+              <a className="button button-dark" href="mailto:hello@clerova-ai.com">
+                Contact us
+              </a>
+              <a href="mailto:hello@clerova-ai.com">hello@clerova-ai.com</a>
+            </div>
+          </div>
         </section>
 
         <section className="section" id="faq">
