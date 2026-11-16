@@ -92,3 +92,22 @@
     justify-self: start;
   }
 }
+
+/* Pricing: three cards, and the line on what detention is worth */
+.pricing-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: none;
+}
+
+.heading .pricing-value {
+  margin-top: 6px;
+  color: var(--done);
+  font-weight: 600;
+}
+
+@media (max-width: 960px) {
+  .pricing-3 {
+    grid-template-columns: 1fr;
+    max-width: 520px;
+  }
+}

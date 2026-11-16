@@ -278,8 +278,9 @@ export function TruckingPage() {
             <span className="kicker">Pricing</span>
             <h2>Priced by the trucks you run. 14 days free.</h2>
             <p>Every plan includes all features. Pay yearly and get two months free.</p>
+            <p className="pricing-value">One paid detention hour at $50 covers two trucks for the month.</p>
           </div>
-          <div className="pricing">
+          <div className="pricing pricing-3">
             {truckPlans.map((plan) => (
               <article key={plan.name} className="price-card">
                 <h3>{plan.name}</h3>
@@ -298,10 +299,25 @@ export function TruckingPage() {
                 </a>
               </article>
             ))}
+            <article className="price-card">
+              <h3>Large fleet or dispatch service</h3>
+              <p className="price-note">For 50 trucks or more, or dispatchers with several carriers</p>
+              <p className="price">
+                <strong>Let's talk</strong>
+              </p>
+              <p className="price-founding">A price that fits how you work</p>
+              <ul>
+                <li>Everything in Fleet</li>
+                <li>Setup help over a video call</li>
+              </ul>
+              <a className="button button-dark" href="mailto:hello@clerova-ai.com?subject=Clerova%20for%20a%20large%20fleet">
+                Email us
+              </a>
+            </article>
           </div>
           <p className="pricing-footnote">
             You enter your trucks when you start. Change your trucks anytime in Settings. Founding prices are for our first 20 customers and stay the same for as long as
-            you stay. Running a dispatch service or 50 trucks or more? Email hello@clerova-ai.com for a price.
+            you stay.
           </p>
         </section>
 
@@ -312,8 +328,8 @@ export function TruckingPage() {
           </div>
           <div className="founder-note">
             <p>
-              Hi, I'm Harleen Ghuman. I built Clerova for small carriers whose evenings disappear into rate cons,
-              broker emails and invoice packets.
+              Hi, I'm Harleen Ghuman. I run a small trucking company myself, and I built Clerova for the
+              paperwork that was taking my evenings: rate cons, broker emails and invoice packets.
             </p>
             <p>
               I set up every founding carrier personally, online. I'll help you get forwarding working and go
