@@ -248,8 +248,7 @@ public class InboundEmailProcessor {
         }
 
         String text = message.getContentText();
-        boolean noText = (text == null || text.isBlank())
-                && (message.getSubject() == null || message.getSubject().isBlank());
+        boolean noText = (text == null || text.isBlank()) && saysNothing(message.getSubject());
         List<String> attachmentNames = inboundMessageRepository.findAttachmentNames(message.getId());
 
         // Nothing to read: don't spend a request on it
@@ -339,6 +338,17 @@ public class InboundEmailProcessor {
         } catch (RuntimeException e) {
             log.warn("Could not generate a proposal for work item {}", workItem.getId(), e);
         }
+    }
+
+    /** A missing subject, or the placeholder mail apps put in for one ("(no subject)", "Fwd:"). */
+    static boolean saysNothing(String subject) {
+        if (subject == null) {
+            return true;
+        }
+
+        String rest = subject.replaceAll("(?i)\\b(re|fwd?|fw)\\s*:", " ")
+                .replaceAll("(?i)[(\\[<]?\\s*no subject\\s*[)\\]>]?", " ");
+        return rest.isBlank();
     }
 
     /**

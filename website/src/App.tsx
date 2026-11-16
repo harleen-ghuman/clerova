@@ -182,7 +182,12 @@ function App() {
       <main id="top">
         <section className="hero" ref={heroRef}>
           <div className="hero-copy">
-            <span className="kicker">For property managers</span>
+            <div className="hero-kickers">
+              <span className="kicker">For property managers</span>
+              <a className="hero-other" href="/trucking">
+                Trucking company? See Clerova for trucking
+              </a>
+            </div>
             <h1>Your requests inbox, sorted and drafted before you open it.</h1>
             <p className="lead">
               Forward your email to Clerova. It sorts every maintenance request

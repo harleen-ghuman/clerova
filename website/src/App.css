@@ -163,6 +163,29 @@ p {
 }
 
 /* Hero */
+.hero-kickers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  margin-bottom: 12px;
+}
+
+.hero-kickers .kicker {
+  margin-bottom: 0;
+}
+
+.hero-other {
+  color: var(--muted, #5d6470);
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.hero-other:hover {
+  color: var(--ink);
+}
+
 
 .hero {
   width: min(1160px, calc(100% - 32px));

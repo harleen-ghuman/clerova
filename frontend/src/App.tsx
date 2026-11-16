@@ -287,7 +287,8 @@ function App({
       setFocusCompanyInfo(false);
     }
 
-    show(view, view === "requests" ? selectedId : null);
+    // Coming back to Requests keeps the open request; tapping Requests again goes to the list
+    show(view, view === "requests" && activeView !== "requests" ? selectedId : null);
   }
 
   function selectRequest(item: WorkItem | null) {
