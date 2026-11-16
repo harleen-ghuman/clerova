@@ -328,8 +328,8 @@ export function TruckingPage() {
           </div>
           <div className="founder-note">
             <p>
-              Hi, I'm Harleen Ghuman. I run a small trucking company myself, and I built Clerova for the
-              paperwork that was taking my evenings: rate cons, broker emails and invoice packets.
+              Hi, I'm Harleen Ghuman. I built Clerova because paperwork is the hardest part of running trucks:
+              rate cons, broker emails and invoice packets that eat your evenings.
             </p>
             <p>
               I set up every founding carrier personally, online. I'll help you get forwarding working and go
